@@ -48,6 +48,15 @@
     "vitest": "^5.1.0"
   },
   "overrides": {
+    "eslint": {
+      "minimatch": "11.0.7"
+    },
+    "@eslint/config-array": {
+      "minimatch": "11.0.7"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.7"
+    },
     "@tailwindcss/typography@0.5.20": {
       "postcss-selector-parser": "6.1.5"
     }
