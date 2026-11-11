@@ -5,19 +5,20 @@ import { useEffect, useState } from 'react'
 
 function CopyButton() {
   const [text, setText] = useState('Copy')
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : ''
 
   useEffect(() => {
-    setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       setText('Copy')
     }, 2000)
+
+    return () => window.clearTimeout(timeout)
   }, [text])
 
   return (
     <button
-      onClick={() => {
+      onClick={async () => {
+        await navigator.clipboard.writeText(window.location.href)
         setText('Copied')
-        navigator.clipboard.writeText(currentUrl)
       }}
       className="font-base flex items-center gap-1 text-center text-sm text-zinc-500 transition-colors dark:text-zinc-400"
       type="button"
