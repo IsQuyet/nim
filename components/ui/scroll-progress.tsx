@@ -7,7 +7,7 @@ import { RefObject } from 'react'
 export type ScrollProgressProps = {
   className?: string
   springOptions?: SpringOptions
-  containerRef?: RefObject<HTMLDivElement>
+  containerRef?: RefObject<HTMLDivElement | null>
 }
 
 const DEFAULT_SPRING_OPTIONS: SpringOptions = {
@@ -23,7 +23,8 @@ export function ScrollProgress({
 }: ScrollProgressProps) {
   const { scrollYProgress } = useScroll({
     container: containerRef,
-    layoutEffect: Boolean(containerRef?.current),
+    // 父级 DOM ref 附着后再订阅，避免误将页面当作滚动容器。
+    layoutEffect: false,
   })
 
   const scaleX = useSpring(scrollYProgress, {

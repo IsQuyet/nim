@@ -5,15 +5,23 @@ import {
   Children,
   cloneElement,
   ReactElement,
-  useEffect,
+  HTMLAttributes,
   useState,
   useId,
 } from 'react'
 
+type AnimatedBackgroundItemProps = HTMLAttributes<HTMLElement> & {
+  'data-id': string
+  'data-checked'?: 'true' | 'false'
+}
+
 export type AnimatedBackgroundProps = {
   children:
-    | ReactElement<{ 'data-id': string }>[]
-    | ReactElement<{ 'data-id': string }>
+    | ReactElement<AnimatedBackgroundItemProps>[]
+    | ReactElement<AnimatedBackgroundItemProps>
+  /** 受控选中项，null 表示清空选择。 */
+  value?: string | null
+  /** 非受控初始值，后续变化不覆盖内部选择。 */
   defaultValue?: string
   onValueChange?: (newActiveId: string | null) => void
   className?: string
@@ -23,30 +31,31 @@ export type AnimatedBackgroundProps = {
 
 export function AnimatedBackground({
   children,
+  value,
   defaultValue,
   onValueChange,
   className,
   transition,
   enableHover = false,
 }: AnimatedBackgroundProps) {
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [internalActiveId, setInternalActiveId] = useState<string | null>(
+    defaultValue ?? null,
+  )
+  const isControlled = value !== undefined
+  const activeId = isControlled ? value : internalActiveId
   const uniqueId = useId()
 
   const handleSetActiveId = (id: string | null) => {
-    setActiveId(id)
+    if (!isControlled) {
+      setInternalActiveId(id)
+    }
 
     if (onValueChange) {
       onValueChange(id)
     }
   }
 
-  useEffect(() => {
-    if (defaultValue !== undefined) {
-      setActiveId(defaultValue)
-    }
-  }, [defaultValue])
-
-  return Children.map(children, (child: any, index) => {
+  return Children.map(children, (child, index) => {
     const id = child.props['data-id']
 
     const interactionProps = enableHover
@@ -73,7 +82,7 @@ export function AnimatedBackground({
               layoutId={`background-${uniqueId}`}
               className={cn('absolute inset-0', className)}
               transition={transition}
-              initial={{ opacity: defaultValue ? 1 : 0 }}
+              initial={{ opacity: (value ?? defaultValue) ? 1 : 0 }}
               animate={{
                 opacity: 1,
               }}

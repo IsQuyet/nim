@@ -3,7 +3,7 @@ import { AnimatedBackground } from '@/components/ui/animated-background'
 import { TextLoop } from '@/components/ui/text-loop'
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useIsClient } from '@/hooks/useIsClient'
 
 const THEMES_OPTIONS = [
   {
@@ -24,12 +24,8 @@ const THEMES_OPTIONS = [
 ]
 
 function ThemeSwitch() {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useIsClient()
   const { theme, setTheme } = useTheme()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   if (!mounted) {
     return null
@@ -38,7 +34,7 @@ function ThemeSwitch() {
   return (
     <AnimatedBackground
       className="pointer-events-none rounded-lg bg-zinc-100 dark:bg-zinc-800"
-      defaultValue={theme}
+      value={theme ?? null}
       transition={{
         type: 'spring',
         bounce: 0,
@@ -46,7 +42,9 @@ function ThemeSwitch() {
       }}
       enableHover={false}
       onValueChange={(id) => {
-        setTheme(id as string)
+        if (id !== null) {
+          setTheme(id)
+        }
       }}
     >
       {THEMES_OPTIONS.map((theme) => {
