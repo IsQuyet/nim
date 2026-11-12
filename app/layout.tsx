@@ -5,6 +5,7 @@ import { Header } from './header'
 import { Footer } from './footer'
 import { ThemeProvider } from 'next-themes'
 import { getSiteUrl } from '@/lib/site-config'
+import { SITE } from './data'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -18,10 +19,10 @@ export const metadata: Metadata = {
     canonical: '/'
   },
   title: {
-    default: 'Nim - Personal website template',
-    template: '%s | Nim'
+    default: SITE.name,
+    template: `%s | ${SITE.name}`
   },
-  description:  'Nim is a free and open-source personal website template built with Next.js 15, React 19 and Motion-Primitives.',
+  description: SITE.description,
 };
 
 const geist = Geist({

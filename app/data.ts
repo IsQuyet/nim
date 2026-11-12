@@ -27,6 +27,11 @@ type SocialLink = {
   link: string
 }
 
+export const SITE = {
+  name: 'Site name',
+  description: 'A short description of this site.',
+}
+
 export const PROFILE = {
   name: 'Your name',
   role: 'Your role',
