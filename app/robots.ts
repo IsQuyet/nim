@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { WEBSITE_URL } from '@/lib/constants'
+import { getSiteUrl } from '@/lib/site-config'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -8,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: '/private/',
     },
-    sitemap: `${WEBSITE_URL}/sitemap.xml`,
+    sitemap: new URL('/sitemap.xml', getSiteUrl()).href,
   }
 }

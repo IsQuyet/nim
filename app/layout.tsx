@@ -4,6 +4,7 @@ import './globals.css'
 import { Header } from './header'
 import { Footer } from './footer'
 import { ThemeProvider } from 'next-themes'
+import { getSiteUrl } from '@/lib/site-config'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -12,7 +13,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://nim-fawn.vercel.app/'),
+  metadataBase: getSiteUrl(),
   alternates: {
     canonical: '/'
   },
