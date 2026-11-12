@@ -23,6 +23,9 @@ export const metadata: Metadata = {
     template: `%s | ${SITE.name}`
   },
   description: SITE.description,
+  openGraph: {
+    images: ['/cover.jpg'],
+  },
 };
 
 const geist = Geist({
