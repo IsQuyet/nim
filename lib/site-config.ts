@@ -19,10 +19,11 @@ export function getSiteUrl(environment: SiteEnvironment = process.env): URL {
   }
 
   const isHttp = url.protocol === 'http:' || url.protocol === 'https:'
+  // 规范化后的 href 必须恰好是 origin 加 /，以此排除凭据、子路径、查询和片段。
   const isSiteRoot = url.href === `${url.origin}/`
 
   if (!isHttp || !isSiteRoot) {
-    throw new Error('SITE_URL 必须是 HTTP 或 HTTPS 站点根地址。')
+    throw new Error('SITE_URL 必须是站点根地址。')
   }
 
   return url
