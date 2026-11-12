@@ -1,12 +1,3 @@
-export const metadata = {
-  title: '为什么想找一款记账软件，最后却让我思考起了数据的开放？',
-  description:
-    '从寻找记账软件出发，思考个人财务数据的可携带性、授权访问，以及安全与开放之间的关系。',
-  alternates: {
-    canonical: '/blog/financial-data-portability',
-  },
-}
-
 # 为什么想找一款记账软件，最后却让我思考起了数据的开放？
 
 最开始，我只是想找一款方便的记账软件。

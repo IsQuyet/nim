@@ -9,8 +9,10 @@ describe('首页文章索引', () => {
     expect(new Set(BLOG_POSTS.map(post => post.uid)).size).toBe(BLOG_POSTS.length)
     expect(new Set(BLOG_POSTS.map(post => post.link)).size).toBe(BLOG_POSTS.length)
     const appDirectory = dirname(fileURLToPath(import.meta.url))
+    expect(existsSync(resolve(appDirectory, 'blog', '[slug]', 'page.tsx'))).toBe(true)
     for (const post of BLOG_POSTS) {
-      const file = resolve(appDirectory, post.link.slice(1), 'page.mdx')
+      const slug = post.link.slice('/blog/'.length)
+      const file = resolve(appDirectory, '..', 'content', 'blog', `${slug}.md`)
       expect(existsSync(file), post.link).toBe(true)
     }
   })
