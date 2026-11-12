@@ -1,3 +1,14 @@
+type Site = {
+  name: string
+  description: string
+}
+
+type Profile = {
+  name: string
+  role: string
+  description: string
+}
+
 type Project = {
   name: string
   description: string
@@ -27,12 +38,12 @@ type SocialLink = {
   link: string
 }
 
-export const SITE = {
+export const SITE: Site = {
   name: 'Site name',
   description: 'A short description of this site.',
 }
 
-export const PROFILE = {
+export const PROFILE: Profile = {
   name: 'Your name',
   role: 'Your role',
   description: 'A short introduction about you.',
