@@ -8,13 +8,15 @@
     "start": "next start",
     "lint": "eslint .",
     "check-types": "next typegen && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:init": "tsx scripts/init-database.ts"
   },
   "engines": {
     "node": ">=24"
   },
   "dependencies": {
     "@tailwindcss/typography": "0.5.20",
+    "better-sqlite3": "^13.1.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",
@@ -28,9 +30,11 @@
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
+    "@next/env": "^16.4.6",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -42,6 +46,7 @@
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.10",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },

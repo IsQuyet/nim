@@ -10,6 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
+# 本地数据库
+/.data/
+
 # testing
 /coverage
 
