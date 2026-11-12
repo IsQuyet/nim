@@ -27,6 +27,12 @@ type SocialLink = {
   link: string
 }
 
+export const PROFILE = {
+  name: 'Your name',
+  role: 'Your role',
+  description: 'A short introduction about you.',
+}
+
 export const PROJECTS: Project[] = [
   {
     name: 'Project name',
