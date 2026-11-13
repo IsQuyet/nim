@@ -3,33 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PostSummary } from '@/lib/posts'
 import AdminPage from './page'
 
-const mocks = vi.hoisted(() => ({
-  requireAdminSession: vi.fn(),
-  openDatabase: vi.fn(),
-  createPostStore: vi.fn(),
-  listPosts: vi.fn(),
-  close: vi.fn(),
-}))
-
-vi.mock('@/lib/auth', () => ({ requireAdminSession: mocks.requireAdminSession }))
-vi.mock('@/lib/database', () => ({ openDatabase: mocks.openDatabase }))
-vi.mock('@/lib/posts', () => ({ createPostStore: mocks.createPostStore }))
+const getAdminPosts = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/admin-posts', () => ({ getAdminPosts }))
 
 beforeEach(() => {
-  for (const mock of Object.values(mocks)) mock.mockReset()
-  mocks.requireAdminSession.mockResolvedValue({ githubId: '1234' })
-  mocks.openDatabase.mockReturnValue({ close: mocks.close })
-  mocks.createPostStore.mockReturnValue({ listPosts: mocks.listPosts })
-  mocks.listPosts.mockReturnValue([])
+  getAdminPosts.mockReset()
+  getAdminPosts.mockResolvedValue([])
 })
 
 describe('管理员文章列表', () => {
-  it('未通过管理员验证时不读取数据库', async () => {
+  it('权限检查失败时不渲染文章列表', async () => {
     const denied = new Error('Redirect to sign-in')
-    mocks.requireAdminSession.mockRejectedValue(denied)
+    getAdminPosts.mockRejectedValue(denied)
 
     await expect(AdminPage()).rejects.toBe(denied)
-    expect(mocks.openDatabase).not.toHaveBeenCalled()
   })
 
   it('没有文章时显示空状态', async () => {
@@ -37,7 +24,6 @@ describe('管理员文章列表', () => {
 
     expect(screen.getByText('No posts yet.')).toBeDefined()
     expect(screen.queryByRole('list', { name: 'Posts' })).toBeNull()
-    expect(mocks.close).toHaveBeenCalledOnce()
   })
 
   it('展示草稿摘要与发布状态，仅为已有发布版本提供公开阅读链接', async () => {
@@ -64,7 +50,7 @@ describe('管理员文章列表', () => {
         status: 'modified',
       },
     ]
-    mocks.listPosts.mockReturnValue(posts)
+    getAdminPosts.mockResolvedValue(posts)
 
     render(await AdminPage())
 
@@ -83,6 +69,5 @@ describe('管理员文章列表', () => {
       .toBe(`/blog/${posts[1].id}`)
     expect(within(items[2]).getByRole('link', { name: 'View published' }).getAttribute('href'))
       .toBe(`/blog/${posts[2].id}`)
-    expect(mocks.close).toHaveBeenCalledOnce()
   })
 })
