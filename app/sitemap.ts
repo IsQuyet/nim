@@ -1,11 +1,12 @@
 import type { MetadataRoute } from 'next'
-import { BLOG_POSTS } from './data'
+import { getBlogPosts } from '@/lib/blog'
 import { getSiteUrl } from '@/lib/site-config'
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const posts = await getBlogPosts()
   const siteUrl = getSiteUrl()
 
-  return ['/', ...BLOG_POSTS.map(post => post.link)].map(path => ({
+  return ['/', ...posts.map(post => `/blog/${post.slug}`)].map(path => ({
     url: new URL(path, siteUrl).href,
   }))
 }

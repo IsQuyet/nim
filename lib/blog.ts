@@ -1,16 +1,28 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import 'server-only'
 import { cache } from 'react'
-import { BLOG_POSTS } from '@/app/data'
+import { connection } from 'next/server'
+import { openDatabase } from './database'
+import { createPostStore } from './posts'
 
 export const getBlogPost = cache(async (slug: string) => {
-  const post = BLOG_POSTS.find(post => post.link === `/blog/${slug}`)
-  if (!post) return null
+  // 同步 SQLite 查询本身不会退出预渲染，须先等待请求再读库。
+  await connection()
+  const database = openDatabase()
 
-  const body = await readFile(
-    join(process.cwd(), 'content', 'blog', `${slug}.md`),
-    'utf8',
-  )
+  try {
+    return createPostStore(database).getPublishedPost(slug)
+  } finally {
+    database.close()
+  }
+})
 
-  return { ...post, body }
+export const getBlogPosts = cache(async () => {
+  await connection()
+  const database = openDatabase()
+
+  try {
+    return createPostStore(database).listPublishedPosts()
+  } finally {
+    database.close()
+  }
 })

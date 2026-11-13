@@ -23,7 +23,10 @@ const schema = `
 `
 
 export function getDatabasePath() {
-  return resolve(process.env.DATABASE_PATH?.trim() || '.data/nim.sqlite')
+  // 数据库是运行时持久文件，不应追踪并打包本地数据库及整个项目。
+  return resolve(
+    /* turbopackIgnore: true */ process.env.DATABASE_PATH?.trim() || '.data/nim.sqlite',
+  )
 }
 
 export function initializeDatabase(filename = getDatabasePath()) {

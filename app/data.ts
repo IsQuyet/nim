@@ -70,6 +70,7 @@ export const WORK_EXPERIENCE: WorkExperience[] = [
   },
 ]
 
+// 仅供显式导入使用，公开页面从数据库读取已发布内容。
 export const BLOG_POSTS: BlogPost[] = [
   {
     title: '为什么想找一款记账软件，最后却让我思考起了数据的开放？',
