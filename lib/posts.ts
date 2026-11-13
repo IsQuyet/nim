@@ -30,6 +30,13 @@ export type PublishedPostSummary = Pick<
   'id' | 'slug' | 'title' | 'description' | 'publishedAt'
 >
 
+export type PostSummary = Pick<
+  DraftPost,
+  'id' | 'slug' | 'title' | 'description' | 'updatedAt'
+> & {
+  status: 'draft' | 'published' | 'modified'
+}
+
 export function importPublishedPosts(database: Database, posts: CreateDraftInput[]) {
   const store = createPostStore(database)
   const selectExisting = database.prepare<[string], { id: string }>(
@@ -62,6 +69,18 @@ export function createPostStore(database: Database) {
     FROM posts p
     JOIN post_contents c ON c.post_id = p.id AND c.stage = 'draft'
     WHERE p.id = ?
+  `)
+  const selectPostList = database.prepare<[], PostSummary>(`
+    SELECT p.id, p.slug, d.title, d.description, d.updated_at AS updatedAt,
+      CASE
+        WHEN c.post_id IS NULL THEN 'draft'
+        WHEN (d.title, d.description, d.body) = (c.title, c.description, c.body) THEN 'published'
+        ELSE 'modified'
+      END AS status
+    FROM posts p
+    JOIN post_contents d ON d.post_id = p.id AND d.stage = 'draft'
+    LEFT JOIN post_contents c ON c.post_id = p.id AND c.stage = 'published'
+    ORDER BY d.updated_at DESC, p.id ASC
   `)
   const selectPublished = database.prepare<[string], PublishedPost>(`
     SELECT p.id, p.slug, p.created_at AS createdAt,
@@ -155,6 +174,10 @@ export function createPostStore(database: Database) {
     }
   }).immediate
 
+  function listPosts() {
+    return selectPostList.all()
+  }
+
   function listPublishedPosts() {
     return selectPublishedList.all()
   }
@@ -165,6 +188,7 @@ export function createPostStore(database: Database) {
     publishDraft,
     getDraft,
     getPublishedPost,
+    listPosts,
     listPublishedPosts,
   }
 }

@@ -25,6 +25,40 @@ afterEach(() => {
   if (directory) rmSync(directory, { recursive: true })
 })
 
+describe('文章管理列表', () => {
+  it('列出草稿摘要，并依据完整发布快照区分状态，恢复相同内容后不再标记修改', () => {
+    const content = {
+      title: 'First post',
+      description: 'Post description.',
+      body: '# First body',
+    }
+    expect(store.listPosts()).toEqual([])
+    const draft = store.createDraft({ slug: 'first-post', ...content })
+    const summary = {
+      id: draft.id,
+      slug: draft.slug,
+      title: content.title,
+      description: content.description,
+      updatedAt: draft.updatedAt,
+    }
+    expect(store.listPosts()).toEqual([{ ...summary, status: 'draft' }])
+
+    const published = store.publishDraft(draft.id)
+    expect(store.listPosts()).toEqual([{ ...summary, status: 'published' }])
+
+    const edited = store.saveDraft(draft.id, { ...content, body: '# Revised body' })
+    expect(store.listPosts()).toEqual([
+      { ...summary, updatedAt: edited.updatedAt, status: 'modified' },
+    ])
+    expect(store.getPublishedPost(draft.slug)).toEqual(published)
+
+    const restored = store.saveDraft(draft.id, content)
+    expect(store.listPosts()).toEqual([
+      { ...summary, updatedAt: restored.updatedAt, status: 'published' },
+    ])
+  })
+})
+
 describe('已发布文章导入', () => {
   it('将标题、摘要和 Markdown 原文一起持久导入，保留原来的 slug', () => {
     const input = {
