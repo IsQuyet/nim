@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Database } from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initializeDatabase, openDatabase } from './database'
-import { createPostStore } from './posts'
+import { createPostStore, importPublishedPosts } from './posts'
 
 let directory: string
 let filename: string
@@ -23,6 +23,63 @@ beforeEach(() => {
 afterEach(() => {
   if (database?.open) database.close()
   if (directory) rmSync(directory, { recursive: true })
+})
+
+describe('已发布文章导入', () => {
+  it('将标题、摘要和 Markdown 原文一起持久导入，保留原来的 slug', () => {
+    const input = {
+      slug: 'existing-post',
+      title: 'Existing post',
+      description: 'Existing description.',
+      body: '# Existing post\n\n**Markdown** content.\n',
+    }
+
+    expect(importPublishedPosts(database, [input])).toEqual({ imported: 1, skipped: 0 })
+    database.close()
+    database = openDatabase(filename)
+    store = createPostStore(database)
+
+    const published = store.getPublishedPost(input.slug)
+    expect(published).toMatchObject(input)
+    expect(store.getDraft(published!.id)).toMatchObject(input)
+    expect(store.listPublishedPosts()).toEqual([
+      {
+        id: published!.id,
+        slug: input.slug,
+        title: input.title,
+        description: input.description,
+        publishedAt: published!.publishedAt,
+      },
+    ])
+  })
+
+  it('重复导入不覆盖已编辑的草稿和发布版本，也不发布已有的未发布草稿', () => {
+    const original = {
+      slug: 'existing-post',
+      title: 'Original title',
+      description: 'Original description.',
+      body: '# Original body',
+    }
+    const draft = store.createDraft(original)
+    const published = store.publishDraft(draft.id)
+    const edited = store.saveDraft(draft.id, {
+      title: 'Edited title',
+      description: 'Edited description.',
+      body: '# Edited body',
+    })
+    const unpublished = store.createDraft({ ...original, slug: 'unpublished-post' })
+
+    expect(importPublishedPosts(database, [
+      { ...original, title: 'Outdated source title' },
+      { ...original, slug: unpublished.slug },
+    ])).toEqual({ imported: 0, skipped: 2 })
+
+    expect(store.getDraft(draft.id)).toEqual(edited)
+    expect(store.getPublishedPost(draft.slug)).toEqual(published)
+    expect(store.getDraft(unpublished.id)).toEqual(unpublished)
+    expect(store.getPublishedPost(unpublished.slug)).toBeNull()
+    expect(store.listPublishedPosts()).toHaveLength(1)
+  })
 })
 
 describe('文章持久化与发布边界', () => {

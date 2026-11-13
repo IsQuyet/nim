@@ -30,6 +30,31 @@ export type PublishedPostSummary = Pick<
   'id' | 'slug' | 'title' | 'description' | 'publishedAt'
 >
 
+export function importPublishedPosts(database: Database, posts: CreateDraftInput[]) {
+  const store = createPostStore(database)
+  const selectExisting = database.prepare<[string], { id: string }>(
+    'SELECT id FROM posts WHERE slug = ?',
+  )
+
+  return database.transaction(() => {
+    let imported = 0
+    let skipped = 0
+
+    for (const post of posts) {
+      if (selectExisting.get(post.slug)) {
+        skipped += 1
+        continue
+      }
+
+      const draft = store.createDraft(post)
+      store.publishDraft(draft.id)
+      imported += 1
+    }
+
+    return { imported, skipped }
+  }).immediate()
+}
+
 export function createPostStore(database: Database) {
   const selectDraft = database.prepare<[string], DraftPost>(`
     SELECT p.id, p.slug, p.created_at AS createdAt,
