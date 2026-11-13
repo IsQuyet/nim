@@ -5,6 +5,7 @@ import GitHub from 'next-auth/providers/github'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
 import { getSiteUrl } from './site-config'
+import { getAuthSecret } from './auth-secret'
 
 declare module 'next-auth' {
   interface Session {
@@ -14,17 +15,16 @@ declare module 'next-auth' {
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 
-type AuthEnvironment = Readonly<Record<string, string | undefined>>
+export function getAuthOptions(): NextAuthOptions | null {
+  const clientId = process.env.GITHUB_CLIENT_ID?.trim()
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim()
+  const adminId = process.env.ADMIN_GITHUB_ID?.trim()
+  if (!clientId || !clientSecret || !adminId) return null
 
-export function getAuthOptions(environment: AuthEnvironment = process.env): NextAuthOptions | null {
-  const clientId = environment.GITHUB_CLIENT_ID?.trim()
-  const clientSecret = environment.GITHUB_CLIENT_SECRET?.trim()
-  const adminId = environment.ADMIN_GITHUB_ID?.trim()
-  const secret = environment.AUTH_SECRET?.trim()
+  const secret = getAuthSecret()
+  if (!secret) return null
 
-  if (!clientId || !clientSecret || !adminId || !secret) return null
-
-  const siteUrl = getSiteUrl(environment)
+  const siteUrl = getSiteUrl()
   // NextAuth v4 从环境变量读取回调基址，统一由 SITE_URL 提供，不另配域名。
   process.env.NEXTAUTH_URL = siteUrl.origin
 

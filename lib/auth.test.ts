@@ -1,7 +1,11 @@
 // @vitest-environment node
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getServerSession, type Account } from 'next-auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession, getAuthOptions } from './auth'
+import { getAuthSecret, initializeAuthSecret } from './auth-secret'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/server', () => ({ connection: async () => {} }))
@@ -25,16 +29,23 @@ function githubAccount(id: string, provider = 'github'): Account {
   }
 }
 
+let directory: string
+
 beforeEach(() => {
+  directory = mkdtempSync(join(tmpdir(), 'nim-auth-options-'))
+  vi.stubEnv('DATABASE_PATH', join(directory, 'nim.sqlite'))
   for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
   vi.stubEnv('NEXTAUTH_URL', '')
   vi.mocked(getServerSession).mockReset()
 })
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  if (directory) rmSync(directory, { recursive: true })
+})
 
 describe('管理员身份与认证配置', () => {
-  it.each(['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'ADMIN_GITHUB_ID', 'AUTH_SECRET'])(
+  it.each(['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'ADMIN_GITHUB_ID'])(
     '缺少 %s 时不启用认证，不授予管理员会话',
     async name => {
       vi.stubEnv(name, '')
@@ -43,6 +54,16 @@ describe('管理员身份与认证配置', () => {
       expect(getServerSession).not.toHaveBeenCalled()
     },
   )
+
+  it('无需手填 AUTH_SECRET，初始化后使用持久密钥，未初始化时保持关闭', () => {
+    vi.stubEnv('AUTH_SECRET', '')
+    expect(getAuthOptions()).toBeNull()
+
+    initializeAuthSecret()
+
+    expect(getAuthOptions()?.secret).toBe(getAuthSecret())
+    expect(getAuthOptions()?.secret).toBeTruthy()
+  })
 
   it('只允许指定 GitHub 账号，名字、邮箱或其他身份来源不能替代账号 ID', async () => {
     const signIn = getAuthOptions()!.callbacks!.signIn!

@@ -10,8 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
-# 本地数据库
+# 本地持久化数据与会话密钥
 /.data/
+auth-secret
 
 # testing
 /coverage

@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
+import { getDatabasePath } from './data-paths'
 
 const schema = `
   CREATE TABLE posts (
@@ -21,13 +22,6 @@ const schema = `
 
   PRAGMA user_version = 1;
 `
-
-export function getDatabasePath() {
-  // 数据库是运行时持久文件，不应追踪并打包本地数据库及整个项目。
-  return resolve(
-    /* turbopackIgnore: true */ process.env.DATABASE_PATH?.trim() || '.data/nim.sqlite',
-  )
-}
 
 export function initializeDatabase(filename = getDatabasePath()) {
   mkdirSync(dirname(filename), { recursive: true })
