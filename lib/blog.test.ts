@@ -33,7 +33,7 @@ afterEach(() => {
 describe('公开文章数据来源', () => {
   it('空库返回空列表和不存在，不回退到仓库里的文章', async () => {
     expect(await getBlogPosts()).toEqual([])
-    expect(await getBlogPost('financial-data-portability')).toBeNull()
+    expect(await getBlogPost('264efa5a-5f48-4f4d-bbc3-56021a5f6342')).toBeNull()
   })
 
   it('只读取数据库中的发布快照，支持新文章，保存草稿不改变公开结果', async () => {
@@ -47,19 +47,18 @@ describe('公开文章数据来源', () => {
       description: 'Revised description.',
       body: '# Revised body',
     }
-    const draft = store.createDraft({ slug: 'new-database-post', ...first })
+    const draft = store.createDraft(first)
 
     expect(await getBlogPosts()).toEqual([])
-    expect(await getBlogPost(draft.slug)).toBeNull()
+    expect(await getBlogPost(draft.id)).toBeNull()
 
     const published = store.publishDraft(draft.id)
     store.saveDraft(draft.id, second)
 
-    expect(await getBlogPost(draft.slug)).toEqual(published)
+    expect(await getBlogPost(draft.id)).toEqual(published)
     expect(await getBlogPosts()).toEqual([
       {
         id: draft.id,
-        slug: draft.slug,
         title: first.title,
         description: first.description,
         publishedAt: published.publishedAt,
@@ -67,11 +66,10 @@ describe('公开文章数据来源', () => {
     ])
 
     const republished = store.publishDraft(draft.id)
-    expect(await getBlogPost(draft.slug)).toEqual(republished)
+    expect(await getBlogPost(draft.id)).toEqual(republished)
     expect(await getBlogPosts()).toEqual([
       {
         id: draft.id,
-        slug: draft.slug,
         title: second.title,
         description: second.description,
         publishedAt: republished.publishedAt,

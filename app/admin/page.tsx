@@ -51,13 +51,13 @@ export default async function AdminPage() {
                 <p className="text-zinc-600 dark:text-zinc-400">{post.description}</p>
               )}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                <span className="break-all">/blog/{post.slug}</span>
+                <span className="break-all">/blog/{post.id}</span>
                 <time dateTime={post.updatedAt}>
                   Updated {dateFormatter.format(new Date(post.updatedAt))}
                 </time>
                 {post.status !== 'draft' && (
                   <Link
-                    href={`/blog/${post.slug}`}
+                    href={`/blog/${post.id}`}
                     className="underline underline-offset-4 transition-colors hover:text-zinc-950 dark:hover:text-zinc-100"
                   >
                     View published

@@ -235,7 +235,7 @@ export function HomeContent({ posts }: HomeContentProps) {
               <Link
                 key={post.id}
                 className="-mx-3 rounded-xl px-3 py-3"
-                href={`/blog/${post.slug}`}
+                href={`/blog/${post.id}`}
                 data-id={post.id}
               >
                 <div className="flex flex-col space-y-1">

@@ -6,7 +6,6 @@ import { getDatabasePath } from './data-paths'
 const schema = `
   CREATE TABLE posts (
     id TEXT PRIMARY KEY NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL
   );
 
@@ -20,7 +19,7 @@ const schema = `
     PRIMARY KEY (post_id, stage)
   );
 
-  PRAGMA user_version = 1;
+  PRAGMA user_version = 2;
 `
 
 export function initializeDatabase(filename = getDatabasePath()) {
@@ -34,7 +33,30 @@ export function initializeDatabase(filename = getDatabasePath()) {
 
     if (version === 0) {
       database.transaction(() => database.exec(schema)).immediate()
-    } else if (version !== 1) {
+    } else if (version === 1) {
+      // 重建身份表时暂时关闭外键，事务内检查快照关联，避免触发级联删除。
+      database.pragma('foreign_keys = OFF')
+      try {
+        database.transaction(() => {
+          database.exec(`
+            CREATE TABLE posts_next (
+              id TEXT PRIMARY KEY NOT NULL,
+              created_at TEXT NOT NULL
+            );
+            INSERT INTO posts_next (id, created_at) SELECT id, created_at FROM posts;
+            DROP TABLE posts;
+            ALTER TABLE posts_next RENAME TO posts;
+            PRAGMA user_version = 2;
+          `)
+          const violations = database.pragma('foreign_key_check') as unknown[]
+          if (violations.length > 0) {
+            throw new Error('数据库外键检查失败。')
+          }
+        }).immediate()
+      } finally {
+        database.pragma('foreign_keys = ON')
+      }
+    } else if (version !== 2) {
       throw new Error(`不支持的数据库结构版本：${version}`)
     }
   } finally {

@@ -2,18 +2,16 @@ import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { BLOG_POSTS } from './data'
+import { BLOG_POST_SOURCES } from './data'
 
 describe('仓库文章导入素材', () => {
-  it('每篇导入文章都有对应路由和正文文件，链接和标识不重复', () => {
-    expect(new Set(BLOG_POSTS.map(post => post.uid)).size).toBe(BLOG_POSTS.length)
-    expect(new Set(BLOG_POSTS.map(post => post.link)).size).toBe(BLOG_POSTS.length)
+  it('素材 ID 和文件不重复，正文文件存在', () => {
+    expect(new Set(BLOG_POST_SOURCES.map(post => post.id)).size).toBe(BLOG_POST_SOURCES.length)
+    expect(new Set(BLOG_POST_SOURCES.map(post => post.file)).size).toBe(BLOG_POST_SOURCES.length)
     const appDirectory = dirname(fileURLToPath(import.meta.url))
-    expect(existsSync(resolve(appDirectory, 'blog', '[slug]', 'page.tsx'))).toBe(true)
-    for (const post of BLOG_POSTS) {
-      const slug = post.link.slice('/blog/'.length)
-      const file = resolve(appDirectory, '..', 'content', 'blog', `${slug}.md`)
-      expect(existsSync(file), post.link).toBe(true)
+    for (const post of BLOG_POST_SOURCES) {
+      const file = resolve(appDirectory, '..', 'content', 'blog', post.file)
+      expect(existsSync(file), post.file).toBe(true)
     }
   })
 })

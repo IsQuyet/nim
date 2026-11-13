@@ -6,7 +6,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getBlogPosts()
   const siteUrl = getSiteUrl()
 
-  return ['/', ...posts.map(post => `/blog/${post.slug}`)].map(path => ({
+  return ['/', ...posts.map(post => `/blog/${post.id}`)].map(path => ({
     url: new URL(path, siteUrl).href,
   }))
 }

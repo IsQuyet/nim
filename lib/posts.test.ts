@@ -33,10 +33,9 @@ describe('文章管理列表', () => {
       body: '# First body',
     }
     expect(store.listPosts()).toEqual([])
-    const draft = store.createDraft({ slug: 'first-post', ...content })
+    const draft = store.createDraft(content)
     const summary = {
       id: draft.id,
-      slug: draft.slug,
       title: content.title,
       description: content.description,
       updatedAt: draft.updatedAt,
@@ -50,7 +49,7 @@ describe('文章管理列表', () => {
     expect(store.listPosts()).toEqual([
       { ...summary, updatedAt: edited.updatedAt, status: 'modified' },
     ])
-    expect(store.getPublishedPost(draft.slug)).toEqual(published)
+    expect(store.getPublishedPost(draft.id)).toEqual(published)
 
     const restored = store.saveDraft(draft.id, content)
     expect(store.listPosts()).toEqual([
@@ -60,9 +59,9 @@ describe('文章管理列表', () => {
 })
 
 describe('已发布文章导入', () => {
-  it('将标题、摘要和 Markdown 原文一起持久导入，保留原来的 slug', () => {
+  it('按素材 ID 持久导入标题、摘要和 Markdown 原文', () => {
     const input = {
-      slug: 'existing-post',
+      id: '9ea8d4be-4b45-46d2-954c-3e1da354d33f',
       title: 'Existing post',
       description: 'Existing description.',
       body: '# Existing post\n\n**Markdown** content.\n',
@@ -73,13 +72,12 @@ describe('已发布文章导入', () => {
     database = openDatabase(filename)
     store = createPostStore(database)
 
-    const published = store.getPublishedPost(input.slug)
+    const published = store.getPublishedPost(input.id)
     expect(published).toMatchObject(input)
-    expect(store.getDraft(published!.id)).toMatchObject(input)
+    expect(store.getDraft(input.id)).toMatchObject(input)
     expect(store.listPublishedPosts()).toEqual([
       {
-        id: published!.id,
-        slug: input.slug,
+        id: input.id,
         title: input.title,
         description: input.description,
         publishedAt: published!.publishedAt,
@@ -88,43 +86,43 @@ describe('已发布文章导入', () => {
   })
 
   it('重复导入不覆盖已编辑的草稿和发布版本，也不发布已有的未发布草稿', () => {
-    const original = {
-      slug: 'existing-post',
+    const content = {
       title: 'Original title',
       description: 'Original description.',
       body: '# Original body',
     }
-    const draft = store.createDraft(original)
+    const draft = store.createDraft(content)
     const published = store.publishDraft(draft.id)
     const edited = store.saveDraft(draft.id, {
       title: 'Edited title',
       description: 'Edited description.',
       body: '# Edited body',
     })
-    const unpublished = store.createDraft({ ...original, slug: 'unpublished-post' })
+    const unpublished = store.createDraft(content)
 
     expect(importPublishedPosts(database, [
-      { ...original, title: 'Outdated source title' },
-      { ...original, slug: unpublished.slug },
+      { ...content, id: draft.id, title: 'Outdated source title' },
+      { ...content, id: unpublished.id },
     ])).toEqual({ imported: 0, skipped: 2 })
 
     expect(store.getDraft(draft.id)).toEqual(edited)
-    expect(store.getPublishedPost(draft.slug)).toEqual(published)
+    expect(store.getPublishedPost(draft.id)).toEqual(published)
     expect(store.getDraft(unpublished.id)).toEqual(unpublished)
-    expect(store.getPublishedPost(unpublished.slug)).toBeNull()
+    expect(store.getPublishedPost(unpublished.id)).toBeNull()
     expect(store.listPublishedPosts()).toHaveLength(1)
   })
 })
 
 describe('文章持久化与发布边界', () => {
-  it('重开数据库及重复初始化后草稿仍在，未发布内容不出现在公开读取中', () => {
+  it('只提供内容即可生成独立 ID，重开数据库及重复初始化后草稿仍在', () => {
     const input = {
-      slug: 'first-post',
       title: 'First post',
       description: 'A saved draft.',
       body: '# Draft\n\nMarkdown content.',
     }
     const draft = store.createDraft(input)
+    const another = store.createDraft(input)
+    expect(another.id).not.toBe(draft.id)
 
     database.close()
     initializeDatabase(filename)
@@ -132,11 +130,11 @@ describe('文章持久化与发布边界', () => {
     store = createPostStore(database)
 
     expect(store.getDraft(draft.id)).toEqual(draft)
-    expect(store.getPublishedPost(input.slug)).toBeNull()
+    expect(store.getPublishedPost(draft.id)).toBeNull()
     expect(store.listPublishedPosts()).toEqual([])
   })
 
-  it('保存草稿不改变发布快照，再次发布才整体替换公开内容', () => {
+  it('保存草稿不改变发布快照，再次发布才整体替换公开内容，文章 ID 始终不变', () => {
     const first = {
       title: 'Published title',
       description: 'Published description.',
@@ -147,16 +145,15 @@ describe('文章持久化与发布边界', () => {
       description: 'Edited description.',
       body: '# Edited body',
     }
-    const draft = store.createDraft({ slug: 'first-post', ...first })
+    const draft = store.createDraft(first)
     const published = store.publishDraft(draft.id)
     store.saveDraft(draft.id, second)
 
     expect(store.getDraft(draft.id)).toMatchObject(second)
-    expect(store.getPublishedPost(draft.slug)).toEqual(published)
+    expect(store.getPublishedPost(draft.id)).toEqual(published)
     expect(store.listPublishedPosts()).toEqual([
       {
         id: draft.id,
-        slug: draft.slug,
         title: first.title,
         description: first.description,
         publishedAt: published.publishedAt,
@@ -164,8 +161,8 @@ describe('文章持久化与发布边界', () => {
     ])
 
     const republished = store.publishDraft(draft.id)
-    expect(republished).toMatchObject(second)
-    expect(store.getPublishedPost(draft.slug)).toEqual(republished)
+    expect(republished).toMatchObject({ id: draft.id, ...second })
+    expect(store.getPublishedPost(draft.id)).toEqual(republished)
     expect(store.listPublishedPosts()).toHaveLength(1)
     expect(store.listPublishedPosts()[0]).toMatchObject({
       title: second.title,

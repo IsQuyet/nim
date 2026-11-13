@@ -4,8 +4,8 @@ import sitemap from './sitemap'
 
 vi.mock('@/lib/blog', () => ({
   getBlogPosts: async () => [
-    { slug: 'first-post' },
-    { slug: 'second-post' },
+    { id: '3f4229bc-e848-47fc-88b0-358c90b111b5' },
+    { id: '68767e8c-c86e-4b97-bb15-356c2553f49c' },
   ],
 }))
 
@@ -16,8 +16,8 @@ describe('公开站点爬虫入口', () => {
     vi.stubEnv('SITE_URL', 'https://example.test')
     expect(await sitemap()).toEqual([
       { url: 'https://example.test/' },
-      { url: 'https://example.test/blog/first-post' },
-      { url: 'https://example.test/blog/second-post' },
+      { url: 'https://example.test/blog/3f4229bc-e848-47fc-88b0-358c90b111b5' },
+      { url: 'https://example.test/blog/68767e8c-c86e-4b97-bb15-356c2553f49c' },
     ])
   })
 
