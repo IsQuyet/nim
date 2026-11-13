@@ -12,7 +12,6 @@ let directory: string
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'nim-auth-secret-'))
   vi.stubEnv('DATABASE_PATH', join(directory, 'data', 'nim.sqlite'))
-  vi.stubEnv('AUTH_SECRET', '')
 })
 
 afterEach(() => {
@@ -45,18 +44,6 @@ describe('会话密钥的初始化与持久保存', () => {
     expect(readFileSync(filename, 'utf8')).toBe(stored)
     expect(getAuthSecret()).toBe(secret)
     expect(await decode({ secret: getAuthSecret()!, token })).toMatchObject({ githubId: '1234' })
-  })
-
-  it('已有手动密钥时保存同一值，之后不再手填也不更换密钥', () => {
-    const secret = 'existing-secret-kept-across-initialization'
-    vi.stubEnv('AUTH_SECRET', secret)
-
-    initializeAuthSecret()
-
-    expect(getAuthSecret()).toBe(secret)
-    expect(readFileSync(getAuthSecretPath(), 'utf8').trim()).toBe(secret)
-    vi.stubEnv('AUTH_SECRET', '')
-    expect(getAuthSecret()).toBe(secret)
   })
 
   it('已有密钥文件为空时明确失败，不生成新密钥覆盖它', () => {

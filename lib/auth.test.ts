@@ -6,6 +6,7 @@ import { getServerSession, type Account } from 'next-auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession, getAuthOptions } from './auth'
 import { getAuthSecret, initializeAuthSecret } from './auth-secret'
+import { getAuthSecretPath } from './data-paths'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/server', () => ({ connection: async () => {} }))
@@ -17,7 +18,6 @@ const environment = {
   GITHUB_CLIENT_ID: 'test-client-id',
   GITHUB_CLIENT_SECRET: 'test-client-secret',
   ADMIN_GITHUB_ID: '1234',
-  AUTH_SECRET: 'test-session-secret-at-least-thirty-two-characters',
 }
 
 function githubAccount(id: string, provider = 'github'): Account {
@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.stubEnv('DATABASE_PATH', join(directory, 'nim.sqlite'))
   for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
   vi.stubEnv('NEXTAUTH_URL', '')
+  initializeAuthSecret()
   vi.mocked(getServerSession).mockReset()
 })
 
@@ -55,14 +56,13 @@ describe('管理员身份与认证配置', () => {
     },
   )
 
-  it('无需手填 AUTH_SECRET，初始化后使用持久密钥，未初始化时保持关闭', () => {
-    vi.stubEnv('AUTH_SECRET', '')
-    expect(getAuthOptions()).toBeNull()
-
-    initializeAuthSecret()
-
+  it('认证使用持久文件中的密钥，文件缺失时保持关闭', () => {
     expect(getAuthOptions()?.secret).toBe(getAuthSecret())
     expect(getAuthOptions()?.secret).toBeTruthy()
+
+    rmSync(getAuthSecretPath())
+
+    expect(getAuthOptions()).toBeNull()
   })
 
   it('只允许指定 GitHub 账号，名字、邮箱或其他身份来源不能替代账号 ID', async () => {
