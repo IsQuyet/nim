@@ -427,20 +427,26 @@ describe('管理员认证与数据库会话', () => {
     const orm = openDatabase()
     const original = { title: 'Saved title', description: '', body: '# Saved body\r\n' }
     let id: string
+    let expectedRevisionId: number
     try {
-      id = createPostStore(orm).createDraft(original).id
+      const draft = createPostStore(orm).createDraft(original)
+      id = draft.id
+      expectedRevisionId = draft.revisionId
     } finally {
       orm.$client.close()
     }
     database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
     const { saveDraftAction } = await import('../app/admin/actions')
 
-    expect(await saveDraftAction(id, { status: 'idle' }, { ...original, body: '# Unsaved body' })).toEqual({
+    expect(await saveDraftAction(id, { status: 'idle' }, {
+      content: { ...original, body: '# Unsaved body' }, expectedRevisionId,
+    })).toEqual({
       status: 'error',
       message: 'Sign in to save this draft.',
       signInRequired: true,
     })
-    expect(database.prepare("SELECT title, description, body FROM post_contents WHERE post_id = ? AND stage = 'draft'").get(id))
+    expect(database.prepare(`SELECT r.title, r.description, r.body FROM post_revisions r
+      INNER JOIN post_drafts d ON d.revision_id = r.id WHERE d.post_id = ?`).get(id))
       .toEqual(original)
   })
 

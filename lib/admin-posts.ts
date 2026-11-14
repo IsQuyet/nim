@@ -1,6 +1,7 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { getAdminSession } from './auth'
+import type { PostStore } from './content'
 import { openDatabase } from './database'
 import { createPostStore } from './posts'
 
@@ -9,13 +10,13 @@ type AdminPostStoreResult<T> =
   | { authorized: true; value: T }
 
 export async function withAdminPostStore<T>(
-  operation: (store: ReturnType<typeof createPostStore>) => T,
-): Promise<AdminPostStoreResult<T>> {
+  operation: (store: PostStore) => T,
+): Promise<AdminPostStoreResult<Awaited<T>>> {
   if (!(await getAdminSession())) return { authorized: false }
 
   const database = openDatabase()
   try {
-    return { authorized: true, value: operation(createPostStore(database)) }
+    return { authorized: true, value: await operation(createPostStore(database)) }
   } finally {
     database.$client.close()
   }

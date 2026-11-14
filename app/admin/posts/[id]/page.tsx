@@ -37,6 +37,7 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
           description: draft.description,
           body: draft.body,
         }}
+        initialRevisionId={draft.revisionId}
         action={saveDraftAction.bind(null, draft.id)}
       />
     </main>

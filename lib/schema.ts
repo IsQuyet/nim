@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
-import { check, customType, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { check, customType, foreignKey, index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import { revisionSources, revisionSourceSchema } from './content'
 
 const date = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',
@@ -12,16 +13,56 @@ export const posts = sqliteTable('posts', {
   createdAt: text('created_at').notNull(),
 })
 
-export const postContents = sqliteTable('post_contents', {
+export const postRevisions = sqliteTable('post_revisions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
-  stage: text('stage', { enum: ['draft', 'published'] }).notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
   body: text('body').notNull(),
-  updatedAt: text('updated_at').notNull(),
+  createdAt: text('created_at').notNull(),
+  source: text('source', { enum: revisionSources }).notNull(),
+  restoredFromRevisionId: integer('restored_from_revision_id'),
 }, table => [
-  primaryKey({ columns: [table.postId, table.stage] }),
-  check('post_contents_stage_check', sql`${table.stage} in ('draft', 'published')`),
+  unique('post_revisions_post_id_id_unique').on(table.postId, table.id),
+  foreignKey({
+    columns: [table.postId, table.restoredFromRevisionId],
+    foreignColumns: [table.postId, table.id],
+  }),
+  check('post_revisions_source_check', sql`${table.source} in (${sql.raw(revisionSourceSchema.options.map(source => `'${source}'`).join(', '))})`),
+  check('post_revisions_restore_check', sql`(${table.source} = ${sql.raw(`'${revisionSourceSchema.enum.restore}'`)}) = (${table.restoredFromRevisionId} is not null)`),
+])
+
+export const postDrafts = sqliteTable('post_drafts', {
+  postId: text('post_id').primaryKey().references(() => posts.id, { onDelete: 'cascade' }),
+  revisionId: integer('revision_id').notNull(),
+}, table => [
+  foreignKey({
+    columns: [table.postId, table.revisionId],
+    foreignColumns: [postRevisions.postId, postRevisions.id],
+  }),
+])
+
+export const postPublications = sqliteTable('post_publications', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  revisionId: integer('revision_id').notNull(),
+  publishedAt: text('published_at').notNull(),
+}, table => [
+  unique('post_publications_post_id_id_unique').on(table.postId, table.id),
+  foreignKey({
+    columns: [table.postId, table.revisionId],
+    foreignColumns: [postRevisions.postId, postRevisions.id],
+  }),
+])
+
+export const postPublished = sqliteTable('post_published', {
+  postId: text('post_id').primaryKey().references(() => posts.id, { onDelete: 'cascade' }),
+  publicationId: integer('publication_id').notNull(),
+}, table => [
+  foreignKey({
+    columns: [table.postId, table.publicationId],
+    foreignColumns: [postPublications.postId, postPublications.id],
+  }),
 ])
 
 export const user = sqliteTable('user', {

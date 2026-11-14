@@ -16,17 +16,61 @@ export function samePostContent(left: PostContent, right: PostContent) {
   return postContentFields.every(field => left[field] === right[field])
 }
 
+export const revisionIdSchema = z.number().int().positive().safe()
+
+export const revisionSources = ['create', 'save', 'publish', 'import', 'restore', 'migration'] as const
+export const revisionSourceSchema = z.enum(revisionSources)
+
+export type PostRevision = PostContent & {
+  id: number
+  postId: string
+  createdAt: string
+  source: z.infer<typeof revisionSourceSchema>
+  restoredFromRevisionId: number | null
+}
+
 export type DraftPost = PostContent & {
   id: string
+  revisionId: number
   createdAt: string
   updatedAt: string
 }
 
 export type PublishedPost = PostContent & {
   id: string
+  revisionId: number
+  publicationId: number
   createdAt: string
   publishedAt: string
 }
+
+export type PostPublication = {
+  id: number
+  postId: string
+  revisionId: number
+  publishedAt: string
+}
+
+export type PostMutationResult<T> =
+  | { status: 'success'; value: T }
+  | { status: 'missing' }
+  | { status: 'conflict' }
+
+export const draftWriteSchema = z.object({
+  content: postContentSchema,
+  expectedRevisionId: revisionIdSchema,
+})
+
+export const draftEditorInputSchema = draftWriteSchema.extend({
+  expectedRevisionId: revisionIdSchema.nullable(),
+})
+
+export type DraftEditorInput = z.infer<typeof draftEditorInputSchema>
+
+export type DraftFormState =
+  | { status: 'idle' }
+  | { status: 'saved'; content: PostContent; revisionId: number }
+  | { status: 'error'; message: string; signInRequired?: true }
 
 export type PublishedPostSummary = Pick<
   PublishedPost,
@@ -44,4 +88,23 @@ export type PostSummary = Pick<
 
 export type ImportPostInput = PostContent & {
   id: string
+}
+
+export type ImportDraftInput = PostContent & {
+  id?: string
+}
+
+export type PostStore = {
+  createDraft(content: PostContent): DraftPost
+  saveDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost>
+  publishDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<PublishedPost>
+  restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>
+  importDraft(input: ImportDraftInput): DraftPost
+  getDraft(id: string): DraftPost | null
+  getPublishedPost(id: string): PublishedPost | null
+  getRevision(id: string, revisionId: number): PostRevision | null
+  listRevisions(id: string): PostRevision[]
+  listPublications(id: string): PostPublication[]
+  listPosts(): PostSummary[]
+  listPublishedPosts(): PublishedPostSummary[]
 }

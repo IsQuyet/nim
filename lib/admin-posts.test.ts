@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from './auth'
-import { initializeDatabase } from './database'
+import { initializeDatabase, openDatabase } from './database'
+import * as databaseModule from './database'
 import { getAdminDraft, getAdminPosts, withAdminPostStore } from './admin-posts'
 
 vi.mock('server-only', () => ({}))
@@ -38,6 +39,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   if (directory) rmSync(directory, { recursive: true })
 })
@@ -92,10 +94,10 @@ describe('管理端文章访问', () => {
     expect(await getAdminDraft('missing')).toBeNull()
 
     const saved = await withAdminPostStore(store =>
-      store.saveDraft(draft.id, { ...first, body: '# Edited body' }),
+      store.saveDraft(draft.id, { ...first, body: '# Edited body' }, draft.revisionId),
     )
-    assert.ok(saved.authorized && saved.value)
-    const edited = saved.value
+    assert.ok(saved.authorized && saved.value.status === 'success')
+    const edited = saved.value.value
     expect(await getAdminDraft(draft.id)).toEqual(edited)
     expect(await getAdminPosts()).toEqual([
       {
@@ -108,5 +110,57 @@ describe('管理端文章访问', () => {
     ])
     expect(await withAdminPostStore(store => store.getPublishedPost(draft.id)))
       .toEqual({ authorized: true, value: null })
+  })
+
+  it('异步操作等待期间保持连接打开，完成后返回已解析值并关闭连接', async () => {
+    await initializeDatabase()
+    const database = openDatabase()
+    vi.spyOn(databaseModule, 'openDatabase').mockReturnValue(database)
+    const close = vi.spyOn(database.$client, 'close')
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const content = { title: 'Async draft', description: '', body: '# Async body' }
+    const pending = withAdminPostStore(async store => {
+      entered.resolve()
+      await resume.promise
+      expect(database.$client.open).toBe(true)
+      return store.createDraft(content)
+    })
+
+    await entered.promise
+    expect(database.$client.open).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    resume.resolve()
+    const result = await pending
+
+    assert.ok(result.authorized)
+    expect(result.value.title).toBe(content.title)
+    expect(result.value.revisionId).toBeGreaterThan(0)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(database.$client.open).toBe(false)
+  })
+
+  it('异步操作拒绝时也等待结束再关闭连接，并原样传播错误', async () => {
+    await initializeDatabase()
+    const database = openDatabase()
+    vi.spyOn(databaseModule, 'openDatabase').mockReturnValue(database)
+    const close = vi.spyOn(database.$client, 'close')
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const error = new Error('Async operation failed')
+    const pending = withAdminPostStore(async () => {
+      entered.resolve()
+      await resume.promise
+      throw error
+    })
+
+    await entered.promise
+    expect(database.$client.open).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    const rejected = expect(pending).rejects.toBe(error)
+    resume.resolve()
+    await rejected
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(database.$client.open).toBe(false)
   })
 })

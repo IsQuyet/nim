@@ -9,34 +9,56 @@ import {
 } from 'react'
 import { MarkdownContent } from '@/components/markdown-content'
 import { MarkdownProse } from '@/components/markdown-prose'
-import { samePostContent, type PostContent } from '@/lib/content'
+import {
+  samePostContent,
+  type DraftEditorInput,
+  type DraftFormState,
+  type PostContent,
+} from '@/lib/content'
 import { cn } from '@/lib/utils'
-import type { DraftFormState } from './actions'
 
 type PostEditorProps = {
   initialContent: PostContent
-  action: (state: DraftFormState, input: PostContent) => Promise<DraftFormState>
+  initialRevisionId: number | null
+  action: (state: DraftFormState, input: DraftEditorInput) => Promise<DraftFormState>
 }
 
 const FIELD_CLASS_NAME =
   'w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-zinc-900 outline-offset-4 focus-visible:outline-2 dark:border-zinc-800 dark:text-zinc-100'
 
-export function PostEditor({ initialContent, action }: PostEditorProps) {
+export function PostEditor({
+  initialContent,
+  initialRevisionId,
+  action,
+}: PostEditorProps) {
   const prefix = useId()
   const [title, setTitle] = useState(initialContent.title)
   const [description, setDescription] = useState(initialContent.description)
   const [body, setBody] = useState(initialContent.body)
   const [preview, setPreview] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState(() => ({
+    content: initialContent,
+    revisionId: initialRevisionId,
+  }))
   const [state, submitAction, pending] = useActionState<
     DraftFormState,
-    PostContent
-  >(action, { status: 'idle' })
-  const savedContent = state.status === 'saved' ? state.content : initialContent
-  const hasChanges = !samePostContent({ title, description, body }, savedContent)
+    DraftEditorInput
+  >(async (previousState, input) => {
+    const result = await action(previousState, input)
+    if (result.status === 'saved') {
+      setSavedSnapshot({ content: result.content, revisionId: result.revisionId })
+    }
+    return result
+  }, { status: 'idle' })
+  const hasChanges = !samePostContent({ title, description, body }, savedSnapshot.content)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    startTransition(() => submitAction({ title, description, body }))
+    const input = {
+      content: { title, description, body },
+      expectedRevisionId: savedSnapshot.revisionId,
+    }
+    startTransition(() => submitAction(input))
   }
 
   return (

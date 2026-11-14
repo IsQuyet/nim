@@ -25,6 +25,7 @@ export default async function NewDraftPage() {
       </section>
       <PostEditor
         initialContent={{ title: '', description: '', body: '' }}
+        initialRevisionId={null}
         action={createDraftAction}
       />
     </main>

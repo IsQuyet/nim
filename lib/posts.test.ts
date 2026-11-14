@@ -7,12 +7,38 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { createPostStore, importPublishedPosts } from './posts'
-import { postContents } from './schema'
+import type { DraftPost, PostContent, PostMutationResult, PostStore } from './content'
+import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 
 let directory: string
 let filename: string
 let database: AppDatabase
-let store: ReturnType<typeof createPostStore>
+let store: PostStore
+
+const content = { title: 'First post', description: 'Description.', body: '# First body\r\n' }
+
+function success<T>(result: PostMutationResult<T>): T {
+  assert.ok(result.status === 'success')
+  return result.value
+}
+
+function save(draft: DraftPost, input: PostContent) {
+  return success(store.saveDraft(draft.id, input, draft.revisionId))
+}
+
+function publish(draft: DraftPost, input: PostContent = draft) {
+  return success(store.publishDraft(draft.id, input, draft.revisionId))
+}
+
+function snapshot() {
+  return {
+    posts: database.select().from(posts).all(),
+    revisions: database.select().from(postRevisions).all(),
+    drafts: database.select().from(postDrafts).all(),
+    publications: database.select().from(postPublications).all(),
+    published: database.select().from(postPublished).all(),
+  }
+}
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-posts-'))
@@ -27,218 +53,238 @@ afterEach(() => {
   if (directory) rmSync(directory, { recursive: true })
 })
 
-describe('文章管理列表', () => {
-  it('列出草稿摘要，并依据完整发布快照区分状态，恢复相同内容后不再标记修改', () => {
-    const content = {
-      title: 'First post',
-      description: 'Post description.',
-      body: '# First body',
-    }
-    expect(store.listPosts()).toEqual([])
+describe('文章修订与草稿', () => {
+  it('生成独立文章身份和首次修订，重开数据库及重复初始化后仍在', async () => {
     const draft = store.createDraft(content)
-    const summary = {
-      id: draft.id,
-      title: content.title,
-      description: content.description,
-      updatedAt: draft.updatedAt,
-    }
-    expect(store.listPosts()).toEqual([{ ...summary, status: 'draft' }])
-
-    const published = store.publishDraft(draft.id)
-    expect(store.listPosts()).toEqual([{ ...summary, status: 'published' }])
-
-    const edited = store.saveDraft(draft.id, { ...content, body: '# Revised body' })
-    assert.ok(edited)
-    expect(store.listPosts()).toEqual([
-      { ...summary, updatedAt: edited.updatedAt, status: 'modified' },
-    ])
-    expect(store.getPublishedPost(draft.id)).toEqual(published)
-
-    const restored = store.saveDraft(draft.id, content)
-    assert.ok(restored)
-    expect(store.listPosts()).toEqual([
-      { ...summary, updatedAt: restored.updatedAt, status: 'published' },
-    ])
-  })
-})
-
-describe('已发布文章导入', () => {
-  it('按素材 ID 持久导入标题、摘要和 Markdown 原文', () => {
-    const input = {
-      id: '9ea8d4be-4b45-46d2-954c-3e1da354d33f',
-      title: 'Existing post',
-      description: 'Existing description.',
-      body: '# Existing post\n\n**Markdown** content.\n',
-    }
-
-    expect(importPublishedPosts(database, [input])).toEqual({ imported: 1, skipped: 0 })
+    const another = store.createDraft(content)
+    expect(another.id).not.toBe(draft.id)
+    expect(store.listRevisions(draft.id)).toEqual([{
+      id: draft.revisionId, postId: draft.id, ...content,
+      createdAt: draft.updatedAt, source: 'create', restoredFromRevisionId: null,
+    }])
     database.$client.close()
+    await initializeDatabase(filename)
     database = openDatabase(filename)
     store = createPostStore(database)
-
-    const published = store.getPublishedPost(input.id)
-    expect(published).toMatchObject(input)
-    expect(store.getDraft(input.id)).toMatchObject(input)
-    expect(store.listPublishedPosts()).toEqual([
-      {
-        id: input.id,
-        title: input.title,
-        description: input.description,
-        publishedAt: published!.publishedAt,
-      },
-    ])
+    expect(store.getDraft(draft.id)).toEqual(draft)
+    expect(store.getPublishedPost(draft.id)).toBeNull()
   })
 
-  it('重复导入不覆盖已编辑的草稿和发布版本，也不发布已有的未发布草稿', () => {
-    const content = {
-      title: 'Original title',
-      description: 'Original description.',
-      body: '# Original body',
-    }
+  it('内容变化才追加修订，不改写旧版，也不为相同内容刷新时间', () => {
     const draft = store.createDraft(content)
-    const published = store.publishDraft(draft.id)
-    const edited = store.saveDraft(draft.id, {
-      title: 'Edited title',
-      description: 'Edited description.',
-      body: '# Edited body',
-    })
-    const unpublished = store.createDraft(content)
-
-    expect(importPublishedPosts(database, [
-      { ...content, id: draft.id, title: 'Outdated source title' },
-      { ...content, id: unpublished.id },
-    ])).toEqual({ imported: 0, skipped: 2 })
-
-    expect(store.getDraft(draft.id)).toEqual(edited)
-    expect(store.getPublishedPost(draft.id)).toEqual(published)
-    expect(store.getDraft(unpublished.id)).toEqual(unpublished)
-    expect(store.getPublishedPost(unpublished.id)).toBeNull()
-    expect(store.listPublishedPosts()).toHaveLength(1)
-  })
-})
-
-describe('文章持久化与发布边界', () => {
-  it('不存在的文章读写均返回缺失结果，不创建文章或快照', () => {
-    const content = { title: 'Missing', description: '', body: '# Missing' }
-    expect(store.getDraft('missing')).toBeNull()
-    expect(store.getPublishedPost('missing')).toBeNull()
-    expect(store.saveDraft('missing', content)).toBeNull()
-    expect(store.publishDraft('missing')).toBeNull()
-    expect(store.listPosts()).toEqual([])
-    expect(store.listPublishedPosts()).toEqual([])
-    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
-    expect(database.$client.prepare('SELECT * FROM post_contents').all()).toEqual([])
+    expect(save(draft, content)).toEqual(draft)
+    const revised = save(draft, { ...content, body: '# Revised\n' })
+    expect(revised.revisionId).not.toBe(draft.revisionId)
+    expect(store.listRevisions(draft.id).map(revision => revision.source)).toEqual(['save', 'create'])
+    expect(store.getRevision(draft.id, draft.revisionId)).toMatchObject(content)
+    expect(save(revised, revised)).toEqual(revised)
+    expect(store.listRevisions(draft.id)).toHaveLength(2)
+    const returned = save(revised, content)
+    expect(returned.revisionId).not.toBe(draft.revisionId)
+    expect(store.listRevisions(draft.id)).toHaveLength(3)
   })
 
-  it('用已有文章内容新建和保存时，各自身份和草稿阶段保持独立', () => {
-    const original = store.createDraft({ title: 'Original', description: '', body: '# Original' })
-    store.publishDraft(original.id)
-    const published = database.select().from(postContents).where(eq(postContents.stage, 'published')).get()!
-    const content = { ...original, ...published }
-
-    const copied = store.createDraft(content)
+  it('额外身份与持久化字段不能控制新建和保存目标', () => {
+    const original = store.createDraft(content)
+    const sourceRevision = store.getRevision(original.id, original.revisionId)
+    assert.ok(sourceRevision)
+    const input = { ...original, ...sourceRevision, stage: 'published' }
+    const copied = store.createDraft(input)
     expect(copied.id).not.toBe(original.id)
-    expect(store.getDraft(copied.id)).toEqual(copied)
-    expect(store.getPublishedPost(copied.id)).toBeNull()
-
-    const saved = store.saveDraft(copied.id, content)
-    assert.ok(saved)
+    const saved = save(copied, input)
     expect(saved.id).toBe(copied.id)
     expect(store.getDraft(copied.id)).toEqual(saved)
     expect(store.getPublishedPost(copied.id)).toBeNull()
   })
 
-  it('创建内容失败时不留下只有身份的文章，排除故障后可以重试', () => {
-    database.$client.exec(`
-      CREATE TRIGGER reject_content BEFORE INSERT ON post_contents
-      BEGIN SELECT RAISE(ABORT, 'content unavailable'); END;
-    `)
-    const content = { title: 'Draft', description: '', body: '# Draft' }
+  it('不存在的文章与修订返回缺失结果，不留下身份或快照', () => {
+    expect(store.getDraft('missing')).toBeNull()
+    expect(store.getPublishedPost('missing')).toBeNull()
+    expect(store.getRevision('missing', 1)).toBeNull()
+    expect(store.saveDraft('missing', content, 1)).toEqual({ status: 'missing' })
+    expect(store.publishDraft('missing', content, 1)).toEqual({ status: 'missing' })
+    expect(store.restoreRevision('missing', 1, 1)).toEqual({ status: 'missing' })
+    expect(snapshot()).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [] })
+  })
 
+  it('创建修订失败时一并回滚文章身份，排除故障后可重试', () => {
+    database.$client.exec(`CREATE TRIGGER reject_revision BEFORE INSERT ON post_revisions
+      BEGIN SELECT RAISE(ABORT, 'revision unavailable'); END;`)
     expect(() => store.createDraft(content)).toThrow()
-    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
-    expect(database.$client.prepare('SELECT * FROM post_contents').all()).toEqual([])
-
-    database.$client.exec('DROP TRIGGER reject_content')
+    expect(snapshot().posts).toEqual([])
+    database.$client.exec('DROP TRIGGER reject_revision')
     const draft = store.createDraft(content)
-    expect(store.getDraft(draft.id)).toMatchObject(content)
-  })
-
-  it('整批导入中途失败时回滚前面的文章和发布快照', () => {
-    database.$client.exec(`
-      CREATE TRIGGER reject_second BEFORE INSERT ON post_contents
-      WHEN NEW.title = 'Rejected'
-      BEGIN SELECT RAISE(ABORT, 'content unavailable'); END;
-    `)
-    const inputs = [
-      { id: 'first', title: 'First', description: '', body: '# First' },
-      { id: 'second', title: 'Rejected', description: '', body: '# Second' },
-    ]
-
-    expect(() => importPublishedPosts(database, inputs)).toThrow()
-    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
-    expect(store.listPosts()).toEqual([])
-    expect(store.listPublishedPosts()).toEqual([])
-
-    database.$client.exec('DROP TRIGGER reject_second')
-    expect(importPublishedPosts(database, inputs)).toEqual({ imported: 2, skipped: 0 })
-    expect(store.listPublishedPosts()).toHaveLength(2)
-  })
-
-  it('只提供内容即可生成独立 ID，重开数据库及重复初始化后草稿仍在', async () => {
-    const input = {
-      title: 'First post',
-      description: 'A saved draft.',
-      body: '# Draft\n\nMarkdown content.',
-    }
-    const draft = store.createDraft(input)
-    const another = store.createDraft(input)
-    expect(another.id).not.toBe(draft.id)
-
-    database.$client.close()
-    await initializeDatabase(filename)
-    database = openDatabase(filename)
-    store = createPostStore(database)
-
     expect(store.getDraft(draft.id)).toEqual(draft)
-    expect(store.getPublishedPost(draft.id)).toBeNull()
-    expect(store.listPublishedPosts()).toEqual([])
   })
 
-  it('保存草稿不改变发布快照，再次发布才整体替换公开内容，文章 ID 始终不变', () => {
-    const first = {
-      title: 'Published title',
-      description: 'Published description.',
-      body: '# Published body',
-    }
-    const second = {
-      title: 'Edited title',
-      description: 'Edited description.',
-      body: '# Edited body',
-    }
-    const draft = store.createDraft(first)
-    const published = store.publishDraft(draft.id)
-    assert.ok(published)
-    store.saveDraft(draft.id, second)
+  it('草稿头更新失败时不留下孤立的新修订', () => {
+    const draft = store.createDraft(content)
+    const before = snapshot()
+    database.$client.exec(`CREATE TRIGGER reject_head BEFORE UPDATE ON post_drafts
+      BEGIN SELECT RAISE(ABORT, 'head unavailable'); END;`)
+    expect(() => save(draft, { ...content, title: 'Changed' })).toThrow()
+    expect(snapshot()).toEqual(before)
+  })
+})
 
-    expect(store.getDraft(draft.id)).toMatchObject(second)
+describe('编辑基线与显式导入', () => {
+  it('另一编辑入口保存后，旧基线的保存、发布和恢复均冲突，即使内容相同', () => {
+    const draft = store.createDraft(content)
+    const revised = save(draft, { ...content, title: 'Changed' })
+    const before = snapshot()
+    expect(store.saveDraft(draft.id, revised, draft.revisionId)).toEqual({ status: 'conflict' })
+    expect(store.publishDraft(draft.id, revised, draft.revisionId)).toEqual({ status: 'conflict' })
+    expect(store.restoreRevision(draft.id, draft.revisionId, draft.revisionId)).toEqual({ status: 'conflict' })
+    expect(snapshot()).toEqual(before)
+  })
+
+  it('只按传入身份创建或覆盖草稿，既有公开内容保持不变', () => {
+    const draft = store.createDraft(content)
+    const published = publish(draft)
+    const imported = store.importDraft({ ...content, id: draft.id, body: '# Imported\n\n' })
+    expect(imported.id).toBe(draft.id)
+    expect(imported.createdAt).toBe(draft.createdAt)
     expect(store.getPublishedPost(draft.id)).toEqual(published)
-    expect(store.listPublishedPosts()).toEqual([
-      {
-        id: draft.id,
-        title: first.title,
-        description: first.description,
-        publishedAt: published.publishedAt,
-      },
-    ])
+    expect(store.listRevisions(draft.id)[0].source).toBe('import')
+    expect(store.importDraft(imported)).toEqual(imported)
+    expect(store.listRevisions(draft.id)).toHaveLength(2)
+    expect(store.saveDraft(draft.id, content, draft.revisionId)).toEqual({ status: 'conflict' })
 
-    const republished = store.publishDraft(draft.id)
-    expect(republished).toMatchObject({ id: draft.id, ...second })
-    expect(store.getPublishedPost(draft.id)).toEqual(republished)
-    expect(store.listPublishedPosts()).toHaveLength(1)
-    expect(store.listPublishedPosts()[0]).toMatchObject({
-      title: second.title,
-      description: second.description,
+    const specifiedId = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
+    expect(store.importDraft({ ...content, id: specifiedId }).id).toBe(specifiedId)
+    expect(store.getPublishedPost(specifiedId)).toBeNull()
+    const generated = store.importDraft(content)
+    expect(generated.id).not.toBe(specifiedId)
+    expect(store.getPublishedPost(generated.id)).toBeNull()
+  })
+})
+
+describe('发布快照与发布记录', () => {
+  it('发布当前可见的未保存内容，原子更新草稿与公开引用', () => {
+    const draft = store.createDraft(content)
+    const visible = { ...content, title: 'Visible title', body: '# Visible\r\n' }
+    const published = publish(draft, visible)
+    expect(published).toMatchObject(visible)
+    expect(store.getDraft(draft.id)).toMatchObject({ ...visible, revisionId: published.revisionId })
+    expect(store.listRevisions(draft.id).map(revision => revision.source)).toEqual(['publish', 'create'])
+    expect(store.listPublications(draft.id)).toEqual([{
+      id: published.publicationId, postId: draft.id, revisionId: published.revisionId, publishedAt: published.publishedAt,
+    }])
+  })
+
+  it('已保存内容发布不复制修订，重复发布同一当前修订不刷时间或发布记录', () => {
+    const draft = store.createDraft(content)
+    const published = publish(draft)
+    expect(publish(draft)).toEqual(published)
+    expect(store.listRevisions(draft.id)).toHaveLength(1)
+    expect(store.listPublications(draft.id)).toHaveLength(1)
+    const edited = save(draft, { ...content, title: 'Edited' })
+    expect(store.getPublishedPost(draft.id)).toEqual(published)
+    const next = publish(edited)
+    expect(next.publicationId).not.toBe(published.publicationId)
+    expect(store.listPublications(draft.id)).toHaveLength(2)
+    expect(store.listRevisions(draft.id)).toHaveLength(2)
+  })
+
+  it.each([
+    ['post_revisions', 'INSERT'],
+    ['post_publications', 'INSERT'],
+    ['post_published', 'UPDATE'],
+  ])('发布在 %s 写入失败时整体回滚', (table, operation) => {
+    const draft = store.createDraft(content)
+    publish(draft)
+    const before = snapshot()
+    database.$client.exec(`CREATE TRIGGER reject_publish BEFORE ${operation} ON ${table}
+      BEGIN SELECT RAISE(ABORT, 'publication unavailable'); END;`)
+    expect(() => publish(draft, { ...content, body: '# Unsaved publication' })).toThrow()
+    expect(snapshot()).toEqual(before)
+  })
+})
+
+describe('历史恢复与管理状态', () => {
+  it('恢复只追加草稿修订，不删除后续历史或改变公开内容，按内容判断已发布状态', () => {
+    const draft = store.createDraft(content)
+    const published = publish(draft)
+    const edited = save(draft, { ...content, body: '# Modified' })
+    expect(store.listPosts()[0].status).toBe('modified')
+    const restored = success(store.restoreRevision(draft.id, draft.revisionId, edited.revisionId))
+    expect(restored.revisionId).not.toBe(draft.revisionId)
+    expect(store.getRevision(draft.id, restored.revisionId)).toMatchObject({
+      ...content, source: 'restore', restoredFromRevisionId: draft.revisionId,
     })
+    expect(store.listRevisions(draft.id)).toHaveLength(3)
+    expect(store.getPublishedPost(draft.id)).toEqual(published)
+    expect(store.listPosts()).toEqual([{
+      id: draft.id, title: content.title, description: content.description,
+      updatedAt: restored.updatedAt, status: 'published',
+    }])
+    expect(success(store.restoreRevision(draft.id, draft.revisionId, restored.revisionId))).toEqual(restored)
+    const republished = publish(restored)
+    expect(republished.publicationId).not.toBe(published.publicationId)
+    expect(store.listPublications(draft.id)).toHaveLength(2)
+  })
+
+  it('不能读取或恢复另一篇文章的修订', () => {
+    const draft = store.createDraft(content)
+    const another = store.createDraft({ ...content, title: 'Another' })
+    const before = snapshot()
+    expect(store.getRevision(draft.id, another.revisionId)).toBeNull()
+    expect(store.restoreRevision(draft.id, another.revisionId, draft.revisionId)).toEqual({ status: 'missing' })
+    expect(snapshot()).toEqual(before)
+  })
+
+  it('真实外键拒绝跨文章的草稿、发布修订、公开指针和恢复来源', () => {
+    const draft = store.createDraft(content)
+    const another = store.createDraft({ ...content, title: 'Another' })
+    const published = publish(another)
+    expect(() => database.update(postDrafts).set({ revisionId: another.revisionId })
+      .where(eq(postDrafts.postId, draft.id)).run()).toThrow()
+    expect(() => database.insert(postPublications).values({
+      postId: draft.id, revisionId: another.revisionId, publishedAt: new Date().toISOString(),
+    }).run()).toThrow()
+    expect(() => database.insert(postPublished).values({ postId: draft.id, publicationId: published.publicationId }).run()).toThrow()
+    expect(() => database.insert(postRevisions).values({
+      postId: draft.id, ...content, createdAt: new Date().toISOString(), source: 'restore',
+      restoredFromRevisionId: another.revisionId,
+    }).run()).toThrow()
+    expect(database.$client.pragma('foreign_key_check')).toEqual([])
+  })
+
+  it('修订与发布记录不可更新，整篇删除仍可级联清理其记录', () => {
+    const draft = store.createDraft(content)
+    const published = publish(draft)
+    const edited = save(draft, { ...content, title: 'Edited' })
+    success(store.restoreRevision(draft.id, draft.revisionId, edited.revisionId))
+    expect(() => database.update(postRevisions).set({ body: 'Changed' }).where(eq(postRevisions.id, draft.revisionId)).run()).toThrow()
+    expect(() => database.update(postPublications).set({ publishedAt: '2099-01-01' }).where(eq(postPublications.id, published.publicationId)).run()).toThrow()
+    database.delete(posts).where(eq(posts.id, draft.id)).run()
+    expect(snapshot()).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [] })
+  })
+})
+
+describe('初始发布素材导入', () => {
+  it('保留原文，重复导入不覆盖现有草稿或公开内容，也不发布已有未发布稿', () => {
+    const existing = store.createDraft(content)
+    const published = publish(existing)
+    const edited = save(existing, { ...content, title: 'Edited' })
+    const unpublished = store.createDraft(content)
+    const input = { id: '9ea8d4be-4b45-46d2-954c-3e1da354d33f', ...content }
+    expect(importPublishedPosts(database, [input, { ...content, id: existing.id }, { ...content, id: unpublished.id }]))
+      .toEqual({ imported: 1, skipped: 2 })
+    expect(store.getDraft(existing.id)).toEqual(edited)
+    expect(store.getPublishedPost(existing.id)).toEqual(published)
+    expect(store.getPublishedPost(unpublished.id)).toBeNull()
+    expect(store.getPublishedPost(input.id)).toMatchObject(input)
+    expect(store.getDraft(input.id)).toMatchObject(input)
+  })
+
+  it('整批导入中途失败时回滚前面的身份、修订和发布引用', () => {
+    const inputs = [
+      { id: 'first', ...content },
+      { id: 'second', ...content, title: ' \t ' },
+    ]
+    expect(() => importPublishedPosts(database, inputs)).toThrow()
+    expect(snapshot()).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [] })
+    expect(importPublishedPosts(database, [{ id: 'first', ...content }])).toEqual({ imported: 1, skipped: 0 })
   })
 })

@@ -52,9 +52,11 @@ describe('公开文章数据来源', () => {
     expect(await getBlogPosts()).toEqual([])
     expect(await getBlogPost(draft.id)).toBeNull()
 
-    const published = store.publishDraft(draft.id)
-    assert.ok(published)
-    store.saveDraft(draft.id, second)
+    const publication = store.publishDraft(draft.id, draft, draft.revisionId)
+    assert.ok(publication.status === 'success')
+    const published = publication.value
+    const saved = store.saveDraft(draft.id, second, draft.revisionId)
+    assert.ok(saved.status === 'success')
 
     expect(await getBlogPost(draft.id)).toEqual(published)
     expect(await getBlogPosts()).toEqual([
@@ -66,8 +68,9 @@ describe('公开文章数据来源', () => {
       },
     ])
 
-    const republished = store.publishDraft(draft.id)
-    assert.ok(republished)
+    const republication = store.publishDraft(draft.id, second, saved.value.revisionId)
+    assert.ok(republication.status === 'success')
+    const republished = republication.value
     expect(await getBlogPost(draft.id)).toEqual(republished)
     expect(await getBlogPosts()).toEqual([
       {
