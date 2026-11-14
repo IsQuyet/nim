@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PostSummary } from '@/lib/posts'
+import type { PostSummary } from '@/lib/content'
 import AdminPage from './page'
 
 const getAdminPosts = vi.hoisted(() => vi.fn())

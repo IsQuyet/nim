@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { withAdminPostStore } from '@/lib/admin-posts'
-import type { createPostStore, DraftPost, PostContent } from '@/lib/posts'
+import { postContentSchema, type DraftPost, type PostContent } from '@/lib/content'
+import type { createPostStore } from '@/lib/posts'
 
 type DraftErrorState = {
   status: 'error'
@@ -31,20 +32,12 @@ async function writeDraft(
 ): Promise<DraftWriteResult> {
   try {
     const result = await withAdminPostStore((store): DraftWriteResult => {
-      if (!input || typeof input !== 'object') {
-        return { status: 'error', message: 'The draft fields must contain text.' }
+      const parsed = postContentSchema.safeParse(input)
+      if (!parsed.success) {
+        return { status: 'error', message: parsed.error.issues[0].message }
       }
-      const { title, description, body } = input as Record<string, unknown>
-      if (
-        typeof title !== 'string' ||
-        typeof description !== 'string' ||
-        typeof body !== 'string'
-      ) {
-        return { status: 'error', message: 'The draft fields must contain text.' }
-      }
-      if (!title.trim()) return { status: 'error', message: 'Enter a title.' }
 
-      const draft = operation(store, { title, description, body })
+      const draft = operation(store, parsed.data)
       if (!draft) return { status: 'error', message: 'This draft does not exist.' }
       return { status: 'saved', draft }
     })

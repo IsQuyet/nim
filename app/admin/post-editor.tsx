@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { MarkdownContent } from '@/components/markdown-content'
 import { MarkdownProse } from '@/components/markdown-prose'
-import type { PostContent } from '@/lib/posts'
+import { samePostContent, type PostContent } from '@/lib/content'
 import { cn } from '@/lib/utils'
 import type { DraftFormState } from './actions'
 
@@ -32,10 +32,7 @@ export function PostEditor({ initialContent, action }: PostEditorProps) {
     PostContent
   >(action, { status: 'idle' })
   const savedContent = state.status === 'saved' ? state.content : initialContent
-  const hasChanges =
-    title !== savedContent.title ||
-    description !== savedContent.description ||
-    body !== savedContent.body
+  const hasChanges = !samePostContent({ title, description, body }, savedContent)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

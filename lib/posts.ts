@@ -4,39 +4,8 @@ import { alias } from 'drizzle-orm/sqlite-core'
 import type { AppDatabase } from './database'
 import { postContents, posts } from './schema'
 
-export type PostContent = {
-  title: string
-  description: string
-  body: string
-}
-
-export type DraftPost = PostContent & {
-  id: string
-  createdAt: string
-  updatedAt: string
-}
-
-export type PublishedPost = PostContent & {
-  id: string
-  createdAt: string
-  publishedAt: string
-}
-
-export type PublishedPostSummary = Pick<
-  PublishedPost,
-  'id' | 'title' | 'description' | 'publishedAt'
->
-
-export type PostSummary = Pick<
-  DraftPost,
-  'id' | 'title' | 'description' | 'updatedAt'
-> & {
-  status: 'draft' | 'published' | 'modified'
-}
-
-export type ImportPostInput = PostContent & {
-  id: string
-}
+import { postContentFields, postStatusSchema } from './content'
+import type { DraftPost, ImportPostInput, PostContent, PostSummary, PublishedPost } from './content'
 
 function getDraft(database: Pick<AppDatabase, 'select'>, id: string) {
   return database.select({
@@ -159,10 +128,9 @@ export function createPostStore(database: AppDatabase) {
       description: draft.description,
       updatedAt: draft.updatedAt,
       status: sql<PostSummary['status']>`case
-        when ${published.postId} is null then 'draft'
-        when (${draft.title}, ${draft.description}, ${draft.body}) =
-             (${published.title}, ${published.description}, ${published.body}) then 'published'
-        else 'modified'
+        when ${published.postId} is null then ${postStatusSchema.enum.draft}
+        when ${and(...postContentFields.map(field => eq(draft[field], published[field])))} then ${postStatusSchema.enum.published}
+        else ${postStatusSchema.enum.modified}
       end`,
     }).from(posts).innerJoin(draft, and(
       eq(draft.postId, posts.id),
