@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "check-types": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
     "setup": "tsx scripts/setup.ts",
     "db:import": "tsx scripts/import-posts.ts",
     "db:post-file": "tsx scripts/post-file.ts",
@@ -44,6 +45,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

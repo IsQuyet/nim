@@ -73,7 +73,7 @@ const message = "hello"
     ['sql', 'SELECT title FROM posts WHERE id = 1;', 'SELECT'],
     ['bash', 'echo "$HOME"', 'echo'],
     ['ts', 'interface Post { title: string }', 'interface'],
-  ])('按 %s 语言识别语法，而不把所有代码当作 JavaScript', async (language, source, keyword) => {
+  ])('按 %s 语言识别语法关键字并保留代码原文', async (language, source, keyword) => {
     const { container } = render(await MarkdownContent({ source: `\`\`\`${language}\n${source}\n\`\`\`` }))
     expect(container.querySelector('pre code')?.textContent?.trimEnd()).toBe(source)
     const tokens = Array.from(container.querySelectorAll('pre code span[style]'))
