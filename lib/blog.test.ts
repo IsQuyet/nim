@@ -1,4 +1,5 @@
 // @vitest-environment node
+import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -52,6 +53,7 @@ describe('公开文章数据来源', () => {
     expect(await getBlogPost(draft.id)).toBeNull()
 
     const published = store.publishDraft(draft.id)
+    assert.ok(published)
     store.saveDraft(draft.id, second)
 
     expect(await getBlogPost(draft.id)).toEqual(published)
@@ -65,6 +67,7 @@ describe('公开文章数据来源', () => {
     ])
 
     const republished = store.publishDraft(draft.id)
+    assert.ok(republished)
     expect(await getBlogPost(draft.id)).toEqual(republished)
     expect(await getBlogPosts()).toEqual([
       {

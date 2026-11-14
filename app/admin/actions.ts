@@ -67,10 +67,7 @@ export async function saveDraftAction(
   _state: DraftFormState,
   input: unknown,
 ): Promise<DraftFormState> {
-  const result = await writeDraft(input, (store, content) => {
-    if (!store.getDraft(id)) return null
-    return store.saveDraft(id, content)
-  })
+  const result = await writeDraft(input, (store, content) => store.saveDraft(id, content))
   if (!result.ok) return { status: 'error', message: result.message }
 
   revalidatePath('/admin')

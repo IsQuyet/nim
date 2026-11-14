@@ -114,11 +114,11 @@ export function createPostStore(database: AppDatabase) {
     }, { behavior: 'immediate' })
   }
 
-  function saveDraft(id: string, content: PostContent): DraftPost {
+  function saveDraft(id: string, content: PostContent): DraftPost | null {
     const fields = { title: content.title, description: content.description, body: content.body }
     return database.transaction(transaction => {
       const draft = getDraft(transaction, id)
-      if (!draft) throw new Error('草稿不存在。')
+      if (!draft) return null
 
       const updatedAt = new Date().toISOString()
       transaction.update(postContents).set({ ...fields, updatedAt }).where(and(
@@ -132,7 +132,7 @@ export function createPostStore(database: AppDatabase) {
   function publishDraft(id: string) {
     return database.transaction(transaction => {
       const draft = getDraft(transaction, id)
-      if (!draft) throw new Error('草稿不存在。')
+      if (!draft) return null
 
       return writePublished(transaction, draft)
     }, { behavior: 'immediate' })

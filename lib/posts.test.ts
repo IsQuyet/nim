@@ -1,4 +1,5 @@
 // @vitest-environment node
+import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,12 +48,14 @@ describe('文章管理列表', () => {
     expect(store.listPosts()).toEqual([{ ...summary, status: 'published' }])
 
     const edited = store.saveDraft(draft.id, { ...content, body: '# Revised body' })
+    assert.ok(edited)
     expect(store.listPosts()).toEqual([
       { ...summary, updatedAt: edited.updatedAt, status: 'modified' },
     ])
     expect(store.getPublishedPost(draft.id)).toEqual(published)
 
     const restored = store.saveDraft(draft.id, content)
+    assert.ok(restored)
     expect(store.listPosts()).toEqual([
       { ...summary, updatedAt: restored.updatedAt, status: 'published' },
     ])
@@ -115,6 +118,18 @@ describe('已发布文章导入', () => {
 })
 
 describe('文章持久化与发布边界', () => {
+  it('不存在的文章读写均返回缺失结果，不创建文章或快照', () => {
+    const content = { title: 'Missing', description: '', body: '# Missing' }
+    expect(store.getDraft('missing')).toBeNull()
+    expect(store.getPublishedPost('missing')).toBeNull()
+    expect(store.saveDraft('missing', content)).toBeNull()
+    expect(store.publishDraft('missing')).toBeNull()
+    expect(store.listPosts()).toEqual([])
+    expect(store.listPublishedPosts()).toEqual([])
+    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
+    expect(database.$client.prepare('SELECT * FROM post_contents').all()).toEqual([])
+  })
+
   it('用已有文章内容新建和保存时，各自身份和草稿阶段保持独立', () => {
     const original = store.createDraft({ title: 'Original', description: '', body: '# Original' })
     store.publishDraft(original.id)
@@ -127,6 +142,7 @@ describe('文章持久化与发布边界', () => {
     expect(store.getPublishedPost(copied.id)).toBeNull()
 
     const saved = store.saveDraft(copied.id, content)
+    assert.ok(saved)
     expect(saved.id).toBe(copied.id)
     expect(store.getDraft(copied.id)).toEqual(saved)
     expect(store.getPublishedPost(copied.id)).toBeNull()
@@ -202,6 +218,7 @@ describe('文章持久化与发布边界', () => {
     }
     const draft = store.createDraft(first)
     const published = store.publishDraft(draft.id)
+    assert.ok(published)
     store.saveDraft(draft.id, second)
 
     expect(store.getDraft(draft.id)).toMatchObject(second)

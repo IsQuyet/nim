@@ -11,7 +11,6 @@ const { AdminPostStoreError, mocks } = vi.hoisted(() => ({
   mocks: {
     withAdminPostStore: vi.fn(),
     createDraft: vi.fn(),
-    getDraft: vi.fn(),
     saveDraft: vi.fn(),
     revalidatePath: vi.fn(),
     redirect: vi.fn(),
@@ -44,7 +43,6 @@ beforeEach(() => {
     try {
       return operation({
         createDraft: mocks.createDraft,
-        getDraft: mocks.getDraft,
         saveDraft: mocks.saveDraft,
       })
     } catch (error) {
@@ -52,7 +50,6 @@ beforeEach(() => {
     }
   })
   mocks.createDraft.mockReturnValue(draft)
-  mocks.getDraft.mockReturnValue(draft)
   mocks.saveDraft.mockReturnValue(draft)
   mocks.redirect.mockImplementation((path) => {
     throw new Error(`Redirect: ${path}`)
@@ -109,13 +106,14 @@ describe('草稿保存入口', () => {
     expect(mocks.redirect).not.toHaveBeenCalled()
   })
 
-  it('不存在的草稿返回明确反馈，不执行保存', async () => {
-    mocks.getDraft.mockReturnValue(null)
+  it('不存在的草稿返回明确反馈，不刷新页面', async () => {
+    mocks.saveDraft.mockReturnValue(null)
     expect(await saveDraftAction(id, { status: 'idle' }, content)).toEqual({
       status: 'error',
       message: 'This draft does not exist.',
     })
-    expect(mocks.saveDraft).not.toHaveBeenCalled()
+    expect(mocks.saveDraft).toHaveBeenCalledExactlyOnceWith(id, content)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   it('数据库连接失败时同样返回表单错误，而不让操作抛出到编辑器', async () => {

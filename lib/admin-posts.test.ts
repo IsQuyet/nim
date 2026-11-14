@@ -1,4 +1,5 @@
 // @vitest-environment node
+import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,6 +78,7 @@ describe('管理端文章访问', () => {
     const edited = await withAdminPostStore((store) =>
       store.saveDraft(draft.id, { ...first, body: '# Edited body' }),
     )
+    assert.ok(edited)
     expect(await getAdminDraft(draft.id)).toEqual(edited)
     expect(await getAdminPosts()).toEqual([
       {
