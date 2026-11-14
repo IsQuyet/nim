@@ -223,6 +223,17 @@ describe('管理员认证与数据库会话', () => {
     expect(await response.text()).not.toContain('provider-access-token')
   })
 
+  it('账号关联存储故障保持为错误，不伪装成未登录', async () => {
+    await finishSignIn(await beginSignIn())
+    database.exec('ALTER TABLE account RENAME TO unavailable_account')
+    try {
+      await expect(app.getAdminSession()).rejects.toThrow()
+    } finally {
+      database.exec('ALTER TABLE unavailable_account RENAME TO account')
+    }
+    expect(await app.getAdminSession()).not.toBeNull()
+  })
+
   it('认证与 Drizzle 对同一会话日期使用一致的查询和存储编码', async () => {
     await finishSignIn(await beginSignIn())
     const session = (await app.getAdminSession())!

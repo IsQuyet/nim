@@ -1,12 +1,14 @@
 import 'server-only'
 import { cache } from 'react'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
+import { and, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
 import { getSiteUrl } from './site-config'
 import { getAuthSecret } from './auth-secret'
 import { openDatabase } from './database'
+import { account } from './schema'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 let auth: ReturnType<typeof betterAuth> | undefined
@@ -64,10 +66,20 @@ export const getAdminSession = cache(async () => {
   const session = await auth.api.getSession({ headers: requestHeaders })
   if (!session) return null
 
-  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders })
-  return accounts.some(account =>
-    account.providerId === 'github' && account.accountId === process.env.ADMIN_GITHUB_ID?.trim(),
-  ) ? session : null
+  const adminId = process.env.ADMIN_GITHUB_ID?.trim()
+  if (!adminId) return null
+
+  const database = openDatabase()
+  try {
+    const adminAccount = database.select({ id: account.id }).from(account).where(and(
+      eq(account.userId, session.user.id),
+      eq(account.providerId, 'github'),
+      eq(account.accountId, adminId),
+    )).get()
+    return adminAccount ? session : null
+  } finally {
+    database.$client.close()
+  }
 })
 
 export async function requireAdminSession() {
