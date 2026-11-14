@@ -2,14 +2,15 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Database } from 'better-sqlite3'
+import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { initializeDatabase, openDatabase } from './database'
+import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { createPostStore, importPublishedPosts } from './posts'
+import { postContents } from './schema'
 
 let directory: string
 let filename: string
-let database: Database
+let database: AppDatabase
 let store: ReturnType<typeof createPostStore>
 
 beforeEach(async () => {
@@ -21,7 +22,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  if (database?.open) database.close()
+  if (database?.$client.open) database.$client.close()
   if (directory) rmSync(directory, { recursive: true })
 })
 
@@ -68,7 +69,7 @@ describe('已发布文章导入', () => {
     }
 
     expect(importPublishedPosts(database, [input])).toEqual({ imported: 1, skipped: 0 })
-    database.close()
+    database.$client.close()
     database = openDatabase(filename)
     store = createPostStore(database)
 
@@ -114,6 +115,60 @@ describe('已发布文章导入', () => {
 })
 
 describe('文章持久化与发布边界', () => {
+  it('用已有文章内容新建和保存时，各自身份和草稿阶段保持独立', () => {
+    const original = store.createDraft({ title: 'Original', description: '', body: '# Original' })
+    store.publishDraft(original.id)
+    const published = database.select().from(postContents).where(eq(postContents.stage, 'published')).get()!
+    const content = { ...original, ...published }
+
+    const copied = store.createDraft(content)
+    expect(copied.id).not.toBe(original.id)
+    expect(store.getDraft(copied.id)).toEqual(copied)
+    expect(store.getPublishedPost(copied.id)).toBeNull()
+
+    const saved = store.saveDraft(copied.id, content)
+    expect(saved.id).toBe(copied.id)
+    expect(store.getDraft(copied.id)).toEqual(saved)
+    expect(store.getPublishedPost(copied.id)).toBeNull()
+  })
+
+  it('创建内容失败时不留下只有身份的文章，排除故障后可以重试', () => {
+    database.$client.exec(`
+      CREATE TRIGGER reject_content BEFORE INSERT ON post_contents
+      BEGIN SELECT RAISE(ABORT, 'content unavailable'); END;
+    `)
+    const content = { title: 'Draft', description: '', body: '# Draft' }
+
+    expect(() => store.createDraft(content)).toThrow()
+    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
+    expect(database.$client.prepare('SELECT * FROM post_contents').all()).toEqual([])
+
+    database.$client.exec('DROP TRIGGER reject_content')
+    const draft = store.createDraft(content)
+    expect(store.getDraft(draft.id)).toMatchObject(content)
+  })
+
+  it('整批导入中途失败时回滚前面的文章和发布快照', () => {
+    database.$client.exec(`
+      CREATE TRIGGER reject_second BEFORE INSERT ON post_contents
+      WHEN NEW.title = 'Rejected'
+      BEGIN SELECT RAISE(ABORT, 'content unavailable'); END;
+    `)
+    const inputs = [
+      { id: 'first', title: 'First', description: '', body: '# First' },
+      { id: 'second', title: 'Rejected', description: '', body: '# Second' },
+    ]
+
+    expect(() => importPublishedPosts(database, inputs)).toThrow()
+    expect(database.$client.prepare('SELECT * FROM posts').all()).toEqual([])
+    expect(store.listPosts()).toEqual([])
+    expect(store.listPublishedPosts()).toEqual([])
+
+    database.$client.exec('DROP TRIGGER reject_second')
+    expect(importPublishedPosts(database, inputs)).toEqual({ imported: 2, skipped: 0 })
+    expect(store.listPublishedPosts()).toHaveLength(2)
+  })
+
   it('只提供内容即可生成独立 ID，重开数据库及重复初始化后草稿仍在', async () => {
     const input = {
       title: 'First post',
@@ -124,7 +179,7 @@ describe('文章持久化与发布边界', () => {
     const another = store.createDraft(input)
     expect(another.id).not.toBe(draft.id)
 
-    database.close()
+    database.$client.close()
     await initializeDatabase(filename)
     database = openDatabase(filename)
     store = createPostStore(database)

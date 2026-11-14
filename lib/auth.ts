@@ -51,7 +51,7 @@ export function getAuth() {
   if (!options) return null
 
   // 按需建立进程内共享连接，构建时不打开持久化文件。
-  auth ??= betterAuth<BetterAuthOptions>({ ...options, database: openDatabase() })
+  auth ??= betterAuth<BetterAuthOptions>({ ...options, database: openDatabase().$client })
   return auth
 }
 

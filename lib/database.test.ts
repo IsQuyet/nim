@@ -1,10 +1,24 @@
 // @vitest-environment node
-import { mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeDatabase, openDatabase } from './database'
+import { account, session, user, verification } from './schema'
+import { createPostStore } from './posts'
+
+const migration = vi.hoisted(() => ({ folder: undefined as string | undefined }))
+vi.mock('drizzle-orm/better-sqlite3/migrator', async importOriginal => {
+  const actual = await importOriginal<typeof import('drizzle-orm/better-sqlite3/migrator')>()
+  return {
+    ...actual,
+    migrate: (...args: Parameters<typeof actual.migrate>) => actual.migrate(args[0], {
+      ...args[1],
+      ...(migration.folder ? { migrationsFolder: migration.folder } : {}),
+    }),
+  }
+})
 
 let directory: string
 let filename: string
@@ -12,95 +26,136 @@ let filename: string
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'nim-database-'))
   filename = join(directory, 'nim.sqlite')
+  migration.folder = undefined
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   if (directory) rmSync(directory, { recursive: true })
 })
 
-function createVersionOne() {
-  const database = new Database(filename)
-  database.exec(`
-    PRAGMA foreign_keys = OFF;
-    CREATE TABLE posts (
-      id TEXT PRIMARY KEY NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE post_contents (
-      post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-      stage TEXT NOT NULL CHECK (stage IN ('draft', 'published')),
-      title TEXT NOT NULL,
-      description TEXT NOT NULL,
-      body TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (post_id, stage)
-    );
-    PRAGMA user_version = 1;
-  `)
-  return database
+function readContents() {
+  const database = new Database(filename, { readonly: true })
+  try {
+    return Object.fromEntries(['posts', 'post_contents', 'user', 'session', 'account', 'verification']
+      .map(table => [table, database.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all()]))
+  } finally {
+    database.close()
+  }
 }
 
-function getColumns(database: Database.Database) {
-  const columns = database.pragma('table_info(posts)') as { name: string }[]
-  return columns.map(column => column.name)
-}
+describe('数据库结构与迁移', () => {
+  it('运行时打开未初始化的数据库明确失败，不隐式创建文件', () => {
+    expect(() => openDatabase(filename)).toThrow()
+    expect(existsSync(filename)).toBe(false)
+  })
 
-describe('文章身份数据库结构', () => {
-  it('新库只保存文章 ID 和创建时间，重复准备保持同一结构', async () => {
-    await initializeDatabase(filename)
+  it('首次准备文章和认证结构，约束文章身份、快照阶段及外键', async () => {
     await initializeDatabase(filename)
     const database = openDatabase(filename)
+    const client = database.$client
 
     try {
-      expect(database.pragma('user_version', { simple: true })).toBe(2)
-      expect(getColumns(database)).toEqual(['id', 'created_at'])
-      expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
+      expect(client.pragma('table_info(posts)')).toEqual([
+        expect.objectContaining({ name: 'id', pk: 1, notnull: 1 }),
+        expect.objectContaining({ name: 'created_at', pk: 0, notnull: 1 }),
+      ])
+      expect(client.pragma('foreign_keys', { simple: true })).toBe(1)
+      expect(client.prepare('SELECT * FROM __drizzle_migrations').all()).toHaveLength(1)
+      const store = createPostStore(database)
+      const draft = store.createDraft({ title: 'Draft', description: '', body: '# Draft\r\n' })
+      const insert = client.prepare('INSERT INTO post_contents VALUES (?, ?, ?, ?, ?, ?)')
+      expect(() => insert.run(draft.id, 'invalid', '', '', '', '2026-11-14')).toThrow()
+      expect(() => insert.run('missing', 'draft', '', '', '', '2026-11-14')).toThrow()
+      expect(client.pragma('foreign_key_check')).toEqual([])
     } finally {
-      database.close()
+      client.close()
     }
   })
 
-  it('升级保留文章 ID、创建时间及完整的草稿和发布快照', async () => {
-    const database = createVersionOne()
-    const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
-    const createdAt = '2026-11-13T04:17:13.397Z'
-    database.prepare('INSERT INTO posts VALUES (?, ?, ?)').run(id, 'first-post', createdAt)
-    const insert = database.prepare('INSERT INTO post_contents VALUES (?, ?, ?, ?, ?, ?)')
-    insert.run(id, 'draft', 'Edited title', 'Edited description.', '# Edited body\r\n', '2026-11-13T12:00:00Z')
-    insert.run(id, 'published', 'Published title', 'Published description.', '# Published body\n', createdAt)
-    const contents = database.prepare('SELECT * FROM post_contents ORDER BY stage').all()
-    database.close()
-
+  it('重复迁移保留文章原文、时间、认证关联和会话，不重复登记已执行迁移', async () => {
     await initializeDatabase(filename)
-    await initializeDatabase(filename)
-    const reopened = openDatabase(filename)
-
+    const database = openDatabase(filename)
+    const createdAt = new Date('2026-11-14T00:00:00Z')
+    const expiresAt = new Date('2099-01-01T00:00:00Z')
     try {
-      expect(reopened.pragma('user_version', { simple: true })).toBe(2)
-      expect(getColumns(reopened)).toEqual(['id', 'created_at'])
-      expect(reopened.prepare('SELECT * FROM posts').all()).toEqual([{ id, created_at: createdAt }])
-      expect(reopened.prepare('SELECT * FROM post_contents ORDER BY stage').all()).toEqual(contents)
+      const store = createPostStore(database)
+      const draft = store.createDraft({ title: 'Published', description: 'Description', body: '# Published\r\n' })
+      store.publishDraft(draft.id)
+      store.saveDraft(draft.id, { title: 'Edited', description: '', body: '# Edited\n' })
+      database.insert(user).values({
+        id: 'admin', name: 'Admin', email: 'admin@example.test', emailVerified: true, createdAt, updatedAt: createdAt,
+      }).run()
+      database.insert(account).values({
+        id: 'github-account', accountId: '1234', providerId: 'github', userId: 'admin',
+        accessToken: 'stored-token', createdAt, updatedAt: createdAt,
+      }).run()
+      database.insert(session).values({
+        id: 'admin-session', token: 'session-token', userId: 'admin', expiresAt, createdAt, updatedAt: createdAt,
+      }).run()
+      database.insert(verification).values({
+        id: 'oauth-state', identifier: 'state', value: 'verification-data', expiresAt, createdAt, updatedAt: createdAt,
+      }).run()
+      expect(database.select({ expiresAt: session.expiresAt }).from(session).get()?.expiresAt).toEqual(expiresAt)
+    } finally {
+      database.$client.close()
+    }
+    const before = readContents()
+
+    await initializeDatabase(filename)
+    await initializeDatabase(filename)
+
+    expect(readContents()).toEqual(before)
+    const reopened = new Database(filename, { readonly: true })
+    try {
+      expect(reopened.prepare('SELECT * FROM __drizzle_migrations').all()).toHaveLength(1)
       expect(reopened.pragma('foreign_key_check')).toEqual([])
     } finally {
       reopened.close()
     }
   })
 
-  it('外键检查失败时回滚整个升级，不改变已有结构和内容', async () => {
-    const database = createVersionOne()
-    database.prepare('INSERT INTO post_contents VALUES (?, ?, ?, ?, ?, ?)')
-      .run('missing-post', 'draft', 'Draft title', '', '# Draft', '2026-11-13T00:00:00Z')
-    const columns = getColumns(database)
-    const contents = database.prepare('SELECT * FROM post_contents').all()
-    database.close()
-
-    await expect(initializeDatabase(filename)).rejects.toThrow('数据库外键检查失败')
-    const reopened = new Database(filename)
+  it('迁移中途失败回滚结构与数据，释放连接并允许修正后重试', async () => {
+    await initializeDatabase(filename)
+    const database = openDatabase(filename)
     try {
-      expect(reopened.pragma('user_version', { simple: true })).toBe(1)
-      expect(getColumns(reopened)).toEqual(columns)
-      expect(reopened.prepare('SELECT * FROM post_contents').all()).toEqual(contents)
+      createPostStore(database).createDraft({ title: 'Existing', description: '', body: '# Existing\r\n' })
+    } finally {
+      database.$client.close()
+    }
+    const before = readContents()
+    const folder = join(directory, 'migrations')
+    cpSync(join(process.cwd(), 'drizzle'), folder, { recursive: true })
+    const journalPath = join(folder, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8'))
+    journal.entries.push({
+      idx: 1, version: '6', when: journal.entries[0].when + 1, tag: '0001_add_marker', breakpoints: true,
+    })
+    writeFileSync(journalPath, JSON.stringify(journal))
+    const sqlPath = join(folder, '0001_add_marker.sql')
+    writeFileSync(sqlPath, 'ALTER TABLE posts ADD COLUMN marker text;\n--> statement-breakpoint\nINSERT INTO missing_table VALUES (1);')
+    migration.folder = folder
+    const close = vi.spyOn(Database.prototype, 'close')
+
+    await expect(initializeDatabase(filename)).rejects.toThrow()
+
+    expect(close).toHaveBeenCalledOnce()
+    expect(close.mock.contexts[0]).toMatchObject({ open: false })
+    expect(readContents()).toEqual(before)
+    const inspected = new Database(filename, { readonly: true })
+    try {
+      expect(inspected.pragma('table_info(posts)')).toHaveLength(2)
+      expect(inspected.prepare('SELECT * FROM __drizzle_migrations').all()).toHaveLength(1)
+    } finally {
+      inspected.close()
+    }
+
+    writeFileSync(sqlPath, 'ALTER TABLE posts ADD COLUMN marker text;')
+    await initializeDatabase(filename)
+    const reopened = new Database(filename, { readonly: true })
+    try {
+      expect(reopened.pragma('table_info(posts)')).toHaveLength(3)
+      expect(reopened.prepare('SELECT * FROM __drizzle_migrations').all()).toHaveLength(2)
     } finally {
       reopened.close()
     }

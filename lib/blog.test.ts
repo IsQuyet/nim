@@ -2,9 +2,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Database } from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initializeDatabase, openDatabase } from './database'
+import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { createPostStore } from './posts'
 import { getBlogPost, getBlogPosts } from './blog'
 
@@ -12,7 +11,7 @@ vi.mock('server-only', () => ({}))
 vi.mock('next/server', () => ({ connection: async () => {} }))
 
 let directory: string
-let database: Database
+let database: AppDatabase
 let store: ReturnType<typeof createPostStore>
 
 beforeEach(async () => {
@@ -25,7 +24,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  if (database?.open) database.close()
+  if (database?.$client.open) database.$client.close()
   vi.unstubAllEnvs()
   if (directory) rmSync(directory, { recursive: true })
 })

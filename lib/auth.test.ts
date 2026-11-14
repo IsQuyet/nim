@@ -4,10 +4,12 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Database } from 'better-sqlite3'
+import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAuthSecret, initializeAuthSecret } from './auth-secret'
 import { getAuthSecretPath } from './data-paths'
-import { initializeDatabase } from './database'
+import { initializeDatabase, openDatabase } from './database'
+import { session as sessions } from './schema'
 
 const next = vi.hoisted(() => ({ requestHeaders: new Headers() }))
 vi.mock('server-only', () => ({}))
@@ -221,6 +223,39 @@ describe('管理员认证与数据库会话', () => {
     expect(await response.text()).not.toContain('provider-access-token')
   })
 
+  it('认证与 Drizzle 对同一会话日期使用一致的查询和存储编码', async () => {
+    await finishSignIn(await beginSignIn())
+    const session = (await app.getAdminSession())!
+    const orm = openDatabase()
+    try {
+      expect(orm.select({ id: sessions.id }).from(sessions)
+        .where(eq(sessions.expiresAt, session.session.expiresAt)).get())
+        .toEqual({ id: session.session.id })
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+      orm.update(sessions).set({ expiresAt }).where(eq(sessions.id, session.session.id)).run()
+      expect((await app.getAdminSession())?.session.expiresAt).toEqual(expiresAt)
+    } finally {
+      orm.$client.close()
+    }
+  })
+
+  it('账号关联写入失败时回滚用户登记，恢复存储后可以重新登录', async () => {
+    database.exec(`
+      CREATE TRIGGER reject_account BEFORE INSERT ON account
+      BEGIN SELECT RAISE(ABORT, 'account unavailable'); END;
+    `)
+    const response = await finishSignIn(await beginSignIn())
+    expect(response.status).toBe(302)
+    expect(new URL(response.headers.get('location')!, environment.SITE_URL).pathname).toBe('/admin/login')
+    expect(database.prepare('SELECT * FROM user').all()).toEqual([])
+    expect(database.prepare('SELECT * FROM account').all()).toEqual([])
+    expect(database.prepare('SELECT * FROM session').all()).toEqual([])
+
+    database.exec('DROP TRIGGER reject_account')
+    expect((await finishSignIn(await beginSignIn())).status).toBe(302)
+    expect(await app.getAdminSession()).not.toBeNull()
+  })
+
   it('其他 GitHub 账号即使姓名邮箱相同或提交管理员字段，也不能登记用户和会话', async () => {
     githubId = '5678'
     const authorization = await beginSignIn({ additionalData: { githubId: '1234' } })
@@ -342,7 +377,7 @@ describe('管理员认证与数据库会话', () => {
     expect(await app.getAdminSession()).toBeNull()
 
     next.requestHeaders = originalHeaders
-    database.prepare('UPDATE session SET expiresAt = ?').run(Date.now() - 1)
+    database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
     expect(await app.getAdminSession()).toBeNull()
   })
 

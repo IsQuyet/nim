@@ -19,5 +19,5 @@ try {
   const { imported, skipped } = importPublishedPosts(database, posts)
   console.log(`文章导入完成：新增 ${imported} 篇，跳过已有 ${skipped} 篇。`)
 } finally {
-  database.close()
+  database.$client.close()
 }

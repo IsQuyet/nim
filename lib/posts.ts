@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { Database } from 'better-sqlite3'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
+import type { AppDatabase } from './database'
+import { postContents, posts } from './schema'
 
 export type PostContent = {
   title: string
@@ -35,153 +38,158 @@ export type ImportPostInput = PostContent & {
   id: string
 }
 
-function insertDraft(database: Database, id: string, content: PostContent): DraftPost {
-  const now = new Date().toISOString()
-  database.prepare('INSERT INTO posts (id, created_at) VALUES (?, ?)').run(id, now)
-  database.prepare(`
-    INSERT INTO post_contents (post_id, stage, title, description, body, updated_at)
-    VALUES (?, 'draft', ?, ?, ?, ?)
-  `).run(id, content.title, content.description, content.body, now)
-
-  return {
-    id,
-    title: content.title,
-    description: content.description,
-    body: content.body,
-    createdAt: now,
-    updatedAt: now,
-  }
+function getDraft(database: Pick<AppDatabase, 'select'>, id: string) {
+  return database.select({
+    id: posts.id,
+    createdAt: posts.createdAt,
+    title: postContents.title,
+    description: postContents.description,
+    body: postContents.body,
+    updatedAt: postContents.updatedAt,
+  }).from(posts).innerJoin(postContents, and(
+    eq(postContents.postId, posts.id),
+    eq(postContents.stage, 'draft'),
+  )).where(eq(posts.id, id)).get() ?? null
 }
 
-export function importPublishedPosts(database: Database, posts: ImportPostInput[]) {
-  const store = createPostStore(database)
-  const selectExisting = database.prepare<[string], { id: string }>(
-    'SELECT id FROM posts WHERE id = ?',
-  )
+function insertDraft(database: Pick<AppDatabase, 'insert'>, id: string, content: PostContent): DraftPost {
+  const fields = { title: content.title, description: content.description, body: content.body }
+  const now = new Date().toISOString()
+  database.insert(posts).values({ id, createdAt: now }).run()
+  database.insert(postContents).values({
+    postId: id,
+    stage: 'draft',
+    ...fields,
+    updatedAt: now,
+  }).run()
 
-  return database.transaction(() => {
+  return { id, createdAt: now, updatedAt: now, ...fields }
+}
+
+function writePublished(database: Pick<AppDatabase, 'insert'>, draft: DraftPost): PublishedPost {
+  const publishedAt = new Date().toISOString()
+  const content = { title: draft.title, description: draft.description, body: draft.body }
+  database.insert(postContents).values({
+    postId: draft.id,
+    stage: 'published',
+    ...content,
+    updatedAt: publishedAt,
+  }).onConflictDoUpdate({
+    target: [postContents.postId, postContents.stage],
+    set: { ...content, updatedAt: publishedAt },
+  }).run()
+
+  return { id: draft.id, createdAt: draft.createdAt, publishedAt, ...content }
+}
+
+export function importPublishedPosts(database: AppDatabase, inputs: ImportPostInput[]) {
+  return database.transaction(transaction => {
     let imported = 0
     let skipped = 0
 
-    for (const post of posts) {
-      if (selectExisting.get(post.id)) {
+    for (const input of inputs) {
+      const existing = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, input.id)).get()
+      if (existing) {
         skipped += 1
         continue
       }
 
-      const draft = insertDraft(database, post.id, post)
-      store.publishDraft(draft.id)
+      const content = { title: input.title, description: input.description, body: input.body }
+      const draft = insertDraft(transaction, input.id, content)
+      writePublished(transaction, draft)
       imported += 1
     }
 
     return { imported, skipped }
-  }).immediate()
+  }, { behavior: 'immediate' })
 }
 
-export function createPostStore(database: Database) {
-  const selectDraft = database.prepare<[string], DraftPost>(`
-    SELECT p.id, p.created_at AS createdAt,
-      c.title, c.description, c.body, c.updated_at AS updatedAt
-    FROM posts p
-    JOIN post_contents c ON c.post_id = p.id AND c.stage = 'draft'
-    WHERE p.id = ?
-  `)
-  const selectPostList = database.prepare<[], PostSummary>(`
-    SELECT p.id, d.title, d.description, d.updated_at AS updatedAt,
-      CASE
-        WHEN c.post_id IS NULL THEN 'draft'
-        WHEN (d.title, d.description, d.body) = (c.title, c.description, c.body) THEN 'published'
-        ELSE 'modified'
-      END AS status
-    FROM posts p
-    JOIN post_contents d ON d.post_id = p.id AND d.stage = 'draft'
-    LEFT JOIN post_contents c ON c.post_id = p.id AND c.stage = 'published'
-    ORDER BY d.updated_at DESC, p.id ASC
-  `)
-  const selectPublished = database.prepare<[string], PublishedPost>(`
-    SELECT p.id, p.created_at AS createdAt,
-      c.title, c.description, c.body, c.updated_at AS publishedAt
-    FROM posts p
-    JOIN post_contents c ON c.post_id = p.id AND c.stage = 'published'
-    WHERE p.id = ?
-  `)
-  const selectPublishedList = database.prepare<[], PublishedPostSummary>(`
-    SELECT p.id, c.title, c.description, c.updated_at AS publishedAt
-    FROM posts p
-    JOIN post_contents c ON c.post_id = p.id AND c.stage = 'published'
-    ORDER BY c.updated_at DESC, p.id ASC
-  `)
-  const updateDraft = database.prepare(`
-    UPDATE post_contents SET title = ?, description = ?, body = ?, updated_at = ?
-    WHERE post_id = ? AND stage = 'draft'
-  `)
-  const writePublished = database.prepare(`
-    INSERT INTO post_contents (post_id, stage, title, description, body, updated_at)
-    VALUES (?, 'published', ?, ?, ?, ?)
-    ON CONFLICT (post_id, stage) DO UPDATE SET
-      title = excluded.title,
-      description = excluded.description,
-      body = excluded.body,
-      updated_at = excluded.updated_at
-  `)
+export function createPostStore(database: AppDatabase) {
+  const draft = alias(postContents, 'draft')
+  const published = alias(postContents, 'published')
 
-  function getDraft(id: string) {
-    return selectDraft.get(id) ?? null
+  function createDraft(content: PostContent) {
+    return database.transaction(transaction => {
+      return insertDraft(transaction, randomUUID(), content)
+    }, { behavior: 'immediate' })
+  }
+
+  function saveDraft(id: string, content: PostContent): DraftPost {
+    const fields = { title: content.title, description: content.description, body: content.body }
+    return database.transaction(transaction => {
+      const draft = getDraft(transaction, id)
+      if (!draft) throw new Error('草稿不存在。')
+
+      const updatedAt = new Date().toISOString()
+      transaction.update(postContents).set({ ...fields, updatedAt }).where(and(
+        eq(postContents.postId, id),
+        eq(postContents.stage, 'draft'),
+      )).run()
+      return { ...draft, ...fields, updatedAt }
+    }, { behavior: 'immediate' })
+  }
+
+  function publishDraft(id: string) {
+    return database.transaction(transaction => {
+      const draft = getDraft(transaction, id)
+      if (!draft) throw new Error('草稿不存在。')
+
+      return writePublished(transaction, draft)
+    }, { behavior: 'immediate' })
   }
 
   function getPublishedPost(id: string) {
-    return selectPublished.get(id) ?? null
+    return database.select({
+      id: posts.id,
+      createdAt: posts.createdAt,
+      title: postContents.title,
+      description: postContents.description,
+      body: postContents.body,
+      publishedAt: postContents.updatedAt,
+    }).from(posts).innerJoin(postContents, and(
+      eq(postContents.postId, posts.id),
+      eq(postContents.stage, 'published'),
+    )).where(eq(posts.id, id)).get() ?? null
   }
 
-  const createDraft = database.transaction((content: PostContent): DraftPost => {
-    return insertDraft(database, randomUUID(), content)
-  }).immediate
-
-  const saveDraft = database.transaction((id: string, content: PostContent): DraftPost => {
-    const draft = getDraft(id)
-    if (!draft) throw new Error('草稿不存在。')
-
-    const updatedAt = new Date().toISOString()
-    updateDraft.run(content.title, content.description, content.body, updatedAt, id)
-    return {
-      ...draft,
-      title: content.title,
-      description: content.description,
-      body: content.body,
-      updatedAt,
-    }
-  }).immediate
-
-  const publishDraft = database.transaction((id: string): PublishedPost => {
-    const draft = getDraft(id)
-    if (!draft) throw new Error('草稿不存在。')
-
-    const publishedAt = new Date().toISOString()
-    writePublished.run(id, draft.title, draft.description, draft.body, publishedAt)
-
-    return {
-      id: draft.id,
+  function listPosts() {
+    return database.select({
+      id: posts.id,
       title: draft.title,
       description: draft.description,
-      body: draft.body,
-      createdAt: draft.createdAt,
-      publishedAt,
-    }
-  }).immediate
-
-  function listPosts() {
-    return selectPostList.all()
+      updatedAt: draft.updatedAt,
+      status: sql<PostSummary['status']>`case
+        when ${published.postId} is null then 'draft'
+        when (${draft.title}, ${draft.description}, ${draft.body}) =
+             (${published.title}, ${published.description}, ${published.body}) then 'published'
+        else 'modified'
+      end`,
+    }).from(posts).innerJoin(draft, and(
+      eq(draft.postId, posts.id),
+      eq(draft.stage, 'draft'),
+    )).leftJoin(published, and(
+      eq(published.postId, posts.id),
+      eq(published.stage, 'published'),
+    )).orderBy(desc(draft.updatedAt), asc(posts.id)).all()
   }
 
   function listPublishedPosts() {
-    return selectPublishedList.all()
+    return database.select({
+      id: posts.id,
+      title: postContents.title,
+      description: postContents.description,
+      publishedAt: postContents.updatedAt,
+    }).from(posts).innerJoin(postContents, and(
+      eq(postContents.postId, posts.id),
+      eq(postContents.stage, 'published'),
+    )).orderBy(desc(postContents.updatedAt), asc(posts.id)).all()
   }
 
   return {
     createDraft,
     saveDraft,
     publishDraft,
-    getDraft,
+    getDraft: (id: string) => getDraft(database, id),
     getPublishedPost,
     listPosts,
     listPublishedPosts,

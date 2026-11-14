@@ -12,7 +12,7 @@ export const getBlogPost = cache(async (id: string) => {
   try {
     return createPostStore(database).getPublishedPost(id)
   } finally {
-    database.close()
+    database.$client.close()
   }
 })
 
@@ -23,6 +23,6 @@ export const getBlogPosts = cache(async () => {
   try {
     return createPostStore(database).listPublishedPosts()
   } finally {
-    database.close()
+    database.$client.close()
   }
 })

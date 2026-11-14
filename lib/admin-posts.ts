@@ -20,7 +20,7 @@ export async function withAdminPostStore<T>(
     try {
       return operation(createPostStore(database))
     } finally {
-      database.close()
+      database.$client.close()
     }
   } catch (error) {
     unstable_rethrow(error)
