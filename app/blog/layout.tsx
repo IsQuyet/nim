@@ -21,7 +21,7 @@ function CopyButton() {
         await navigator.clipboard.writeText(window.location.href)
         setText('Copied')
       }}
-      className="font-base flex items-center gap-1 text-center text-sm text-zinc-500 transition-colors dark:text-zinc-400"
+      className="flex items-center gap-1 text-center text-sm text-zinc-500 transition-colors dark:text-zinc-400"
       type="button"
     >
       <TextMorph>{text}</TextMorph>
