@@ -21,10 +21,10 @@ describe('公开站点爬虫入口', () => {
     ])
   })
 
-  it('robots 声明同一站点的地图地址，保留现有抓取规则', () => {
+  it('robots 声明公开抓取规则与同一站点的地图地址', () => {
     vi.stubEnv('SITE_URL', 'https://example.test')
     expect(robots()).toEqual({
-      rules: { userAgent: '*', allow: '/', disallow: '/private/' },
+      rules: { userAgent: '*', allow: '/' },
       sitemap: 'https://example.test/sitemap.xml',
     })
   })
