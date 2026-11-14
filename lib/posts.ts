@@ -140,7 +140,7 @@ export function createPostStore(database: AppDatabase): PostStore {
     })
   }
 
-  function createDraftOnce(id: string, input: PostContent): PostMutationResult<DraftPost> {
+  function createDraftOnce(id: string, input: PostContent, source: 'create' | 'import' = 'create'): PostMutationResult<DraftPost> {
     postIdSchema.parse(id)
     const content = postContentSchema.parse(input)
     return database.transaction((transaction): PostMutationResult<DraftPost> => {
@@ -151,7 +151,7 @@ export function createPostStore(database: AppDatabase): PostStore {
           ? { status: 'success', value: draft }
           : { status: 'conflict' }
       }
-      return { status: 'success', value: insertDraft(transaction, id, content, 'create') }
+      return { status: 'success', value: insertDraft(transaction, id, content, source) }
     }, { behavior: 'immediate' })
   }
 

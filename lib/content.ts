@@ -130,7 +130,7 @@ export type ImportDraftInput = PostContent & {
 
 export type PostStore = {
   createDraft(content: PostContent): DraftPost
-  createDraftOnce(id: string, content: PostContent): PostMutationResult<DraftPost>
+  createDraftOnce(id: string, content: PostContent, source?: 'create' | 'import'): PostMutationResult<DraftPost>
   saveDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost>
   publishDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<PublishedPost>
   restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>

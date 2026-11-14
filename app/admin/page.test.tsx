@@ -28,6 +28,7 @@ describe('管理员文章列表', () => {
 
     expect(screen.getByText('No posts yet.')).toBeDefined()
     expect(screen.queryByRole('list', { name: 'Posts' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Import Markdown' }).getAttribute('href')).toBe('/admin/import')
   })
 
   it('展示草稿摘要与发布状态，仅为已有发布版本提供公开阅读链接', async () => {

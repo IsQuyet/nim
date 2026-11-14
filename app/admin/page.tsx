@@ -33,6 +33,12 @@ export default async function AdminPage() {
           >
             New draft
           </Link>
+          <Link
+            href="/admin/import"
+            className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+          >
+            Import Markdown
+          </Link>
           <AuthButton action="sign-out" />
         </div>
       </div>

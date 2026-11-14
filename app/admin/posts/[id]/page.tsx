@@ -26,6 +26,9 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
           <Link href={`/admin/posts/${draft.id}/history`} className="underline underline-offset-4">
             Revision history
           </Link>
+          <a href={`/admin/posts/${draft.id}/export`} download className="underline underline-offset-4">
+            Download saved draft
+          </a>
         </div>
         <h1 className="text-lg font-medium">Edit draft</h1>
         <p className="text-xs break-all text-zinc-500 dark:text-zinc-400">
