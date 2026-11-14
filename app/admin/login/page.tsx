@@ -9,6 +9,13 @@ type LoginPageProps = {
   searchParams: Promise<{ error?: string }>
 }
 
+function getSignInErrorMessage(error: string) {
+  if (error === 'AccessDenied') return 'This GitHub account is not allowed to manage this site.'
+  if (error === 'Configuration') return 'Sign-in is unavailable. Please check the server logs.'
+
+  return 'GitHub sign-in could not be completed. Please try signing in again.'
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   if (await getAdminSession()) redirect('/admin')
 
@@ -32,9 +39,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       )}
       {error && (
         <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
-          {error === 'AccessDenied'
-            ? 'This GitHub account is not allowed to manage this site.'
-            : 'Sign-in could not be completed. Please try again.'}
+          {getSignInErrorMessage(error)}
         </p>
       )}
     </main>

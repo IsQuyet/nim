@@ -48,7 +48,7 @@ export function AuthButton({ action }: AuthButtonProps) {
       {error && (
         <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
           {isSignIn
-            ? 'Could not complete sign-in. Please try again.'
+            ? 'GitHub sign-in could not be completed. Please try signing in again.'
             : 'Could not complete sign-out. Please try again.'}
         </p>
       )}

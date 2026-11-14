@@ -39,7 +39,7 @@ describe('管理员登录与退出操作', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue with GitHub' }))
 
     expect((await screen.findByRole('alert')).textContent)
-      .toBe('Could not complete sign-in. Please try again.')
+      .toBe('GitHub sign-in could not be completed. Please try signing in again.')
     expect(screen.getByRole<HTMLButtonElement>('button').disabled).toBe(false)
   })
 })
