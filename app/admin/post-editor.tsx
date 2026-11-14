@@ -8,7 +8,7 @@ import {
   type FormEvent,
 } from 'react'
 import { unstable_rethrow } from 'next/navigation'
-import { MarkdownContent } from '@/components/markdown-content'
+import { MarkdownPreviewLoader } from '@/components/markdown-preview-loader'
 import { MarkdownProse } from '@/components/markdown-prose'
 import {
   samePostContent,
@@ -171,7 +171,7 @@ export function PostEditor({
             <section aria-label="Markdown preview">
               <MarkdownProse className="min-h-80 max-w-none rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
                 {body ? (
-                  <MarkdownContent source={body} />
+                  <MarkdownPreviewLoader source={body} />
                 ) : (
                   <p>Nothing to preview yet.</p>
                 )}

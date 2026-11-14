@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PostRevision, PostRevisionHistory } from '@/lib/content'
 import RevisionHistoryPage from './page'
@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   getAdminRevisionHistory: vi.fn(),
   restoreRevisionAction: vi.fn(),
 }))
+vi.mock('@/components/markdown-content', async () => {
+  const { MarkdownPreview } = await import('@/components/markdown-preview')
+  return { MarkdownContent: MarkdownPreview }
+})
 vi.mock('@/lib/admin-posts', () => ({ getAdminRevisionHistory: mocks.getAdminRevisionHistory }))
 vi.mock('../../../actions', () => ({ restoreRevisionAction: mocks.restoreRevisionAction }))
 
@@ -53,9 +57,11 @@ beforeEach(() => {
 })
 
 async function renderHistory(query: Record<string, string | string[] | undefined> = {}) {
-  return render(await RevisionHistoryPage({
+  const result = render(await RevisionHistoryPage({
     params: Promise.resolve({ id }), searchParams: Promise.resolve(query),
   }))
+  await waitFor(() => expect(screen.queryByText('Rendering preview…')).toBeNull())
+  return result
 }
 
 describe('管理员修订历史页', () => {

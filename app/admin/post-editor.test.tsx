@@ -111,7 +111,7 @@ describe('Markdown 草稿编辑', () => {
     ])
   })
 
-  it('切换编辑与预览保留输入，并使用正文的 Markdown 和 GFM 渲染', () => {
+  it('切换编辑与预览保留输入，并使用正文的 Markdown 和 GFM 渲染', async () => {
     render(<PostEditor initialContent={content} initialRevisionId={1} action={action} />)
     const source =
       '# Preview heading\n\n| Name | Value |\n| --- | --- |\n| Example | 1 |'
@@ -122,7 +122,7 @@ describe('Markdown 草稿编辑', () => {
 
     const preview = screen.getByRole('region', { name: 'Markdown preview' })
     expect(
-      within(preview).getByText('Preview heading', { selector: 'h1' }),
+      await within(preview).findByText('Preview heading', { selector: 'h1' }, { timeout: 5000 }),
     ).toBeDefined()
     expect(within(preview).getByRole('table')).toBeDefined()
     expect(screen.queryByRole('textbox', { name: 'Body' })).toBeNull()
@@ -355,7 +355,8 @@ describe('当前编辑内容发布', () => {
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: edited.description } })
     fireEvent.change(screen.getByLabelText('Body'), { target: { value: edited.body } })
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
-    expect(screen.getByRole('region', { name: 'Markdown preview' }).textContent).toContain('Current preview body')
+    expect(await within(screen.getByRole('region', { name: 'Markdown preview' }))
+      .findByText('Current preview body', { selector: 'h1' }, { timeout: 5000 })).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
 
     expect((await screen.findByRole('status')).textContent).toBe('Post published.')
