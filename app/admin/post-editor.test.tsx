@@ -70,6 +70,24 @@ describe('Markdown 草稿编辑', () => {
     expect(screen.getByText('Unsaved changes.')).toBeDefined()
   })
 
+  it('登录失效时保留输入，并提供不会替换当前页面的登录入口', async () => {
+    action.mockResolvedValue({
+      status: 'error',
+      message: 'Sign in to save this draft.',
+      signInRequired: true,
+    })
+    render(<PostEditor initialContent={content} action={action} />)
+    fireEvent.change(screen.getByLabelText('Body'), { target: { value: 'Unsaved after sign-out' } })
+    fireEvent.submit(screen.getByRole('form', { name: 'Draft' }))
+
+    const link = await screen.findByRole('link', { name: 'Sign in in a new tab' })
+    expect(link.getAttribute('href')).toBe('/admin/login')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toBe('Unsaved after sign-out')
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save draft' }).disabled).toBe(false)
+  })
+
   it('保存失败时显示反馈，保留输入内容以便重试', async () => {
     action.mockResolvedValue({
       status: 'error',

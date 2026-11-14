@@ -10,6 +10,7 @@ import { getAuthSecret, initializeAuthSecret } from './auth-secret'
 import { getAuthSecretPath } from './data-paths'
 import { initializeDatabase, openDatabase } from './database'
 import { session as sessions } from './schema'
+import { createPostStore } from './posts'
 
 const next = vi.hoisted(() => ({ requestHeaders: new Headers() }))
 vi.mock('server-only', () => ({}))
@@ -408,17 +409,39 @@ describe('管理员认证与数据库会话', () => {
     expect(await app.getAdminSession()).not.toBeNull()
   })
 
-  it('认证存储不可用时归类为保存失败，不执行文章操作', async () => {
+  it('认证存储不可用时向上传播错误，不执行文章操作', async () => {
     await finishSignIn(await beginSignIn())
     const { withAdminPostStore } = await import('./admin-posts')
     const operation = vi.fn()
     database.exec('ALTER TABLE session RENAME TO unavailable_session')
     try {
-      await expect(withAdminPostStore(operation)).rejects.toMatchObject({ name: 'AdminPostStoreError' })
+      await expect(withAdminPostStore(operation)).rejects.toThrow()
       expect(operation).not.toHaveBeenCalled()
     } finally {
       database.exec('ALTER TABLE unavailable_session RENAME TO session')
     }
+  })
+
+  it('会话过期后保存返回重登提示，已保存正文保持不变', async () => {
+    await finishSignIn(await beginSignIn())
+    const orm = openDatabase()
+    const original = { title: 'Saved title', description: '', body: '# Saved body\r\n' }
+    let id: string
+    try {
+      id = createPostStore(orm).createDraft(original).id
+    } finally {
+      orm.$client.close()
+    }
+    database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
+    const { saveDraftAction } = await import('../app/admin/actions')
+
+    expect(await saveDraftAction(id, { status: 'idle' }, { ...original, body: '# Unsaved body' })).toEqual({
+      status: 'error',
+      message: 'Sign in to save this draft.',
+      signInRequired: true,
+    })
+    expect(database.prepare("SELECT title, description, body FROM post_contents WHERE post_id = ? AND stage = 'draft'").get(id))
+      .toEqual(original)
   })
 
   it('不开放邮箱密码注册', async () => {

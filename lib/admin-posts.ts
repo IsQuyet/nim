@@ -1,37 +1,34 @@
 import 'server-only'
-import { unstable_rethrow } from 'next/navigation'
-import { requireAdminSession } from './auth'
+import { redirect } from 'next/navigation'
+import { getAdminSession } from './auth'
 import { openDatabase } from './database'
 import { createPostStore } from './posts'
 
-export class AdminPostStoreError extends Error {
-  constructor(cause: unknown) {
-    super('管理数据访问失败。', { cause })
-    this.name = 'AdminPostStoreError'
-  }
-}
+type AdminPostStoreResult<T> =
+  | { authorized: false }
+  | { authorized: true; value: T }
 
 export async function withAdminPostStore<T>(
   operation: (store: ReturnType<typeof createPostStore>) => T,
-): Promise<T> {
+): Promise<AdminPostStoreResult<T>> {
+  if (!(await getAdminSession())) return { authorized: false }
+
+  const database = openDatabase()
   try {
-    await requireAdminSession()
-    const database = openDatabase()
-    try {
-      return operation(createPostStore(database))
-    } finally {
-      database.$client.close()
-    }
-  } catch (error) {
-    unstable_rethrow(error)
-    throw new AdminPostStoreError(error)
+    return { authorized: true, value: operation(createPostStore(database)) }
+  } finally {
+    database.$client.close()
   }
 }
 
 export async function getAdminPosts() {
-  return withAdminPostStore((store) => store.listPosts())
+  const result = await withAdminPostStore(store => store.listPosts())
+  if (!result.authorized) redirect('/admin/login')
+  return result.value
 }
 
 export async function getAdminDraft(id: string) {
-  return withAdminPostStore((store) => store.getDraft(id))
+  const result = await withAdminPostStore(store => store.getDraft(id))
+  if (!result.authorized) redirect('/admin/login')
+  return result.value
 }

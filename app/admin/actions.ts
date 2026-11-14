@@ -1,18 +1,24 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { AdminPostStoreError, withAdminPostStore } from '@/lib/admin-posts'
+import { redirect, unstable_rethrow } from 'next/navigation'
+import { withAdminPostStore } from '@/lib/admin-posts'
 import type { createPostStore, DraftPost, PostContent } from '@/lib/posts'
+
+type DraftErrorState = {
+  status: 'error'
+  message: string
+  signInRequired?: true
+}
 
 export type DraftFormState =
   | { status: 'idle' }
   | { status: 'saved'; content: PostContent }
-  | { status: 'error'; message: string }
+  | DraftErrorState
 
 type DraftWriteResult =
-  | { ok: true; draft: DraftPost }
-  | { ok: false; message: string }
+  | { status: 'saved'; draft: DraftPost }
+  | DraftErrorState
 
 type DraftOperation = (
   store: ReturnType<typeof createPostStore>,
@@ -24,9 +30,9 @@ async function writeDraft(
   operation: DraftOperation,
 ): Promise<DraftWriteResult> {
   try {
-    return await withAdminPostStore((store): DraftWriteResult => {
+    const result = await withAdminPostStore((store): DraftWriteResult => {
       if (!input || typeof input !== 'object') {
-        return { ok: false, message: 'The draft fields must contain text.' }
+        return { status: 'error', message: 'The draft fields must contain text.' }
       }
       const { title, description, body } = input as Record<string, unknown>
       if (
@@ -34,18 +40,22 @@ async function writeDraft(
         typeof description !== 'string' ||
         typeof body !== 'string'
       ) {
-        return { ok: false, message: 'The draft fields must contain text.' }
+        return { status: 'error', message: 'The draft fields must contain text.' }
       }
-      if (!title.trim()) return { ok: false, message: 'Enter a title.' }
+      if (!title.trim()) return { status: 'error', message: 'Enter a title.' }
 
       const draft = operation(store, { title, description, body })
-      if (!draft) return { ok: false, message: 'This draft does not exist.' }
-      return { ok: true, draft }
+      if (!draft) return { status: 'error', message: 'This draft does not exist.' }
+      return { status: 'saved', draft }
     })
+    if (!result.authorized) {
+      return { status: 'error', message: 'Sign in to save this draft.', signInRequired: true }
+    }
+    return result.value
   } catch (error) {
-    if (!(error instanceof AdminPostStoreError)) throw error
+    unstable_rethrow(error)
     console.error('保存草稿失败。', error)
-    return { ok: false, message: 'Could not save the draft. Please try again.' }
+    return { status: 'error', message: 'Could not save the draft. Please try again.' }
   }
 }
 
@@ -53,10 +63,8 @@ export async function createDraftAction(
   _state: DraftFormState,
   input: unknown,
 ): Promise<DraftFormState> {
-  const result = await writeDraft(input, (store, content) =>
-    store.createDraft(content),
-  )
-  if (!result.ok) return { status: 'error', message: result.message }
+  const result = await writeDraft(input, (store, content) => store.createDraft(content))
+  if (result.status === 'error') return result
 
   revalidatePath('/admin')
   redirect(`/admin/posts/${result.draft.id}`)
@@ -68,7 +76,7 @@ export async function saveDraftAction(
   input: unknown,
 ): Promise<DraftFormState> {
   const result = await writeDraft(input, (store, content) => store.saveDraft(id, content))
-  if (!result.ok) return { status: 'error', message: result.message }
+  if (result.status === 'error') return result
 
   revalidatePath('/admin')
   revalidatePath(`/admin/posts/${id}`)

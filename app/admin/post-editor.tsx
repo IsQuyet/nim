@@ -149,6 +149,19 @@ export function PostEditor({ initialContent, action }: PostEditorProps) {
       {state.status === 'error' && (
         <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
           {state.message}
+          {state.signInRequired && (
+            <>
+              {' '}
+              <a
+                href="/admin/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                Sign in in a new tab
+              </a>
+            </>
+          )}
         </p>
       )}
       {state.status === 'saved' && !hasChanges && (
