@@ -1,0 +1,1 @@
+CREATE INDEX `post_revisions_history_idx` ON `post_revisions` (`post_id`,`created_at`,`id`);

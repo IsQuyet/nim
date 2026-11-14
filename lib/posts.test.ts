@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { createPostStore, importPublishedPosts } from './posts'
 import type { DraftPost, PostContent, PostMutationResult, PostStore } from './content'
@@ -277,6 +278,15 @@ describe('历史恢复与管理状态', () => {
 })
 
 describe('修订历史读取', () => {
+  it('按文章与时间读取一页历史时不排序扫描全部修订', () => {
+    const draft = store.createDraft(content)
+    const rows = database.$client.prepare(`EXPLAIN QUERY PLAN
+      SELECT id, title, created_at, source FROM post_revisions
+      WHERE post_id = ? ORDER BY created_at DESC, id DESC LIMIT 20`).all(draft.id)
+    const plan = z.array(z.object({ detail: z.string() })).parse(rows)
+    expect(plan.some(row => row.detail.includes('USE TEMP B-TREE'))).toBe(false)
+  })
+
   it('分页只读取摘要，选中的完整修订独立于当前页，同时返回一致的草稿与公开引用', () => {
     let draft = store.createDraft(content)
     const original = draft

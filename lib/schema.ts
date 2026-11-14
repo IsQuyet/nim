@@ -24,6 +24,7 @@ export const postRevisions = sqliteTable('post_revisions', {
   restoredFromRevisionId: integer('restored_from_revision_id'),
 }, table => [
   unique('post_revisions_post_id_id_unique').on(table.postId, table.id),
+  index('post_revisions_history_idx').on(table.postId, table.createdAt, table.id),
   foreignKey({
     columns: [table.postId, table.restoredFromRevisionId],
     foreignColumns: [table.postId, table.id],
