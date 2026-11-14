@@ -15,11 +15,11 @@ let directory: string
 let database: Database
 let store: ReturnType<typeof createPostStore>
 
-beforeEach(() => {
+beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-blog-'))
   const filename = join(directory, 'nim.sqlite')
   vi.stubEnv('DATABASE_PATH', filename)
-  initializeDatabase(filename)
+  await initializeDatabase(filename)
   database = openDatabase(filename)
   store = createPostStore(database)
 })

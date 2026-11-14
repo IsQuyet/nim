@@ -2,6 +2,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { redirect } from 'next/navigation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requireAdminSession } from './auth'
 import { initializeDatabase } from './database'
@@ -17,8 +18,22 @@ beforeEach(() => {
   vi.stubEnv('DATABASE_PATH', join(directory, 'nim.sqlite'))
   vi.mocked(requireAdminSession).mockReset()
   vi.mocked(requireAdminSession).mockResolvedValue({
-    githubId: '1234',
-    expires: '2099-01-01T00:00:00Z',
+    session: {
+      id: 'session-id',
+      userId: 'admin-id',
+      token: 'session-token',
+      expiresAt: new Date('2099-01-01'),
+      createdAt: new Date('2026-11-14'),
+      updatedAt: new Date('2026-11-14'),
+    },
+    user: {
+      id: 'admin-id',
+      name: 'Admin',
+      email: 'admin@example.test',
+      emailVerified: true,
+      createdAt: new Date('2026-11-14'),
+      updatedAt: new Date('2026-11-14'),
+    },
   })
 })
 
@@ -28,12 +43,13 @@ afterEach(() => {
 })
 
 describe('管理端文章访问', () => {
-  it('未通过身份验证时不创建或读取数据库，也不执行存储操作', async () => {
-    const denied = new Error('Redirect to sign-in')
-    vi.mocked(requireAdminSession).mockRejectedValue(denied)
+  it('未通过身份验证时不打开文章存储，也不执行内容操作', async () => {
+    vi.mocked(requireAdminSession).mockImplementation(async () => redirect('/admin/login'))
     const operation = vi.fn()
 
-    await expect(withAdminPostStore(operation)).rejects.toBe(denied)
+    await expect(withAdminPostStore(operation)).rejects.toMatchObject({
+      digest: expect.stringMatching(/^NEXT_REDIRECT;/),
+    })
     expect(operation).not.toHaveBeenCalled()
     expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
   })
@@ -49,7 +65,7 @@ describe('管理端文章访问', () => {
   })
 
   it('经过验证后可以创建、读取和保存同一草稿，管理列表保持最新内容', async () => {
-    initializeDatabase()
+    await initializeDatabase()
     const first = {
       title: 'First title',
       description: 'Description.',

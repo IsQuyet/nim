@@ -1,21 +1,17 @@
 import 'server-only'
 import { cache } from 'react'
-import { getServerSession, type NextAuthOptions } from 'next-auth'
-import GitHub from 'next-auth/providers/github'
+import { betterAuth, type BetterAuthOptions } from 'better-auth'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
 import { getSiteUrl } from './site-config'
 import { getAuthSecret } from './auth-secret'
-
-declare module 'next-auth' {
-  interface Session {
-    githubId?: string
-  }
-}
+import { openDatabase } from './database'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
+let auth: ReturnType<typeof betterAuth> | undefined
 
-export function getAuthOptions(): NextAuthOptions | null {
+export function getAuthOptions(): BetterAuthOptions | null {
   const clientId = process.env.GITHUB_CLIENT_ID?.trim()
   const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim()
   const adminId = process.env.ADMIN_GITHUB_ID?.trim()
@@ -24,65 +20,54 @@ export function getAuthOptions(): NextAuthOptions | null {
   const secret = getAuthSecret()
   if (!secret) return null
 
-  const siteUrl = getSiteUrl()
-  // NextAuth v4 从环境变量读取回调基址，统一由 SITE_URL 提供，不另配域名。
-  process.env.NEXTAUTH_URL = siteUrl.origin
-
   return {
+    baseURL: getSiteUrl().origin,
     secret,
-    session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE },
-    jwt: { maxAge: SESSION_MAX_AGE },
-    providers: [
-      GitHub({
-        clientId,
-        clientSecret,
-        checks: ['pkce', 'state'],
-        authorization: { params: { scope: '' } },
-        userinfo: {
-          // 身份判断只需公开账号资料，不额外申请或读取私人邮箱。
-          request: ({ client, tokens }) => client.userinfo(tokens.access_token!),
-        },
-      }),
-    ],
-    pages: {
-      signIn: '/admin/login',
-      signOut: '/admin',
-      error: '/admin/login',
-      verifyRequest: '/admin/login',
-    },
-    callbacks: {
-      signIn({ account }) {
-        return account?.provider === 'github' && account.providerAccountId === adminId
-      },
-      jwt({ token, account }) {
-        if (account) {
-          token.githubId = account.provider === 'github' ? account.providerAccountId : undefined
+    advanced: { disableOriginCheck: false },
+    session: { expiresIn: SESSION_MAX_AGE, disableSessionRefresh: true },
+    socialProviders: { github: { clientId, clientSecret } },
+    user: {
+      validateUserInfo({ source }) {
+        if (
+          source.method !== 'oauth' ||
+          source.oauth?.providerId !== 'github' ||
+          String(source.oauth.profile?.id) !== process.env.ADMIN_GITHUB_ID?.trim()
+        ) {
+          return { error: 'account_not_allowed' }
         }
-        return token
-      },
-      session({ session, token }) {
-        session.githubId = typeof token.githubId === 'string' ? token.githubId : undefined
-        return session
-      },
-      redirect({ url }) {
-        try {
-          const target = new URL(url, siteUrl)
-          if (target.origin === siteUrl.origin) return target.href
-        } catch {}
-
-        return new URL('/admin', siteUrl).href
       },
     },
+    account: {
+      accountLinking: { enabled: false },
+      encryptOAuthTokens: true,
+    },
+    onAPIError: { errorURL: '/admin/login' },
+    disabledPaths: ['/get-access-token', '/refresh-token', '/sign-out'],
   }
+}
+
+export function getAuth() {
+  const options = getAuthOptions()
+  if (!options) return null
+
+  // 按需建立进程内共享连接，构建时不打开持久化文件。
+  auth ??= betterAuth<BetterAuthOptions>({ ...options, database: openDatabase() })
+  return auth
 }
 
 export const getAdminSession = cache(async () => {
   await connection()
-  const options = getAuthOptions()
-  if (!options) return null
+  const auth = getAuth()
+  if (!auth) return null
 
-  const session = await getServerSession(options)
-  return session?.githubId === process.env.ADMIN_GITHUB_ID?.trim() ? session : null
+  const requestHeaders = await headers()
+  const session = await auth.api.getSession({ headers: requestHeaders })
+  if (!session) return null
+
+  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders })
+  return accounts.some(account =>
+    account.providerId === 'github' && account.accountId === process.env.ADMIN_GITHUB_ID?.trim(),
+  ) ? session : null
 })
 
 export async function requireAdminSession() {

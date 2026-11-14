@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { authClient } from '@/lib/auth-client'
 import { Magnetic } from '@/components/ui/magnetic'
 
 type AuthButtonProps = {
@@ -9,6 +10,7 @@ type AuthButtonProps = {
 }
 
 export function AuthButton({ action }: AuthButtonProps) {
+  const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState(false)
   const isSignIn = action === 'sign-in'
@@ -19,9 +21,27 @@ export function AuthButton({ action }: AuthButtonProps) {
 
     try {
       if (isSignIn) {
-        await signIn('github', { callbackUrl: '/admin' })
+        const result = await authClient.signIn.social({
+          provider: 'github',
+          callbackURL: '/admin',
+          errorCallbackURL: '/admin/login',
+        })
+        if (result.error) setError(true)
       } else {
-        await signOut({ callbackUrl: '/admin/login' })
+        const session = await authClient.getSession()
+        if (session.error) {
+          setError(true)
+          return
+        }
+        if (session.data) {
+          const result = await authClient.revokeSession({ token: session.data.session.token })
+          if (result.error) {
+            setError(true)
+            return
+          }
+        }
+        router.replace('/admin/login')
+        router.refresh()
       }
     } catch {
       setError(true)

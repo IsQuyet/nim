@@ -1,11 +1,12 @@
 import 'server-only'
+import { unstable_rethrow } from 'next/navigation'
 import { requireAdminSession } from './auth'
 import { openDatabase } from './database'
 import { createPostStore } from './posts'
 
 export class AdminPostStoreError extends Error {
   constructor(cause: unknown) {
-    super('文章存储访问失败。', { cause })
+    super('管理数据访问失败。', { cause })
     this.name = 'AdminPostStoreError'
   }
 }
@@ -13,9 +14,8 @@ export class AdminPostStoreError extends Error {
 export async function withAdminPostStore<T>(
   operation: (store: ReturnType<typeof createPostStore>) => T,
 ): Promise<T> {
-  await requireAdminSession()
-
   try {
+    await requireAdminSession()
     const database = openDatabase()
     try {
       return operation(createPostStore(database))
@@ -23,6 +23,7 @@ export async function withAdminPostStore<T>(
       database.close()
     }
   } catch (error) {
+    unstable_rethrow(error)
     throw new AdminPostStoreError(error)
   }
 }

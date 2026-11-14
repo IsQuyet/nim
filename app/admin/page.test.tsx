@@ -5,6 +5,10 @@ import AdminPage from './page'
 
 const getAdminPosts = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/admin-posts', () => ({ getAdminPosts }))
+vi.mock('next/navigation', async importOriginal => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+}))
 
 beforeEach(() => {
   getAdminPosts.mockReset()

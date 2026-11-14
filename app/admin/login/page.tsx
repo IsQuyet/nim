@@ -10,8 +10,8 @@ type LoginPageProps = {
 }
 
 function getSignInErrorMessage(error: string) {
-  if (error === 'AccessDenied') return 'This GitHub account is not allowed to manage this site.'
-  if (error === 'Configuration') return 'Sign-in is unavailable. Please check the server logs.'
+  if (error === 'account_not_allowed') return 'This GitHub account is not allowed to manage this site.'
+  if (error === 'internal_server_error') return 'Sign-in is unavailable. Please check the server logs.'
 
   return 'GitHub sign-in could not be completed. Please try signing in again.'
 }

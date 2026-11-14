@@ -22,7 +22,7 @@ const schema = `
   PRAGMA user_version = 2;
 `
 
-export function initializeDatabase(filename = getDatabasePath()) {
+export async function initializeDatabase(filename = getDatabasePath()) {
   mkdirSync(dirname(filename), { recursive: true })
   const database = new Database(filename)
 
@@ -59,6 +59,10 @@ export function initializeDatabase(filename = getDatabasePath()) {
     } else if (version !== 2) {
       throw new Error(`不支持的数据库结构版本：${version}`)
     }
+
+    const { getMigrations } = await import('better-auth/db/migration')
+    const { runMigrations } = await getMigrations({ database })
+    await runMigrations()
   } finally {
     database.close()
   }

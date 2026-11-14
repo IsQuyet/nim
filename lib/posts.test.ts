@@ -12,10 +12,10 @@ let filename: string
 let database: Database
 let store: ReturnType<typeof createPostStore>
 
-beforeEach(() => {
+beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-posts-'))
   filename = join(directory, 'nim.sqlite')
-  initializeDatabase(filename)
+  await initializeDatabase(filename)
   database = openDatabase(filename)
   store = createPostStore(database)
 })
@@ -114,7 +114,7 @@ describe('已发布文章导入', () => {
 })
 
 describe('文章持久化与发布边界', () => {
-  it('只提供内容即可生成独立 ID，重开数据库及重复初始化后草稿仍在', () => {
+  it('只提供内容即可生成独立 ID，重开数据库及重复初始化后草稿仍在', async () => {
     const input = {
       title: 'First post',
       description: 'A saved draft.',
@@ -125,7 +125,7 @@ describe('文章持久化与发布边界', () => {
     expect(another.id).not.toBe(draft.id)
 
     database.close()
-    initializeDatabase(filename)
+    await initializeDatabase(filename)
     database = openDatabase(filename)
     store = createPostStore(database)
 

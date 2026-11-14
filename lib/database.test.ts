@@ -47,9 +47,9 @@ function getColumns(database: Database.Database) {
 }
 
 describe('文章身份数据库结构', () => {
-  it('新库只保存文章 ID 和创建时间，重复准备保持同一结构', () => {
-    initializeDatabase(filename)
-    initializeDatabase(filename)
+  it('新库只保存文章 ID 和创建时间，重复准备保持同一结构', async () => {
+    await initializeDatabase(filename)
+    await initializeDatabase(filename)
     const database = openDatabase(filename)
 
     try {
@@ -61,7 +61,7 @@ describe('文章身份数据库结构', () => {
     }
   })
 
-  it('升级保留文章 ID、创建时间及完整的草稿和发布快照', () => {
+  it('升级保留文章 ID、创建时间及完整的草稿和发布快照', async () => {
     const database = createVersionOne()
     const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
     const createdAt = '2026-11-13T04:17:13.397Z'
@@ -72,8 +72,8 @@ describe('文章身份数据库结构', () => {
     const contents = database.prepare('SELECT * FROM post_contents ORDER BY stage').all()
     database.close()
 
-    initializeDatabase(filename)
-    initializeDatabase(filename)
+    await initializeDatabase(filename)
+    await initializeDatabase(filename)
     const reopened = openDatabase(filename)
 
     try {
@@ -87,7 +87,7 @@ describe('文章身份数据库结构', () => {
     }
   })
 
-  it('外键检查失败时回滚整个升级，不改变已有结构和内容', () => {
+  it('外键检查失败时回滚整个升级，不改变已有结构和内容', async () => {
     const database = createVersionOne()
     database.prepare('INSERT INTO post_contents VALUES (?, ?, ?, ?, ?, ?)')
       .run('missing-post', 'draft', 'Draft title', '', '# Draft', '2026-11-13T00:00:00Z')
@@ -95,7 +95,7 @@ describe('文章身份数据库结构', () => {
     const contents = database.prepare('SELECT * FROM post_contents').all()
     database.close()
 
-    expect(() => initializeDatabase(filename)).toThrow('数据库外键检查失败')
+    await expect(initializeDatabase(filename)).rejects.toThrow('数据库外键检查失败')
     const reopened = new Database(filename)
     try {
       expect(reopened.pragma('user_version', { simple: true })).toBe(1)
