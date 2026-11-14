@@ -1,7 +1,7 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { getAdminSession } from './auth'
-import type { PostStore } from './content'
+import { revisionHistoryQuerySchema, type PostStore } from './content'
 import { openDatabase } from './database'
 import { createPostStore } from './posts'
 
@@ -30,6 +30,15 @@ export async function getAdminPosts() {
 
 export async function getAdminDraft(id: string) {
   const result = await withAdminPostStore(store => store.getDraft(id))
+  if (!result.authorized) redirect('/admin/login')
+  return result.value
+}
+
+export async function getAdminRevisionHistory(id: string, query: unknown = {}) {
+  const result = await withAdminPostStore(store => {
+    const parsed = revisionHistoryQuerySchema.safeParse(query)
+    return parsed.success ? store.getRevisionHistory(id, parsed.data) : null
+  })
   if (!result.authorized) redirect('/admin/login')
   return result.value
 }

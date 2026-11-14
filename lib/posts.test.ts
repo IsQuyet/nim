@@ -70,6 +70,20 @@ describe('文章修订与草稿', () => {
     expect(store.getPublishedPost(draft.id)).toBeNull()
   })
 
+  it('同一创建标识重试不重复建稿，内容不同则保留既有草稿并返回冲突', () => {
+    const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
+    const created = success(store.createDraftOnce(id, content))
+    const before = snapshot()
+    expect(success(store.createDraftOnce(id, content))).toEqual(created)
+    expect(snapshot()).toEqual(before)
+    expect(store.createDraftOnce(id, { ...content, body: '# Changed after lost response' }))
+      .toEqual({ status: 'conflict' })
+    expect(snapshot()).toEqual(before)
+    const edited = save(created, { ...content, title: 'Edited elsewhere' })
+    expect(store.createDraftOnce(id, content)).toEqual({ status: 'conflict' })
+    expect(store.getDraft(id)).toEqual(edited)
+  })
+
   it('内容变化才追加修订，不改写旧版，也不为相同内容刷新时间', () => {
     const draft = store.createDraft(content)
     expect(save(draft, content)).toEqual(draft)
@@ -259,6 +273,40 @@ describe('历史恢复与管理状态', () => {
     expect(() => database.update(postPublications).set({ publishedAt: '2099-01-01' }).where(eq(postPublications.id, published.publicationId)).run()).toThrow()
     database.delete(posts).where(eq(posts.id, draft.id)).run()
     expect(snapshot()).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [] })
+  })
+})
+
+describe('修订历史读取', () => {
+  it('分页只读取摘要，选中的完整修订独立于当前页，同时返回一致的草稿与公开引用', () => {
+    let draft = store.createDraft(content)
+    const original = draft
+    const published = publish(draft)
+    for (let index = 0; index < 24; index += 1) draft = save(draft, { ...content, body: `# Revision ${index}` })
+
+    const first = store.getRevisionHistory(draft.id, { page: 1, revisionId: original.revisionId })
+    assert.ok(first)
+    expect(first.draft).toEqual(draft)
+    expect(first.published).toEqual(published)
+    expect(first.selectedRevision).toMatchObject({ id: original.revisionId, body: content.body })
+    expect(first.revisions).toHaveLength(20)
+    expect(first.revisionCount).toBe(25)
+    expect(first.pageCount).toBe(2)
+    expect(first.revisions.every(revision => !('body' in revision) && !('description' in revision))).toBe(true)
+    const second = store.getRevisionHistory(draft.id, { page: 2 })
+    assert.ok(second)
+    expect(second.revisions).toHaveLength(5)
+    expect(second.selectedRevision.id).toBe(draft.revisionId)
+    expect(new Set([...first.revisions, ...second.revisions].map(revision => revision.id)).size).toBe(25)
+    expect(store.getRevisionHistory(draft.id, { page: 3 })).toBeNull()
+  })
+
+  it('不返回不存在文章、跨文章选中修订或无效分页的历史', () => {
+    const draft = store.createDraft(content)
+    const another = store.createDraft({ ...content, title: 'Another' })
+    expect(store.getRevisionHistory('missing')).toBeNull()
+    expect(store.getRevisionHistory(draft.id, { page: 1, revisionId: another.revisionId })).toBeNull()
+    expect(store.getRevisionHistory(draft.id, { page: 0 })).toBeNull()
+    expect(store.getRevisionHistory(draft.id, { page: 1.5 })).toBeNull()
   })
 })
 

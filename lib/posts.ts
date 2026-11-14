@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import type { AppDatabase } from './database'
-import { postContentFields, postContentSchema, postStatusSchema, samePostContent } from './content'
+import { postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from './content'
 import type {
   DraftPost,
   ImportDraftInput,
@@ -10,6 +10,8 @@ import type {
   PostMutationResult,
   PostContent,
   PostRevision,
+  PostRevisionHistory,
+  RevisionHistoryQuery,
   PostStore,
   PostSummary,
   PublishedPost,
@@ -138,6 +140,21 @@ export function createPostStore(database: AppDatabase): PostStore {
     })
   }
 
+  function createDraftOnce(id: string, input: PostContent): PostMutationResult<DraftPost> {
+    postIdSchema.parse(id)
+    const content = postContentSchema.parse(input)
+    return database.transaction((transaction): PostMutationResult<DraftPost> => {
+      const existing = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, id)).get()
+      if (existing) {
+        const draft = getDraft(transaction, id)
+        return draft && samePostContent(draft, content)
+          ? { status: 'success', value: draft }
+          : { status: 'conflict' }
+      }
+      return { status: 'success', value: insertDraft(transaction, id, content, 'create') }
+    }, { behavior: 'immediate' })
+  }
+
   function saveDraft(id: string, input: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost> {
     const content = postContentSchema.parse(input)
     return database.transaction((transaction): PostMutationResult<DraftPost> => {
@@ -192,6 +209,41 @@ export function createPostStore(database: AppDatabase): PostStore {
     }, { behavior: 'immediate' })
   }
 
+  function getRevisionHistory(id: string, query: RevisionHistoryQuery = revisionHistoryQuerySchema.parse({})): PostRevisionHistory | null {
+    return database.transaction(transaction => {
+      const draft = getDraft(transaction, id)
+      if (!draft) return null
+      const total = transaction.select({ value: count() }).from(postRevisions)
+        .where(eq(postRevisions.postId, id)).get()
+      if (!total) throw new Error('无法读取文章修订数量。')
+      const pageCount = Math.ceil(total.value / REVISION_PAGE_SIZE)
+      if (!Number.isSafeInteger(query.page) || query.page < 1 || query.page > pageCount) return null
+      const selectedRevision = transaction.select().from(postRevisions).where(and(
+        eq(postRevisions.postId, id), eq(postRevisions.id, query.revisionId ?? draft.revisionId),
+      )).get()
+      if (!selectedRevision) return null
+      const revisions = transaction.select({
+        id: postRevisions.id,
+        postId: postRevisions.postId,
+        title: postRevisions.title,
+        createdAt: postRevisions.createdAt,
+        source: postRevisions.source,
+        restoredFromRevisionId: postRevisions.restoredFromRevisionId,
+      }).from(postRevisions).where(eq(postRevisions.postId, id))
+        .orderBy(desc(postRevisions.createdAt), desc(postRevisions.id))
+        .limit(REVISION_PAGE_SIZE).offset((query.page - 1) * REVISION_PAGE_SIZE).all()
+      return {
+        draft,
+        published: getPublishedPost(transaction, id),
+        selectedRevision,
+        revisions,
+        page: query.page,
+        pageCount,
+        revisionCount: total.value,
+      }
+    }, { behavior: 'deferred' })
+  }
+
   function listPosts() {
     const draft = alias(postRevisions, 'draft')
     const published = alias(postRevisions, 'published')
@@ -227,6 +279,7 @@ export function createPostStore(database: AppDatabase): PostStore {
 
   return {
     createDraft,
+    createDraftOnce,
     saveDraft,
     publishDraft,
     restoreRevision,
@@ -234,6 +287,7 @@ export function createPostStore(database: AppDatabase): PostStore {
     getDraft: id => getDraft(database, id),
     getPublishedPost: id => getPublishedPost(database, id),
     getRevision,
+    getRevisionHistory,
     listRevisions: id => database.select().from(postRevisions).where(eq(postRevisions.postId, id))
       .orderBy(desc(postRevisions.createdAt), desc(postRevisions.id)).all(),
     listPublications: id => database.select().from(postPublications).where(eq(postPublications.postId, id))

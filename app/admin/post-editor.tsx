@@ -7,6 +7,7 @@ import {
   useState,
   type FormEvent,
 } from 'react'
+import { unstable_rethrow } from 'next/navigation'
 import { MarkdownContent } from '@/components/markdown-content'
 import { MarkdownProse } from '@/components/markdown-prose'
 import {
@@ -17,11 +18,18 @@ import {
 } from '@/lib/content'
 import { cn } from '@/lib/utils'
 
+type DraftAction = (state: DraftFormState, input: DraftEditorInput) => Promise<DraftFormState>
+type SubmitIntent = 'save' | 'publish'
+type EditorSubmission = { intent: SubmitIntent; input: DraftEditorInput }
+
 type PostEditorProps = {
   initialContent: PostContent
-  initialRevisionId: number | null
-  action: (state: DraftFormState, input: DraftEditorInput) => Promise<DraftFormState>
-}
+  action: DraftAction
+  publishAction?: DraftAction
+} & (
+  | { initialRevisionId: number; creationId?: never }
+  | { initialRevisionId: null; creationId: string }
+)
 
 const FIELD_CLASS_NAME =
   'w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-zinc-900 outline-offset-4 focus-visible:outline-2 dark:border-zinc-800 dark:text-zinc-100'
@@ -29,36 +37,58 @@ const FIELD_CLASS_NAME =
 export function PostEditor({
   initialContent,
   initialRevisionId,
+  creationId,
   action,
+  publishAction,
 }: PostEditorProps) {
   const prefix = useId()
+  const [sessionCreationId] = useState(creationId)
   const [title, setTitle] = useState(initialContent.title)
   const [description, setDescription] = useState(initialContent.description)
   const [body, setBody] = useState(initialContent.body)
   const [preview, setPreview] = useState(false)
+  const [pendingIntent, setPendingIntent] = useState<SubmitIntent>('save')
   const [savedSnapshot, setSavedSnapshot] = useState(() => ({
     content: initialContent,
     revisionId: initialRevisionId,
   }))
   const [state, submitAction, pending] = useActionState<
     DraftFormState,
-    DraftEditorInput
-  >(async (previousState, input) => {
-    const result = await action(previousState, input)
-    if (result.status === 'saved') {
-      setSavedSnapshot({ content: result.content, revisionId: result.revisionId })
+    EditorSubmission
+  >(async (previousState, { intent, input }) => {
+    const operation = intent === 'publish' ? publishAction : action
+    if (!operation) return { status: 'error', message: 'Save a draft before publishing.' }
+    try {
+      const result = await operation(previousState, input)
+      if (result.status === 'saved' || result.status === 'published') {
+        setSavedSnapshot({ content: result.content, revisionId: result.revisionId })
+      }
+      return result
+    } catch (error) {
+      unstable_rethrow(error)
+      return {
+        status: 'error',
+        message: 'Could not confirm the operation. Your input is preserved. Check the latest version before retrying.',
+        ...(sessionCreationId ? { reviewPostId: sessionCreationId } : {}),
+      }
     }
-    return result
   }, { status: 'idle' })
   const hasChanges = !samePostContent({ title, description, body }, savedSnapshot.content)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (pending) return
+    const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null
+    const intent = submitter instanceof HTMLButtonElement && submitter.value === 'publish'
+      ? 'publish'
+      : 'save'
     const input = {
       content: { title, description, body },
       expectedRevisionId: savedSnapshot.revisionId,
+      ...(sessionCreationId ? { creationId: sessionCreationId } : {}),
     }
-    startTransition(() => submitAction(input))
+    setPendingIntent(intent)
+    startTransition(() => submitAction({ intent, input }))
   }
 
   return (
@@ -152,12 +182,26 @@ export function PostEditor({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
+            name="intent"
+            value="save"
             disabled={pending}
-            aria-busy={pending}
+            aria-busy={pending && pendingIntent === 'save'}
             className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 disabled:cursor-wait disabled:opacity-60 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
           >
-            {pending ? 'Saving…' : 'Save draft'}
+            {pending && pendingIntent === 'save' ? 'Saving…' : 'Save draft'}
           </button>
+          {publishAction && (
+            <button
+              type="submit"
+              name="intent"
+              value="publish"
+              disabled={pending}
+              aria-busy={pending && pendingIntent === 'publish'}
+              className="rounded-full bg-zinc-950 px-3 py-1.5 text-sm text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-300"
+            >
+              {pending && pendingIntent === 'publish' ? 'Publishing…' : 'Publish'}
+            </button>
+          )}
           {hasChanges && !pending && (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Unsaved changes.
@@ -168,6 +212,19 @@ export function PostEditor({
       {state.status === 'error' && (
         <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
           {state.message}
+          {state.reviewPostId && (
+            <>
+              {' '}
+              <a
+                href={`/admin/posts/${state.reviewPostId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                Check saved draft in a new tab
+              </a>
+            </>
+          )}
           {state.signInRequired && (
             <>
               {' '}
@@ -183,9 +240,9 @@ export function PostEditor({
           )}
         </p>
       )}
-      {state.status === 'saved' && !hasChanges && (
+      {(state.status === 'saved' || state.status === 'published') && !hasChanges && (
         <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
-          Draft saved.
+          {state.status === 'published' ? 'Post published.' : 'Draft saved.'}
         </p>
       )}
     </form>

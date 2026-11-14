@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { requireAdminSession } from '@/lib/auth'
@@ -26,6 +27,7 @@ export default async function NewDraftPage() {
       <PostEditor
         initialContent={{ title: '', description: '', body: '' }}
         initialRevisionId={null}
+        creationId={randomUUID()}
         action={createDraftAction}
       />
     </main>

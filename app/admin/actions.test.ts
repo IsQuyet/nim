@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDraftAction, saveDraftAction } from './actions'
+import { createDraftAction, publishDraftAction, restoreRevisionAction, saveDraftAction } from './actions'
 
 const mocks = vi.hoisted(() => ({
   withAdminPostStore: vi.fn(),
-  createDraft: vi.fn(),
+  createDraftOnce: vi.fn(),
   saveDraft: vi.fn(),
+  publishDraft: vi.fn(),
+  restoreRevision: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
 }))
@@ -32,14 +34,32 @@ const draft = {
   updatedAt: '2026-11-14T00:00:00Z',
 }
 
+const published = {
+  ...content,
+  id,
+  revisionId: 3,
+  publicationId: 1,
+  createdAt: draft.createdAt,
+  publishedAt: '2026-11-15T00:00:00Z',
+}
+
+const adminPaths = [['/admin'], [`/admin/posts/${id}`], [`/admin/posts/${id}/history`]]
+
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset()
   mocks.withAdminPostStore.mockImplementation(async operation => ({
     authorized: true,
-    value: await operation({ createDraft: mocks.createDraft, saveDraft: mocks.saveDraft }),
+    value: await operation({
+      createDraftOnce: mocks.createDraftOnce,
+      saveDraft: mocks.saveDraft,
+      publishDraft: mocks.publishDraft,
+      restoreRevision: mocks.restoreRevision,
+    }),
   }))
-  mocks.createDraft.mockReturnValue(draft)
+  mocks.createDraftOnce.mockReturnValue({ status: 'success', value: draft })
   mocks.saveDraft.mockReturnValue({ status: 'success', value: draft })
+  mocks.publishDraft.mockReturnValue({ status: 'success', value: published })
+  mocks.restoreRevision.mockReturnValue({ status: 'success', value: draft })
   mocks.redirect.mockImplementation(path => {
     throw new Error(`Redirect: ${path}`)
   })
@@ -57,7 +77,7 @@ describe('草稿保存入口', () => {
     expect(await createDraftAction({ status: 'idle' }, untrustedInput)).toEqual(expected)
     expect(await saveDraftAction(id, { status: 'idle' }, untrustedInput)).toEqual(expected)
     expect(readContent).not.toHaveBeenCalled()
-    expect(mocks.createDraft).not.toHaveBeenCalled()
+    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
     expect(mocks.saveDraft).not.toHaveBeenCalled()
     expect(mocks.redirect).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -76,14 +96,14 @@ describe('草稿保存入口', () => {
 
   it('拒绝空白标题和非文本内容，不执行写入', async () => {
     const blank = await createDraftAction({ status: 'idle' }, {
-      content: { ...content, title: '  ' }, expectedRevisionId: null,
+      content: { ...content, title: '  ' }, expectedRevisionId: null, creationId: id,
     })
     expect(blank).toEqual({ status: 'error', message: 'Enter a title.' })
     const invalid = await createDraftAction({ status: 'idle' }, {
-      content: { ...content, body: 123 }, expectedRevisionId: null,
+      content: { ...content, body: 123 }, expectedRevisionId: null, creationId: id,
     })
     expect(invalid.status).toBe('error')
-    expect(mocks.createDraft).not.toHaveBeenCalled()
+    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
   })
 
   it.each([null, undefined, 'text', [], {}, { content: null }])(
@@ -91,7 +111,7 @@ describe('草稿保存入口', () => {
     async unknownInput => {
       expect((await createDraftAction({ status: 'idle' }, unknownInput)).status)
         .toBe('error')
-      expect(mocks.createDraft).not.toHaveBeenCalled()
+      expect(mocks.createDraftOnce).not.toHaveBeenCalled()
       expect(mocks.redirect).not.toHaveBeenCalled()
       expect(mocks.revalidatePath).not.toHaveBeenCalled()
     },
@@ -124,19 +144,36 @@ describe('草稿保存入口', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it('创建时只传内容，并跳转到系统返回 ID 对应的编辑页', async () => {
-    await expect(createDraftAction({ status: 'idle' }, { content, expectedRevisionId: null }))
+  it('创建使用同一系统标识，并跳转到已提交的草稿', async () => {
+    await expect(createDraftAction({ status: 'idle' }, { content, expectedRevisionId: null, creationId: id }))
       .rejects.toThrow(`Redirect: /admin/posts/${id}`)
 
-    expect(mocks.createDraft).toHaveBeenCalledExactlyOnceWith(content)
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith('/admin')
+    expect(mocks.createDraftOnce).toHaveBeenCalledExactlyOnceWith(id, content)
+    expect(mocks.revalidatePath.mock.calls).toEqual([['/admin'], ['/admin/posts/new']])
     expect(mocks.saveDraft).not.toHaveBeenCalled()
   })
 
   it('创建不使用客户端传来的保存基线', async () => {
-    await expect(createDraftAction({ status: 'idle' }, { content, expectedRevisionId: 'ignored' }))
+    await expect(createDraftAction({ status: 'idle' }, { content, expectedRevisionId: 'ignored', creationId: id }))
       .rejects.toThrow(`Redirect: /admin/posts/${id}`)
-    expect(mocks.createDraft).toHaveBeenCalledExactlyOnceWith(content)
+    expect(mocks.createDraftOnce).toHaveBeenCalledExactlyOnceWith(id, content)
+  })
+
+  it.each([undefined, null, '', 'not-a-uuid', 123])('创建拒绝无效操作标识 %j', async creationId => {
+    expect((await createDraftAction({ status: 'idle' }, { content, creationId })).status).toBe('error')
+    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('创建请求冲突时提供检查入口，不覆盖已有稿件或导航', async () => {
+    mocks.createDraftOnce.mockReturnValue({ status: 'conflict' })
+    expect(await createDraftAction({ status: 'idle' }, { content, creationId: id })).toEqual({
+      status: 'error',
+      message: 'A draft already exists for this request. Your input is preserved. Review the saved draft before continuing.',
+      reviewPostId: id,
+    })
+    expect(mocks.redirect).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   it('保存原文及预期修订并返回新基线，只刷新管理页面', async () => {
@@ -144,7 +181,7 @@ describe('草稿保存入口', () => {
       status: 'saved', content, revisionId: 2,
     })
     expect(mocks.saveDraft).toHaveBeenCalledExactlyOnceWith(id, content, 1)
-    expect(mocks.revalidatePath.mock.calls).toEqual([['/admin'], [`/admin/posts/${id}`]])
+    expect(mocks.revalidatePath.mock.calls).toEqual(adminPaths)
     expect(mocks.redirect).not.toHaveBeenCalled()
   })
 
@@ -191,6 +228,150 @@ describe('草稿保存入口', () => {
       status: 'error', message: 'Could not save the draft. Please try again.',
     })
     expect(log).toHaveBeenCalledWith('保存草稿失败。', error)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+describe('文章发布入口', () => {
+  it('先鉴权再读取发布输入，身份失效使用准确发布提示', async () => {
+    mocks.withAdminPostStore.mockResolvedValue({ authorized: false })
+    const readContent = vi.fn(() => { throw new Error('Must not parse before auth') })
+    const untrustedInput = Object.defineProperty({}, 'content', { get: readContent })
+
+    expect(await publishDraftAction(id, { status: 'idle' }, untrustedInput)).toEqual({
+      status: 'error', message: 'Sign in to publish this post.', signInRequired: true,
+    })
+    expect(readContent).not.toHaveBeenCalled()
+    expect(mocks.publishDraft).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    null,
+    { content, expectedRevisionId: null },
+    { content: { ...content, title: ' ' }, expectedRevisionId: 1 },
+    { content: { ...content, body: false }, expectedRevisionId: 1 },
+  ])('发布输入无效时不写入或刷新：%j', async invalid => {
+    expect((await publishDraftAction(id, { status: 'idle' }, invalid)).status).toBe('error')
+    expect(mocks.publishDraft).not.toHaveBeenCalled()
+    expect(mocks.saveDraft).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('把当前内容直接交给原子发布，不先保存或补读草稿，返回发布基线并刷新所有相关页面', async () => {
+    expect(await publishDraftAction(id, { status: 'idle' }, input)).toEqual({
+      status: 'published', content, revisionId: 3,
+    })
+    expect(mocks.publishDraft).toHaveBeenCalledExactlyOnceWith(id, content, 1)
+    expect(mocks.saveDraft).not.toHaveBeenCalled()
+    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.restoreRevision).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ...adminPaths, ['/'], [`/blog/${id}`], ['/sitemap.xml'],
+    ])
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', 'This draft does not exist.'],
+    ['conflict', 'This draft changed since you opened it. Your input is preserved. Review the latest draft before publishing again.'],
+  ])('发布%s时明确反馈，不刷新、不强制覆盖', async (status, message) => {
+    mocks.publishDraft.mockReturnValue({ status })
+    expect(await publishDraftAction(id, { status: 'idle' }, input)).toEqual({ status: 'error', message })
+    expect(mocks.publishDraft).toHaveBeenCalledExactlyOnceWith(id, content, 1)
+    expect(mocks.saveDraft).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
+  it('数据库写入异常使用发布错误文案并保留原始日志', async () => {
+    const error = new Error('Publication transaction failed')
+    mocks.publishDraft.mockImplementation(() => { throw error })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await publishDraftAction(id, { status: 'idle' }, input)).toEqual({
+      status: 'error', message: 'Could not publish the post. Please try again.',
+    })
+    expect(log).toHaveBeenCalledWith('发布文章失败。', error)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+describe('修订恢复入口', () => {
+  const restoreInput = { revisionId: 4, expectedRevisionId: 1 }
+
+  it('恢复前先鉴权，身份失效不解析目标或写入', async () => {
+    mocks.withAdminPostStore.mockResolvedValue({ authorized: false })
+    const readRevision = vi.fn(() => { throw new Error('Must not parse before auth') })
+    const untrustedInput = Object.defineProperty({}, 'revisionId', { get: readRevision })
+    expect(await restoreRevisionAction(id, untrustedInput, { status: 'idle' })).toEqual({
+      status: 'error', message: 'Sign in to restore this revision.', signInRequired: true,
+    })
+    expect(readRevision).not.toHaveBeenCalled()
+    expect(mocks.restoreRevision).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    null,
+    {},
+    { revisionId: 4, expectedRevisionId: null },
+    { revisionId: '4', expectedRevisionId: 1 },
+    { revisionId: 0, expectedRevisionId: 1 },
+    { revisionId: 4, expectedRevisionId: 1.5 },
+  ])('服务端验证绑定的恢复参数，无效时拒绝写入：%j', async invalid => {
+    expect((await restoreRevisionAction(id, invalid, { status: 'idle' })).status).toBe('error')
+    expect(mocks.restoreRevision).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
+  it('只恢复目标修订，刷新管理历史后跳转编辑页，不发布或刷新公开页面', async () => {
+    await expect(restoreRevisionAction(id, restoreInput, { status: 'idle' }))
+      .rejects.toThrow(`Redirect: /admin/posts/${id}`)
+    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1)
+    expect(mocks.saveDraft).not.toHaveBeenCalled()
+    expect(mocks.publishDraft).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath.mock.calls).toEqual(adminPaths)
+    expect(mocks.redirect).toHaveBeenCalledExactlyOnceWith(`/admin/posts/${id}`)
+  })
+
+  it.each([
+    ['missing', 'This draft or revision does not exist.'],
+    ['conflict', 'This draft changed while you were viewing history. Reload the history page before restoring.'],
+  ])('恢复%s时保留历史页，不刷新或导航', async (status, message) => {
+    mocks.restoreRevision.mockReturnValue({ status })
+    expect(await restoreRevisionAction(id, restoreInput, { status: 'idle' })).toEqual({ status: 'error', message })
+    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
+  it('数据库异常返回恢复错误，不当作保存失败或触发导航', async () => {
+    const error = new Error('Restore transaction failed')
+    mocks.restoreRevision.mockImplementation(() => { throw error })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await restoreRevisionAction(id, restoreInput, { status: 'idle' })).toEqual({
+      status: 'error', message: 'Could not restore the revision. Please try again.',
+    })
+    expect(log).toHaveBeenCalledWith('恢复草稿修订失败。', error)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+})
+
+describe('发布与恢复的框架控制流', () => {
+  it.each(['publish', 'restore'])('%s原样传播Next导航，不记录为数据库故障', async kind => {
+    const navigation = await vi.importActual<typeof import('next/navigation')>('next/navigation')
+    let signal: unknown
+    try { navigation.redirect('/admin/login') } catch (error) { signal = error }
+    mocks.withAdminPostStore.mockRejectedValue(signal)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const operation = kind === 'publish'
+      ? publishDraftAction(id, { status: 'idle' }, input)
+      : restoreRevisionAction(id, { revisionId: 4, expectedRevisionId: 1 }, { status: 'idle' })
+    await expect(operation).rejects.toBe(signal)
+    expect(log).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 })

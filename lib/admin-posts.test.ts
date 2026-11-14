@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from './auth'
 import { initializeDatabase, openDatabase } from './database'
 import * as databaseModule from './database'
-import { getAdminDraft, getAdminPosts, withAdminPostStore } from './admin-posts'
+import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore } from './admin-posts'
 
 vi.mock('server-only', () => ({}))
 vi.mock('./auth', () => ({ getAdminSession: vi.fn() }))
@@ -57,7 +57,11 @@ describe('管理端文章访问', () => {
   it('未登录读取页面数据仍交给框架导航，不提前判断文章是否存在', async () => {
     vi.mocked(getAdminSession).mockResolvedValue(null)
 
-    for (const read of [() => getAdminPosts(), () => getAdminDraft('missing')]) {
+    for (const read of [
+      () => getAdminPosts(),
+      () => getAdminDraft('missing'),
+      () => getAdminRevisionHistory('missing', { page: '0' }),
+    ]) {
       await expect(read()).rejects.toMatchObject({ digest: expect.stringMatching(/^NEXT_REDIRECT;/) })
     }
     expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
@@ -110,6 +114,59 @@ describe('管理端文章访问', () => {
     ])
     expect(await withAdminPostStore(store => store.getPublishedPost(draft.id)))
       .toEqual({ authorized: true, value: null })
+  })
+
+  it('历史查询返回同一快照的草稿、公开指针和选中修订，列表仅含摘要', async () => {
+    await initializeDatabase()
+    const first = { title: 'Initial title', description: 'Original summary', body: '# Original body' }
+    const result = await withAdminPostStore(store => {
+      const draft = store.createDraft(first)
+      const edited = store.saveDraft(draft.id, { ...first, body: '# Changed body' }, draft.revisionId)
+      assert.ok(edited.status === 'success')
+      const published = store.publishDraft(draft.id, edited.value, edited.value.revisionId)
+      assert.ok(published.status === 'success')
+      return { draft, edited: edited.value, published: published.value }
+    })
+    assert.ok(result.authorized)
+    const { draft, edited, published } = result.value
+    const history = await getAdminRevisionHistory(draft.id, {
+      page: '1', revisionId: String(draft.revisionId),
+    })
+
+    assert.ok(history)
+    expect(history.draft).toEqual(edited)
+    expect(history.published).toEqual(published)
+    expect(history.selectedRevision).toMatchObject({ id: draft.revisionId, ...first })
+    expect(history.revisionCount).toBe(2)
+    expect(history.page).toBe(1)
+    for (const revision of history.revisions) {
+      expect(revision).not.toHaveProperty('body')
+      expect(revision).not.toHaveProperty('description')
+    }
+  })
+
+  it('历史页只接受共享schema定义的查询，非法查询或不存在的选择返回缺失结果', async () => {
+    await initializeDatabase()
+    const result = await withAdminPostStore(store => store.createDraft({
+      title: 'History query', description: '', body: '# Body',
+    }))
+    assert.ok(result.authorized)
+    const id = result.value.id
+    for (const query of [
+      null,
+      { page: ['1', '2'] },
+      { revisionId: ['1', '2'] },
+      { page: '0' },
+      { page: '1.5' },
+      { page: '2e0' },
+      { revisionId: '0' },
+      { page: '99' },
+      { revisionId: String(Number.MAX_SAFE_INTEGER) },
+    ]) {
+      expect(await getAdminRevisionHistory(id, query)).toBeNull()
+    }
+    expect(await getAdminRevisionHistory(id)).toMatchObject({ page: 1, revisionCount: 1 })
+    expect(await getAdminRevisionHistory('missing')).toBeNull()
   })
 
   it('异步操作等待期间保持连接打开，完成后返回已解析值并关闭连接', async () => {
