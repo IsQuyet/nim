@@ -1,14 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 import { requireAdminSession } from '@/lib/auth'
-import { createDraftAction } from '../../actions'
+import { getAdminWorkingCopy } from '@/lib/admin-posts'
+import { postIdSchema } from '@/lib/content'
 import { PostEditor } from '../../post-editor'
 
 export const metadata: Metadata = { title: 'New draft' }
 
-export default async function NewDraftPage() {
+export default async function NewDraftPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   await requireAdminSession()
+  const identity = postIdSchema.optional().safeParse((await searchParams).draft)
+  if (!identity.success) notFound()
+  if (!identity.data) redirect(`/admin/posts/new?draft=${randomUUID()}`)
+  const id = identity.data
+  const initial = await getAdminWorkingCopy(id)
 
   return (
     <main className="space-y-8">
@@ -24,12 +33,7 @@ export default async function NewDraftPage() {
           Write in Markdown and save a draft.
         </p>
       </section>
-      <PostEditor
-        initialContent={{ title: '', description: '', body: '' }}
-        initialRevisionId={null}
-        creationId={randomUUID()}
-        action={createDraftAction}
-      />
+      <PostEditor key={id} postId={id} initial={initial} isNew={initial === null || initial.checkpointRevisionId === null} />
     </main>
   )
 }

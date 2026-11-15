@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { WritingSessionsProvider } from './writing-sessions'
 
 export const metadata: Metadata = {
   title: 'Admin',
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return <WritingSessionsProvider>{children}</WritingSessionsProvider>
 }

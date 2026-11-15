@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getAdminDraft } from '@/lib/admin-posts'
-import { publishDraftAction, saveDraftAction } from '../../actions'
+import { getAdminWorkingCopy } from '@/lib/admin-posts'
 import { PostEditor } from '../../post-editor'
 
 export const metadata: Metadata = { title: 'Edit draft' }
@@ -13,7 +12,7 @@ type EditDraftPageProps = {
 
 export default async function EditDraftPage({ params }: EditDraftPageProps) {
   const { id } = await params
-  const draft = await getAdminDraft(id)
+  const draft = await getAdminWorkingCopy(id)
   if (!draft) notFound()
 
   return (
@@ -23,29 +22,13 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
           <Link href="/admin" className="underline underline-offset-4">
             Back to posts
           </Link>
-          <Link href={`/admin/posts/${draft.id}/history`} className="underline underline-offset-4">
-            Revision history
-          </Link>
-          <a href={`/admin/posts/${draft.id}/export`} download className="underline underline-offset-4">
-            Download saved draft
-          </a>
         </div>
         <h1 className="text-lg font-medium">Edit draft</h1>
         <p className="text-xs break-all text-zinc-500 dark:text-zinc-400">
           /blog/{draft.id}
         </p>
       </section>
-      <PostEditor
-        key={draft.id}
-        initialContent={{
-          title: draft.title,
-          description: draft.description,
-          body: draft.body,
-        }}
-        initialRevisionId={draft.revisionId}
-        action={saveDraftAction.bind(null, draft.id)}
-        publishAction={publishDraftAction.bind(null, draft.id)}
-      />
+      <PostEditor key={draft.id} postId={draft.id} initial={draft} />
     </main>
   )
 }

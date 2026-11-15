@@ -49,7 +49,7 @@ export default async function AdminPage() {
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 className="font-medium dark:text-zinc-100">
                   <Link href={`/admin/posts/${post.id}`} className="transition-colors hover:text-zinc-600 dark:hover:text-zinc-400">
-                    {post.title}
+                    {post.title.trim() ? post.title : 'Untitled draft'}
                   </Link>
                 </h2>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
