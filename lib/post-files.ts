@@ -1,10 +1,12 @@
 import { z } from 'zod'
-import { postContentSchema, postIdSchema, type DraftFormState, type DraftPost, type PostMutationResult, type PostStore } from './content'
+import { postContentSchema, postIdSchema, type DraftPost, type PostMutationResult, type PostStore } from './content'
 import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
 
 export const postFileStageSchema = z.enum(['draft', 'published'])
 export type PostFileStage = z.infer<typeof postFileStageSchema>
-export type PostFileFormState = Extract<DraftFormState, { status: 'idle' | 'error' }>
+export type PostFileFormState =
+  | { status: 'idle' }
+  | { status: 'error'; message: string; signInRequired?: true; reviewPostId?: string }
 
 type InvalidFile = { status: 'invalid'; message: string }
 

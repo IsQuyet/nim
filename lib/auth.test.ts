@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -427,27 +427,34 @@ describe('管理员认证与数据库会话', () => {
     const orm = openDatabase()
     const original = { title: 'Saved title', description: '', body: '# Saved body\r\n' }
     let id: string
-    let expectedRevisionId: number
+    let expectedVersion: string
     try {
-      const draft = createPostStore(orm).createDraft(original)
+      const store = createPostStore(orm)
+      const draft = store.createDraft(original)
       id = draft.id
-      expectedRevisionId = draft.revisionId
+      const working = store.getWorkingCopy(id)
+      if (!working) throw new Error('Missing working copy')
+      expectedVersion = working.version
     } finally {
       orm.$client.close()
     }
     database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
-    const { saveDraftAction } = await import('../app/admin/actions')
+    const { writeWorkingCopyAction } = await import('../app/admin/writing-actions')
 
-    expect(await saveDraftAction(id, { status: 'idle' }, {
-      content: { ...original, body: '# Unsaved body' }, expectedRevisionId,
+    expect(await writeWorkingCopyAction({
+      postId: id, operationId: randomUUID(), intent: 'save',
+      content: { ...original, body: '# Unsaved body' }, expectedVersion,
     })).toEqual({
       status: 'error',
-      message: 'Sign in to save this draft.',
+      message: 'Sign in to sync this draft.',
       signInRequired: true,
     })
     expect(database.prepare(`SELECT r.title, r.description, r.body FROM post_revisions r
       INNER JOIN post_drafts d ON d.revision_id = r.id WHERE d.post_id = ?`).get(id))
       .toEqual(original)
+    expect(database.prepare('SELECT title, description, body, version FROM post_working_copies WHERE post_id = ?').get(id))
+      .toEqual({ ...original, version: expectedVersion })
+    expect(database.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)).toEqual([])
   })
 
   it('不开放邮箱密码注册', async () => {

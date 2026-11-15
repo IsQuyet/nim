@@ -76,23 +76,6 @@ export type PostMutationResult<T> =
   | { status: 'missing' }
   | { status: 'conflict' }
 
-export const draftWriteSchema = z.object({
-  content: postContentSchema,
-  expectedRevisionId: revisionIdSchema,
-})
-
-export const draftEditorInputSchema = draftWriteSchema.extend({
-  expectedRevisionId: revisionIdSchema.nullable(),
-  creationId: postIdSchema.optional(),
-})
-
-export type DraftEditorInput = z.infer<typeof draftEditorInputSchema>
-
-export type DraftFormState =
-  | { status: 'idle' }
-  | { status: 'saved' | 'published'; content: PostContent; revisionId: number }
-  | { status: 'error'; message: string; signInRequired?: true; reviewPostId?: string }
-
 export type RestoreFormState =
   | { status: 'idle' }
   | { status: 'error'; message: string; signInRequired?: true }
