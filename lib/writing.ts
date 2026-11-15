@@ -34,24 +34,28 @@ export const writingAcknowledgementSchema = z.object({
 })
 
 export type WritingAcknowledgement = z.infer<typeof writingAcknowledgementSchema>
-export type WritingResult =
-  | { status: 'success'; value: WritingAcknowledgement }
-  | { status: 'conflict'; current: WorkingCopy | null }
-  | { status: 'invalid'; message: string }
+const writingSuccessSchema = z.object({ status: z.literal('success'), value: writingAcknowledgementSchema }).strict()
+const writingConflictSchema = z.object({ status: z.literal('conflict'), current: workingCopySchema.nullable() }).strict()
+const writingInvalidSchema = z.object({ status: z.literal('invalid'), message: z.string() }).strict()
+const writingErrorSchema = z.object({ status: z.literal('error'), message: z.string(), signInRequired: z.literal(true).optional() }).strict()
+
+export const writingResultSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingConflictSchema, writingInvalidSchema])
+export type WritingResult = z.infer<typeof writingResultSchema>
+
+export const writingFeedbackSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingConflictSchema, writingInvalidSchema, writingErrorSchema])
+export type WritingFeedback = z.infer<typeof writingFeedbackSchema>
+export const workingCopyReadResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('success'), value: workingCopySchema.nullable() }).strict(),
+  writingErrorSchema,
+])
 
 export type WritingStore = {
   getWorkingCopy(id: string): WorkingCopy | null
   write(command: WritingCommand): WritingResult
 }
 
-export type WritingFeedback = WritingResult | {
-  status: 'error'
-  message: string
-  signInRequired?: true
-}
-
 export type WritingTransport = {
-  read(postId: string): Promise<{ status: 'success'; value: WorkingCopy | null } | Extract<WritingFeedback, { status: 'error' }>>
+  read(postId: string): Promise<z.infer<typeof workingCopyReadResultSchema>>
   write(command: WritingCommand): Promise<WritingFeedback>
 }
 
