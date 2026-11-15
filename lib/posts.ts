@@ -2,10 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import type { AppDatabase } from './database'
-import { postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from './content'
+import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from './content'
 import type {
   DraftPost,
-  ImportDraftInput,
   ImportPostInput,
   PostMutationResult,
   PostContent,
@@ -112,9 +111,9 @@ export function createPostStore(database: AppDatabase): PostStore {
     }, { behavior: 'immediate' })
   }
 
-  function importDraft(input: ImportDraftInput) {
+  function importDraft(input: ImportPostInput) {
     const content = postContentSchema.parse(input)
-    const id = input.id ?? randomUUID()
+    const id = identifiedPostContentSchema.shape.id.parse(input.id)
     return database.transaction(transaction => {
       const post = transaction.select().from(posts).where(eq(posts.id, id)).get()
       if (!post) return insertDraft(transaction, id, content, 'import')

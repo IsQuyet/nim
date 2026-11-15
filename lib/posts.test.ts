@@ -153,6 +153,13 @@ describe('编辑基线与显式导入', () => {
     expect(snapshot()).toEqual(before)
   })
 
+  it('存储导入要求明确身份，不在缺失身份时另建文章', () => {
+    const before = snapshot()
+    // @ts-expect-error 未分配身份的文件解析结果不是存储导入命令。
+    expect(() => store.importDraft(content)).toThrow(z.ZodError)
+    expect(snapshot()).toEqual(before)
+  })
+
   it('只按传入身份创建或覆盖草稿，既有公开内容保持不变', () => {
     const draft = store.createDraft(content)
     const published = publish(draft)
@@ -168,9 +175,6 @@ describe('编辑基线与显式导入', () => {
     const specifiedId = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
     expect(store.importDraft({ ...content, id: specifiedId }).id).toBe(specifiedId)
     expect(store.getPublishedPost(specifiedId)).toBeNull()
-    const generated = store.importDraft(content)
-    expect(generated.id).not.toBe(specifiedId)
-    expect(store.getPublishedPost(generated.id)).toBeNull()
   })
 })
 

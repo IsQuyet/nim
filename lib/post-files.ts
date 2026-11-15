@@ -28,7 +28,7 @@ export function importPostMarkdown(
   const parsed = parseMarkdownFile(source)
   if (!parsed.success) return { status: 'invalid', message: parsed.message }
   if (parsed.data.id !== undefined) {
-    return { status: 'success', value: store.importDraft(parsed.data) }
+    return { status: 'success', value: store.importDraft({ ...parsed.data, id: parsed.data.id }) }
   }
   const identity = postIdSchema.safeParse(newPostId)
   if (!identity.success) return { status: 'invalid', message: identity.error.issues[0].message }

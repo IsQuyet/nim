@@ -111,9 +111,8 @@ export type PostSummary = Pick<
   status: z.infer<typeof postStatusSchema>
 }
 
-export type ImportPostInput = PostContent & {
-  id: string
-}
+export const identifiedPostContentSchema = postContentSchema.extend({ id: z.string().min(1) })
+export type ImportPostInput = z.infer<typeof identifiedPostContentSchema>
 
 export type ImportDraftInput = PostContent & {
   id?: string
@@ -125,7 +124,7 @@ export type PostStore = {
   saveDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost>
   publishDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<PublishedPost>
   restoreRevision(id: string, revisionId: number, expectedRevisionId: number, expectedWorkingVersion?: string): PostMutationResult<DraftPost>
-  importDraft(input: ImportDraftInput): DraftPost
+  importDraft(input: ImportPostInput): DraftPost
   getWorkingCopy(id: string): WorkingCopy | null
   getDraft(id: string): DraftPost | null
   getPublishedPost(id: string): PublishedPost | null
