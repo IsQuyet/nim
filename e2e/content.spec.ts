@@ -4,29 +4,60 @@ import { parseMarkdownFile } from '../lib/markdown-file'
 import { MARKDOWN_CODE_THEME } from '../lib/markdown-highlighter'
 import { test, expect, expireSession, signIn, snapshot, withStore } from './fixtures'
 
-async function createDraft(page: Page, title: string, body = '# First snapshot') {
+async function openNewDraft(page: Page) {
   await page.goto('/admin/posts/new')
+  const status = page.getByLabel('Saving status')
+  await expect(status).toContainText(/Ready to write\.|Choose how to continue with your local copies\./)
+  const recovery = page.getByRole('region', { name: 'Local recovery copies' })
+  if (await recovery.isVisible()) {
+    await recovery.getByRole('button', { name: 'Continue without restoring', exact: true }).click()
+  }
+  await expect(recovery).toBeHidden()
+  await expect(status).toContainText('Ready to write.')
+  await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeEnabled()
+}
+
+async function createDraft(page: Page, title: string, body = '# First snapshot') {
+  await openNewDraft(page)
   await page.getByLabel('Title', { exact: true }).fill(title)
   await page.getByLabel('Body', { exact: true }).fill(body)
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+  await save(page)
   await expect(page).toHaveURL(/\/admin\/posts\/[0-9a-f-]{36}$/)
   const id = new URL(page.url()).pathname.split('/').at(-1)
   assert.ok(id)
   return id
 }
 
+async function synced(page: Page) {
+  const status = page.getByLabel('Saving status')
+  await expect(status).toContainText('Synced to server.')
+  await expect(status).toContainText('Recovery copy saved on this browser.')
+}
+
 async function save(page: Page) {
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
   await expect(page.getByText('Draft saved.', { exact: true })).toBeVisible()
+  await synced(page)
 }
 
 async function publish(page: Page) {
   await page.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(page.getByText('Post published.', { exact: true })).toBeVisible()
+  await synced(page)
 }
 
-function actionRequest(route: Route) {
-  return route.request().method() === 'POST' && Boolean(route.request().headers()['next-action'])
+function actionRequest(route: Route, intent?: 'save' | 'publish') {
+  const request = route.request()
+  const body = request.postData() ?? ''
+  return request.method() === 'POST' && Boolean(request.headers()['next-action'])
+    && body.includes('"intent"')
+    && (intent === undefined || new RegExp(`"intent"\\s*:\\s*"${intent}"`).test(body))
+}
+
+function operationId(route: Route) {
+  const id = route.request().postData()?.match(/"operationId"\s*:\s*"([0-9a-f-]{36})"/i)?.[1]
+  assert.ok(id, '写入请求必须携带 operationId。')
+  return id
 }
 
 test('发布当前可见内容，私有修改和历史恢复不改变公开版本', async ({ page, login, runtime }, testInfo) => {
@@ -71,23 +102,26 @@ test('旧编辑基线拒绝覆盖，过期会话重登后原标签页仍能保�
   const id = await createDraft(page, 'Concurrent post')
   const stale = await context.newPage()
   await stale.goto(`/admin/posts/${id}`)
+  await expect(stale.getByLabel('Saving status')).toContainText('Synced to server.')
   await page.getByLabel('Body', { exact: true }).fill('# Current saved revision')
   await save(page)
   const before = snapshot(runtime, id)
   await stale.getByLabel('Body', { exact: true }).fill('# Keep this stale input')
   await stale.getByRole('button', { name: 'Publish', exact: true }).click()
-  await expect(stale.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('changed since you opened it')
+  await expect(stale.getByRole('region', { name: 'Draft conflict' })).toBeVisible()
   await expect(stale.getByLabel('Body', { exact: true })).toHaveValue('# Keep this stale input')
   expect(snapshot(runtime, id)).toEqual(before)
 
   await expireSession(page, runtime)
   await page.getByLabel('Body', { exact: true }).fill('# Keep this after expiry')
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Sign in to save')
+  await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Sign in to sync this draft.')
   expect(snapshot(runtime, id)).toEqual(before)
   const signingIn = await context.newPage()
   await signIn(signingIn, runtime.origin)
-  await save(page)
+  await page.getByRole('button', { name: 'Retry sync', exact: true }).click()
+  await expect(page.getByText('Draft saved.', { exact: true })).toBeVisible()
+  await synced(page)
   expect(snapshot(runtime, id).revisions.at(-1)?.body).toBe('# Keep this after expiry')
 })
 
@@ -156,7 +190,12 @@ test('文件 ID 决定草稿目标，下载保留 UTF-8 原文且不改变公开
   await page.getByLabel('Markdown file', { exact: true }).setInputFiles({ name: 'renamed.md', mimeType: 'text/markdown', buffer: Buffer.from(file) })
   await page.getByRole('button', { name: 'Import draft', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${draft.id}`)
-  expect(snapshot(runtime, draft.id)).toEqual(before)
+  const repeated = snapshot(runtime, draft.id)
+  expect(repeated).toEqual({
+    ...before,
+    workingCopies: before.workingCopies.map(copy => ({ ...copy, version: expect.any(String) })),
+  })
+  expect(repeated.workingCopies[0].version).not.toBe(before.workingCopies[0].version)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/admin/import')
   await page.screenshot({ path: testInfo.outputPath('import-mobile.png'), fullPage: true })
@@ -184,57 +223,110 @@ test('大于默认 HTTP 上限的合法文件能导入，超文件限额会保�
   })).toBe('too-large.md')
 })
 
-test('已提交的新建重试保持幂等，改内容则冲突，保存与发布断网均保留输入', async ({ page, context, login, runtime }) => {
+test('提交丢响应以原回执重试，保存发布断网与远端变化均保留本地输入', async ({ page, context, login, runtime }) => {
   await login()
-  await page.goto('/admin/posts/new')
+  await openNewDraft(page)
   await page.getByLabel('Title', { exact: true }).fill('Lost response creation')
   await page.getByLabel('Body', { exact: true }).fill('# Keep after response loss')
+  const committedResponse = Promise.withResolvers<void>()
+  const dropResponse = Promise.withResolvers<void>()
+  const creationOperations: string[] = []
   let drop = true
   await page.route(`${runtime.origin}/**`, async route => {
-    if (drop && actionRequest(route)) {
+    if (!actionRequest(route, 'save')) {
+      await route.continue()
+      return
+    }
+    creationOperations.push(operationId(route))
+    if (drop) {
       drop = false
       const response = await route.fetch()
       await response.body()
+      committedResponse.resolve()
+      await dropResponse.promise
       await route.abort('failed')
     } else await route.continue()
   })
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Could not confirm')
+  const continuedBody = '# Keep typing while creation is pending'
+  try {
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+    await committedResponse.promise
+    await expect(page.getByLabel('Body', { exact: true })).toBeEditable()
+    await page.getByLabel('Body', { exact: true }).fill(continuedBody)
+  } finally {
+    dropResponse.resolve()
+  }
+  await expect(page.getByLabel('Saving status')).toContainText('Server sync is not confirmed. Your input is preserved.')
+  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(continuedBody)
   const created = await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Lost response creation'))
   expect(created).toHaveLength(1)
   const before = snapshot(runtime, created[0].id)
   expect(before.posts).toHaveLength(1)
   expect(before.revisions).toHaveLength(1)
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+  expect(before.revisions[0].body).toBe('# Keep after response loss')
+  expect(before.receipts.filter(receipt => receipt.operationId === creationOperations[0])).toHaveLength(1)
+
+  await page.getByRole('button', { name: 'Retry sync', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${created[0].id}`)
-  expect(snapshot(runtime, created[0].id)).toEqual(before)
+  await synced(page)
+  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(continuedBody)
+  const confirmed = snapshot(runtime, created[0].id)
+  expect(creationOperations).toEqual([creationOperations[0], creationOperations[0]])
+  expect(confirmed.revisions).toEqual(before.revisions)
+  expect(confirmed.drafts).toEqual(before.drafts)
+  expect(confirmed.publications).toEqual(before.publications)
+  expect(confirmed.workingCopies[0].body).toBe(continuedBody)
+  expect(confirmed.receipts.filter(receipt => receipt.operationId === creationOperations[0])).toHaveLength(1)
+  expect(confirmed.receipts).toHaveLength(before.receipts.length + 1)
   await page.unrouteAll({ behavior: 'wait' })
 
   for (const intent of ['save', 'publish'] as const) {
     let fail = true
-    const beforeAttempt = snapshot(runtime, created[0].id)
+    const rejected = Promise.withResolvers<ReturnType<typeof snapshot>>()
+    const operations: string[] = []
     const body = `# Kept during ${intent} outage`
     await page.route(`${runtime.origin}/**`, async route => {
-      if (fail && actionRequest(route)) { fail = false; await route.abort('internetdisconnected') }
-      else await route.continue()
+      if (!actionRequest(route, intent)) {
+        await route.continue()
+        return
+      }
+      operations.push(operationId(route))
+      if (fail) {
+        fail = false
+        rejected.resolve(snapshot(runtime, created[0].id))
+        await route.abort('internetdisconnected')
+      } else await route.continue()
     })
     await page.getByLabel('Body', { exact: true }).fill(body)
     await page.getByRole('button', { name: intent === 'save' ? 'Save draft' : 'Publish', exact: true }).click()
-    await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Could not confirm')
+    await expect(page.getByLabel('Saving status')).toContainText('Server sync is not confirmed. Your input is preserved.')
     await expect(page.getByLabel('Body', { exact: true })).toHaveValue(body)
+    const beforeAttempt = await rejected.promise
     expect(snapshot(runtime, created[0].id)).toEqual(beforeAttempt)
-    if (intent === 'save') await save(page)
-    else await publish(page)
-    expect(snapshot(runtime, created[0].id).revisions.at(-1)?.body).toBe(body)
+    await page.getByRole('button', { name: 'Retry sync', exact: true }).click()
+    await expect(page.getByText(intent === 'save' ? 'Draft saved.' : 'Post published.', { exact: true })).toBeVisible()
+    await synced(page)
+    const accepted = snapshot(runtime, created[0].id)
+    expect(operations).toEqual([operations[0], operations[0]])
+    expect(accepted.revisions).toHaveLength(beforeAttempt.revisions.length + 1)
+    expect(accepted.revisions.at(-1)?.body).toBe(body)
+    expect(accepted.publications).toHaveLength(beforeAttempt.publications.length + (intent === 'publish' ? 1 : 0))
+    expect(accepted.receipts.filter(receipt => receipt.operationId === operations[0])).toHaveLength(1)
     await page.unrouteAll({ behavior: 'wait' })
   }
 
-  await page.goto('/admin/posts/new')
+  await openNewDraft(page)
   await page.getByLabel('Title', { exact: true }).fill('Changed response creation')
   await page.getByLabel('Body', { exact: true }).fill('# Actually committed first text')
+  const changedOperations: string[] = []
   drop = true
   await page.route(`${runtime.origin}/**`, async route => {
-    if (drop && actionRequest(route)) {
+    if (!actionRequest(route, 'save')) {
+      await route.continue()
+      return
+    }
+    changedOperations.push(operationId(route))
+    if (drop) {
       drop = false
       const response = await route.fetch()
       await response.body()
@@ -242,22 +334,44 @@ test('已提交的新建重试保持幂等，改内容则冲突，保存与发�
     } else await route.continue()
   })
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Could not confirm')
+  await expect(page.getByLabel('Saving status')).toContainText('Server sync is not confirmed. Your input is preserved.')
   const changed = await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Changed response creation'))
   expect(changed).toHaveLength(1)
-  const committed = snapshot(runtime, changed[0].id)
-  expect(committed.revisions).toHaveLength(1)
-  await page.getByLabel('Body', { exact: true }).fill('# Keep these different local edits')
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('already exists for this request')
-  expect(snapshot(runtime, changed[0].id)).toEqual(committed)
+  expect(snapshot(runtime, changed[0].id).revisions).toHaveLength(1)
+  const localBody = '# Keep these different local edits'
+  const remoteBody = '# Remote import after response loss'
+  await page.getByLabel('Body', { exact: true }).fill(localBody)
+  await withStore(runtime, store => store.importDraft({
+    id: changed[0].id, title: 'Changed response creation', description: 'Imported remotely', body: remoteBody,
+  }))
+  const imported = snapshot(runtime, changed[0].id)
+  expect(imported.revisions).toHaveLength(2)
+  expect(imported.revisions.at(-1)?.source).toBe('import')
+  await page.getByRole('button', { name: 'Retry sync', exact: true }).click()
+  await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${changed[0].id}`)
+  const conflict = page.getByRole('region', { name: 'Draft conflict' })
+  await expect(conflict).toBeVisible()
+  await conflict.getByText('Review server text', { exact: true }).click()
+  await expect(conflict).toContainText(remoteBody)
+  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(localBody)
+  expect(changedOperations).toEqual([changedOperations[0], changedOperations[0]])
+  expect(snapshot(runtime, changed[0].id)).toEqual(imported)
   const [review] = await Promise.all([
     context.waitForEvent('page'),
-    page.getByRole('link', { name: 'Check saved draft in a new tab' }).click(),
+    conflict.getByRole('link', { name: 'Review server draft in a new tab', exact: true }).click(),
   ])
-  await expect(review.getByLabel('Body', { exact: true })).toHaveValue('# Actually committed first text')
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue('# Keep these different local edits')
+  const reviewStatus = review.getByLabel('Saving status')
+  await expect(reviewStatus).toContainText(/Synced to server\.|Choose how to continue with your local copies\./)
+  const recovery = review.getByRole('region', { name: 'Local recovery copies' })
+  if (await recovery.isVisible()) {
+    await recovery.getByRole('button', { name: 'Continue without restoring', exact: true }).click()
+  }
+  await expect(reviewStatus).toContainText('Synced to server.')
+  await expect(review.getByLabel('Body', { exact: true })).toHaveValue(remoteBody)
+  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(localBody)
   expect(await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Changed response creation'))).toHaveLength(1)
+  expect(snapshot(runtime, changed[0].id)).toEqual(imported)
+  await page.unrouteAll({ behavior: 'wait' })
 })
 
 test('多语言两端原文与高亮一致，预览资源按需且所有网络类型均无 WASM 请求', async ({ page, context, login }, testInfo) => {

@@ -13,7 +13,9 @@ import { z } from 'zod'
 import type { PostStore } from '../lib/content'
 import { openDatabase } from '../lib/database'
 import { createPostStore } from '../lib/posts'
-import { postDrafts, postPublications, postPublished, postRevisions, posts, session } from '../lib/schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts, postWorkingCopies, postWriteReceipts, session } from '../lib/schema'
+import { createWritingStore } from '../lib/writing-store'
+import type { WritingStore } from '../lib/writing'
 
 type Runtime = {
   origin: string
@@ -31,6 +33,15 @@ export async function withStore<T>(runtime: Runtime, operation: (store: PostStor
   }
 }
 
+export async function withWritingStore<T>(runtime: Runtime, operation: (store: WritingStore) => T | Promise<T>): Promise<Awaited<T>> {
+  const database = openDatabase(runtime.filename)
+  try {
+    return await operation(createWritingStore(database))
+  } finally {
+    database.$client.close()
+  }
+}
+
 export function snapshot(runtime: Runtime, id: string) {
   const database = openDatabase(runtime.filename)
   try {
@@ -40,6 +51,8 @@ export function snapshot(runtime: Runtime, id: string) {
       drafts: database.select().from(postDrafts).where(eq(postDrafts.postId, id)).all(),
       publications: database.select().from(postPublications).where(eq(postPublications.postId, id)).orderBy(asc(postPublications.id)).all(),
       published: database.select().from(postPublished).where(eq(postPublished.postId, id)).all(),
+      workingCopies: database.select().from(postWorkingCopies).where(eq(postWorkingCopies.postId, id)).all(),
+      receipts: database.select().from(postWriteReceipts).where(eq(postWriteReceipts.postId, id)).orderBy(asc(postWriteReceipts.operationId)).all(),
     }
   } finally {
     database.$client.close()
@@ -187,10 +200,18 @@ initialize().catch(error => { console.error(error); process.exitCode = 1 })
   baseURL: async ({ runtime }, provide) => provide(runtime.origin),
   extraHTTPHeaders: async ({ runtime }, provide) => provide({ 'x-forwarded-for': runtime.nextAddress() }),
   login: async ({ page, runtime }, provide) => provide(() => signIn(page, runtime.origin)),
-  checkBrowser: [async ({ page, runtime }, provide, testInfo) => {
+  checkBrowser: [async ({ context, page, runtime }, provide, testInfo) => {
     const errors: string[] = []
-    page.on('pageerror', error => errors.push(error.message))
+    const tracked = new Set<Page>()
+    const observe = (opened: Page) => {
+      if (tracked.has(opened)) return
+      tracked.add(opened)
+      opened.on('pageerror', error => errors.push(error.message))
+    }
+    observe(page)
+    context.on('page', observe)
     await provide()
+    context.off('page', observe)
     if (testInfo.status !== testInfo.expectedStatus) {
       await testInfo.attach('server.log', { body: runtime.logs(), contentType: 'text/plain' })
     }
