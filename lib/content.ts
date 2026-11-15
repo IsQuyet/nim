@@ -2,11 +2,15 @@ import { z } from 'zod'
 
 const text = z.string({ error: 'The draft fields must contain text.' })
 
-export const postContentSchema = z.object({
-  title: text.refine(title => title.trim().length > 0, { error: 'Enter a title.' }),
+export const postFieldsSchema = z.object({
+  title: text,
   description: text,
   body: text,
 }, { error: 'The draft fields must contain text.' })
+
+export const postContentSchema = postFieldsSchema.extend({
+  title: text.refine(title => title.trim().length > 0, { error: 'Enter a title.' }),
+})
 
 export type PostContent = z.infer<typeof postContentSchema>
 

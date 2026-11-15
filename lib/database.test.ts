@@ -11,6 +11,7 @@ import { z } from 'zod'
 import { initializeDatabase, openDatabase } from './database'
 import { account, session, user, verification } from './schema'
 import { createPostStore } from './posts'
+import { createWritingStore } from './writing-store'
 
 const migration = vi.hoisted(() => ({ folder: undefined as string | undefined }))
 vi.mock('drizzle-orm/better-sqlite3/migrator', async importOriginal => {
@@ -31,7 +32,7 @@ const journalSchema = z.object({
     idx: z.number(), version: z.string(), when: z.number(), tag: z.string(), breakpoints: z.boolean(),
   })),
 })
-const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'user', 'session', 'account', 'verification']
+const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'post_working_copies', 'post_write_receipts', 'user', 'session', 'account', 'verification']
 const authTables = ['user', 'session', 'account', 'verification']
 let directory: string
 let filename: string
@@ -172,6 +173,11 @@ describe('数据库结构与迁移', () => {
         createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-10T00:00:00.000Z',
       })
       expect(store.getPublishedPost('draft-only')).toBeNull()
+      expect(createWritingStore(database).getWorkingCopy('draft-only')).toMatchObject({
+        id: 'draft-only', title: '  Draft  ', description: '', body: '    code\r\n\n',
+        checkpointRevisionId: unpublished?.revisionId,
+        updatedAt: '2026-11-10T00:00:00.000Z', version: expect.any(String),
+      })
       expect(store.getDraft('modified')).toMatchObject({ title: 'Edited', body: '# New\r\n', updatedAt: '2026-11-12T00:00:00.000Z' })
       expect(store.getPublishedPost('modified')).toMatchObject({ title: 'Published', body: '# Old\n', publishedAt: '2026-11-11T00:00:00.000Z' })
       expect(store.listRevisions('modified')).toHaveLength(2)

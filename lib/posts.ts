@@ -9,109 +9,15 @@ import type {
   ImportPostInput,
   PostMutationResult,
   PostContent,
-  PostRevision,
   PostRevisionHistory,
   RevisionHistoryQuery,
   PostStore,
   PostSummary,
   PublishedPost,
 } from './content'
-import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts, postWorkingCopies } from './schema'
 
-type PostDatabase = Pick<AppDatabase, 'select' | 'insert' | 'update'>
-
-function contentOf(content: PostContent): PostContent {
-  return { title: content.title, description: content.description, body: content.body }
-}
-
-function getDraft(database: PostDatabase, id: string): DraftPost | null {
-  return database.select({
-    id: posts.id,
-    revisionId: postRevisions.id,
-    createdAt: posts.createdAt,
-    updatedAt: postRevisions.createdAt,
-    title: postRevisions.title,
-    description: postRevisions.description,
-    body: postRevisions.body,
-  }).from(posts).innerJoin(postDrafts, eq(postDrafts.postId, posts.id))
-    .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
-    .where(eq(posts.id, id)).get() ?? null
-}
-
-function getPublishedPost(database: PostDatabase, id: string): PublishedPost | null {
-  return database.select({
-    id: posts.id,
-    revisionId: postRevisions.id,
-    publicationId: postPublications.id,
-    createdAt: posts.createdAt,
-    publishedAt: postPublications.publishedAt,
-    title: postRevisions.title,
-    description: postRevisions.description,
-    body: postRevisions.body,
-  }).from(posts).innerJoin(postPublished, eq(postPublished.postId, posts.id))
-    .innerJoin(postPublications, eq(postPublications.id, postPublished.publicationId))
-    .innerJoin(postRevisions, eq(postRevisions.id, postPublications.revisionId))
-    .where(eq(posts.id, id)).get() ?? null
-}
-
-function insertRevision(
-  database: PostDatabase,
-  postId: string,
-  content: PostContent,
-  source: PostRevision['source'],
-  restoredFromRevisionId: number | null = null,
-): PostRevision {
-  return database.insert(postRevisions).values({
-    postId,
-    ...contentOf(content),
-    createdAt: new Date().toISOString(),
-    source,
-    restoredFromRevisionId,
-  }).returning().get()
-}
-
-function insertDraft(database: PostDatabase, id: string, content: PostContent, source: PostRevision['source']): DraftPost {
-  const createdAt = new Date().toISOString()
-  database.insert(posts).values({ id, createdAt }).run()
-  const revision = insertRevision(database, id, content, source)
-  database.insert(postDrafts).values({ postId: id, revisionId: revision.id }).run()
-  return { id, revisionId: revision.id, createdAt, updatedAt: revision.createdAt, ...contentOf(content) }
-}
-
-function updateDraft(
-  database: PostDatabase,
-  draft: DraftPost,
-  content: PostContent,
-  source: PostRevision['source'],
-  restoredFromRevisionId: number | null = null,
-): DraftPost {
-  if (samePostContent(draft, content)) return draft
-  const revision = insertRevision(database, draft.id, content, source, restoredFromRevisionId)
-  database.update(postDrafts).set({ revisionId: revision.id }).where(eq(postDrafts.postId, draft.id)).run()
-  return { ...draft, ...contentOf(content), revisionId: revision.id, updatedAt: revision.createdAt }
-}
-
-function writePublication(database: PostDatabase, draft: DraftPost): PublishedPost {
-  const current = getPublishedPost(database, draft.id)
-  if (current?.revisionId === draft.revisionId) return current
-
-  const publication = database.insert(postPublications).values({
-    postId: draft.id,
-    revisionId: draft.revisionId,
-    publishedAt: new Date().toISOString(),
-  }).returning().get()
-  database.insert(postPublished).values({ postId: draft.id, publicationId: publication.id })
-    .onConflictDoUpdate({ target: postPublished.postId, set: { publicationId: publication.id } }).run()
-
-  return {
-    id: draft.id,
-    revisionId: draft.revisionId,
-    publicationId: publication.id,
-    createdAt: draft.createdAt,
-    publishedAt: publication.publishedAt,
-    ...contentOf(draft),
-  }
-}
+import { contentOf, getDraft, getPublishedPost, getWorkingCopy, insertDraft, insertRevision, updateDraft, writePublication, writeWorkingCopy } from './post-storage'
 
 export function importPublishedPosts(database: AppDatabase, inputs: ImportPostInput[]) {
   return database.transaction(transaction => {
@@ -147,7 +53,8 @@ export function createPostStore(database: AppDatabase): PostStore {
       const existing = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, id)).get()
       if (existing) {
         const draft = getDraft(transaction, id)
-        return draft && samePostContent(draft, content)
+        const working = getWorkingCopy(transaction, id)
+        return draft && working && samePostContent(draft, content) && samePostContent(working, content)
           ? { status: 'success', value: draft }
           : { status: 'conflict' }
       }
@@ -160,7 +67,8 @@ export function createPostStore(database: AppDatabase): PostStore {
     return database.transaction((transaction): PostMutationResult<DraftPost> => {
       const draft = getDraft(transaction, id)
       if (!draft) return { status: 'missing' }
-      if (draft.revisionId !== expectedRevisionId) return { status: 'conflict' }
+      const working = getWorkingCopy(transaction, id)
+      if (draft.revisionId !== expectedRevisionId || (working && !samePostContent(working, draft))) return { status: 'conflict' }
       return { status: 'success', value: updateDraft(transaction, draft, content, 'save') }
     }, { behavior: 'immediate' })
   }
@@ -170,7 +78,8 @@ export function createPostStore(database: AppDatabase): PostStore {
     return database.transaction((transaction): PostMutationResult<PublishedPost> => {
       const draft = getDraft(transaction, id)
       if (!draft) return { status: 'missing' }
-      if (draft.revisionId !== expectedRevisionId) return { status: 'conflict' }
+      const working = getWorkingCopy(transaction, id)
+      if (draft.revisionId !== expectedRevisionId || (working && !samePostContent(working, draft))) return { status: 'conflict' }
       const saved = updateDraft(transaction, draft, content, 'publish')
       return { status: 'success', value: writePublication(transaction, saved) }
     }, { behavior: 'immediate' })
@@ -186,7 +95,8 @@ export function createPostStore(database: AppDatabase): PostStore {
     return database.transaction((transaction): PostMutationResult<DraftPost> => {
       const draft = getDraft(transaction, id)
       if (!draft) return { status: 'missing' }
-      if (draft.revisionId !== expectedRevisionId) return { status: 'conflict' }
+      const working = getWorkingCopy(transaction, id)
+      if (draft.revisionId !== expectedRevisionId || (working && !samePostContent(working, draft))) return { status: 'conflict' }
       const revision = transaction.select().from(postRevisions).where(and(
         eq(postRevisions.postId, id), eq(postRevisions.id, revisionId),
       )).get()
@@ -205,7 +115,8 @@ export function createPostStore(database: AppDatabase): PostStore {
       if (draft) return updateDraft(transaction, draft, content, 'import')
       const revision = insertRevision(transaction, id, content, 'import')
       transaction.insert(postDrafts).values({ postId: id, revisionId: revision.id }).run()
-      return { id, revisionId: revision.id, createdAt: post.createdAt, updatedAt: revision.createdAt, ...content }
+      writeWorkingCopy(transaction, id, content, true)
+      return { id, revisionId: revision.id, createdAt: post.createdAt, updatedAt: revision.createdAt, ...contentOf(content) }
     }, { behavior: 'immediate' })
   }
 
@@ -245,24 +156,23 @@ export function createPostStore(database: AppDatabase): PostStore {
   }
 
   function listPosts() {
-    const draft = alias(postRevisions, 'draft')
+    const draft = alias(postWorkingCopies, 'draft')
     const published = alias(postRevisions, 'published')
     return database.select({
       id: posts.id,
       title: draft.title,
       description: draft.description,
-      updatedAt: draft.createdAt,
+      updatedAt: draft.updatedAt,
       status: sql<PostSummary['status']>`case
         when ${postPublished.publicationId} is null then ${postStatusSchema.enum.draft}
         when ${and(...postContentFields.map(field => eq(draft[field], published[field])))} then ${postStatusSchema.enum.published}
         else ${postStatusSchema.enum.modified}
       end`,
-    }).from(posts).innerJoin(postDrafts, eq(postDrafts.postId, posts.id))
-      .innerJoin(draft, eq(draft.id, postDrafts.revisionId))
+    }).from(posts).innerJoin(draft, eq(draft.postId, posts.id))
       .leftJoin(postPublished, eq(postPublished.postId, posts.id))
       .leftJoin(postPublications, eq(postPublications.id, postPublished.publicationId))
       .leftJoin(published, eq(published.id, postPublications.revisionId))
-      .orderBy(desc(draft.createdAt), asc(posts.id)).all()
+      .orderBy(desc(draft.updatedAt), asc(posts.id)).all()
   }
 
   function listPublishedPosts() {
