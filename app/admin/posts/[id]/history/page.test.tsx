@@ -38,6 +38,11 @@ function createHistory(): PostRevisionHistory {
       description: draftRevision.description, body: draftRevision.body,
       createdAt: '2026-11-01T00:00:00.000Z', updatedAt: draftRevision.createdAt,
     },
+    workingCopy: {
+      id, version: 'working-version', checkpointRevisionId: draftRevision.id,
+      title: draftRevision.title, description: draftRevision.description, body: draftRevision.body,
+      createdAt: '2026-11-01T00:00:00.000Z', updatedAt: draftRevision.createdAt,
+    },
     published: {
       id, revisionId: publishedRevision.id, publicationId: 3,
       title: publishedRevision.title, description: publishedRevision.description, body: publishedRevision.body,
@@ -99,7 +104,7 @@ describe('管理员修订历史页', () => {
       '2026-11-15T01:00:00.000Z', '2026-11-14T01:00:00.000Z', '2026-11-13T01:00:00.000Z',
     ])
     expect(within(items[0]).getByText('Currently published')).toBeDefined()
-    expect(within(items[1]).getByText('Current draft')).toBeDefined()
+    expect(within(items[1]).getByText('Last saved revision')).toBeDefined()
     expect(within(items[0]).getByText('Published')).toBeDefined()
     expect(within(items[1]).getByText('Saved')).toBeDefined()
     expect(within(items[2]).getByText('Restored')).toBeDefined()
@@ -161,7 +166,7 @@ describe('管理员修订历史页', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Restore result in test.')
     expect(mocks.restoreRevisionAction).toHaveBeenCalledTimes(1)
     expect(mocks.restoreRevisionAction.mock.calls[0].slice(0, 3)).toEqual([
-      id, { revisionId: 6, expectedRevisionId: 7 }, { status: 'idle' },
+      id, { revisionId: 6, expectedRevisionId: 7, expectedWorkingVersion: 'working-version' }, { status: 'idle' },
     ])
   })
 })

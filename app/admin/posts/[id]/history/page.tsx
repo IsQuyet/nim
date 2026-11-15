@@ -46,7 +46,7 @@ function RevisionMarkers({
 }) {
   return (
     <>
-      {revisionId === draftRevisionId && <span>Current draft</span>}
+      {revisionId === draftRevisionId && <span>Last saved revision</span>}
       {revisionId === publishedRevisionId && <span>Currently published</span>}
     </>
   )
@@ -56,7 +56,7 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
   const { id } = await params
   const history = await getAdminRevisionHistory(id, await searchParams)
   if (!history) notFound()
-  const { draft, published, selectedRevision, revisions, page, pageCount, revisionCount } = history
+  const { draft, workingCopy, published, selectedRevision, revisions, page, pageCount, revisionCount } = history
 
   return (
     <main className="space-y-8">
@@ -144,12 +144,13 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
           <p className="text-zinc-600 dark:text-zinc-400">{selectedRevision.description}</p>
         )}
         <RestoreForm
-          key={`${selectedRevision.id}:${draft.revisionId}`}
+          key={`${selectedRevision.id}:${workingCopy.version}`}
           action={restoreRevisionAction.bind(null, id, {
             revisionId: selectedRevision.id,
             expectedRevisionId: draft.revisionId,
+            expectedWorkingVersion: workingCopy.version,
           })}
-          disabled={samePostContent(selectedRevision, draft)}
+          disabled={samePostContent(selectedRevision, workingCopy)}
         />
         <MarkdownProse className="max-w-none">
           <MarkdownContent source={selectedRevision.body} />

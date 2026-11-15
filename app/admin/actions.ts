@@ -155,8 +155,8 @@ export async function restoreRevisionAction(
   _state: RestoreFormState,
 ): Promise<RestoreFormState> {
   void _state
-  const result = await writeDraft(input, restoreRevisionSchema, (store, { revisionId, expectedRevisionId }) =>
-    store.restoreRevision(id, revisionId, expectedRevisionId), restoreFeedback)
+  const result = await writeDraft(input, restoreRevisionSchema, (store, { revisionId, expectedRevisionId, expectedWorkingVersion }) =>
+    store.restoreRevision(id, revisionId, expectedRevisionId, expectedWorkingVersion), restoreFeedback)
   if (result.status === 'error') return result
 
   revalidateDraftPages(id)

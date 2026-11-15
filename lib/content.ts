@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { WorkingCopy } from './writing'
 
 const text = z.string({ error: 'The draft fields must contain text.' })
 
@@ -22,6 +23,7 @@ export function samePostContent(left: PostContent, right: PostContent) {
 
 export const postIdSchema = z.uuid({ error: 'The post ID must be a UUID.' })
 export const revisionIdSchema = z.number().int().positive().safe()
+export const workingVersionSchema = z.string().min(1)
 
 export const revisionSources = ['create', 'save', 'publish', 'import', 'restore', 'migration'] as const
 export const revisionSourceSchema = z.enum(revisionSources)
@@ -38,6 +40,7 @@ export type PostRevisionSummary = Omit<PostRevision, 'body' | 'description'>
 
 export type PostRevisionHistory = {
   draft: DraftPost
+  workingCopy: WorkingCopy
   published: PublishedPost | null
   selectedRevision: PostRevision
   revisions: PostRevisionSummary[]
@@ -97,6 +100,7 @@ export type RestoreFormState =
 export const restoreRevisionSchema = z.object({
   revisionId: revisionIdSchema,
   expectedRevisionId: revisionIdSchema,
+  expectedWorkingVersion: workingVersionSchema,
 })
 
 const revisionQueryNumber = z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(revisionIdSchema)
@@ -137,8 +141,9 @@ export type PostStore = {
   createDraftOnce(id: string, content: PostContent, source?: 'create' | 'import'): PostMutationResult<DraftPost>
   saveDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost>
   publishDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<PublishedPost>
-  restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>
+  restoreRevision(id: string, revisionId: number, expectedRevisionId: number, expectedWorkingVersion?: string): PostMutationResult<DraftPost>
   importDraft(input: ImportDraftInput): DraftPost
+  getWorkingCopy(id: string): WorkingCopy | null
   getDraft(id: string): DraftPost | null
   getPublishedPost(id: string): PublishedPost | null
   getRevision(id: string, revisionId: number): PostRevision | null

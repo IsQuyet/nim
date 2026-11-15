@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { postContentSchema, postFieldsSchema, postIdSchema, revisionIdSchema } from './content'
+import { postContentSchema, postFieldsSchema, postIdSchema, revisionIdSchema, workingVersionSchema } from './content'
 
-export const workingVersionSchema = z.string().min(1)
+export { workingVersionSchema } from './content'
 
 export const workingCopySchema = postFieldsSchema.extend({
   id: z.string().min(1),

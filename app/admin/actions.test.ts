@@ -297,7 +297,7 @@ describe('文章发布入口', () => {
 })
 
 describe('修订恢复入口', () => {
-  const restoreInput = { revisionId: 4, expectedRevisionId: 1 }
+  const restoreInput = { revisionId: 4, expectedRevisionId: 1, expectedWorkingVersion: 'working-version' }
 
   it('恢复前先鉴权，身份失效不解析目标或写入', async () => {
     mocks.withAdminPostStore.mockResolvedValue({ authorized: false })
@@ -329,7 +329,7 @@ describe('修订恢复入口', () => {
   it('只恢复目标修订，刷新管理历史后跳转编辑页，不发布或刷新公开页面', async () => {
     await expect(restoreRevisionAction(id, restoreInput, { status: 'idle' }))
       .rejects.toThrow(`Redirect: /admin/posts/${id}`)
-    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1)
+    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1, 'working-version')
     expect(mocks.saveDraft).not.toHaveBeenCalled()
     expect(mocks.publishDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath.mock.calls).toEqual(adminPaths)
@@ -342,7 +342,7 @@ describe('修订恢复入口', () => {
   ])('恢复%s时保留历史页，不刷新或导航', async (status, message) => {
     mocks.restoreRevision.mockReturnValue({ status })
     expect(await restoreRevisionAction(id, restoreInput, { status: 'idle' })).toEqual({ status: 'error', message })
-    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1)
+    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1, 'working-version')
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
     expect(mocks.redirect).not.toHaveBeenCalled()
   })

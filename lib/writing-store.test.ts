@@ -135,6 +135,33 @@ describe('工作稿与明确修订', () => {
     }
   })
 
+  it('历史恢复以工作稿版本保护自动内容，恢复到上次修订也留下明确恢复节点', () => {
+    const store = createPostStore(database)
+    const saved = store.createDraft(content)
+    const initial = writer.getWorkingCopy(saved.id)
+    assert.ok(initial)
+    const pending = written(writer.write(command(initial, { content: { ...content, body: '自动保存' } })))
+    expect(store.restoreRevision(saved.id, saved.revisionId, saved.revisionId, initial.version)).toEqual({ status: 'conflict' })
+    const restored = store.restoreRevision(saved.id, saved.revisionId, saved.revisionId, pending.version)
+    assert.equal(restored.status, 'success')
+    expect(restored.value.revisionId).not.toBe(saved.revisionId)
+    expect(store.listRevisions(saved.id)[0]).toMatchObject({ source: 'restore', restoredFromRevisionId: saved.revisionId })
+    expect(writer.getWorkingCopy(saved.id)).toMatchObject(content)
+    expect(store.getRevisionHistory(saved.id)?.workingCopy).toEqual(writer.getWorkingCopy(saved.id))
+  })
+
+  it('导入替换未明确保存的工作内容，即使等于上次修订也留下导入节点', () => {
+    const store = createPostStore(database)
+    const saved = store.createDraft(content)
+    const initial = writer.getWorkingCopy(saved.id)
+    assert.ok(initial)
+    written(writer.write(command(initial, { content: { ...content, body: '自动保存' } })))
+    const imported = store.importDraft({ ...content, id: saved.id })
+    expect(imported.revisionId).not.toBe(saved.revisionId)
+    expect(store.listRevisions(saved.id)[0].source).toBe('import')
+    expect(writer.getWorkingCopy(saved.id)).toMatchObject(content)
+  })
+
   it('仅持修订基线的写入不能覆盖尚未明确保存的工作稿', () => {
     const store = createPostStore(database)
     const saved = store.createDraft(content)

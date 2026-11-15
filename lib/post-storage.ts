@@ -98,8 +98,9 @@ export function updateDraft(
   content: PostContent,
   source: PostRevision['source'],
   restoredFromRevisionId: number | null = null,
+  forceCheckpoint = false,
 ): DraftPost {
-  if (samePostContent(draft, content)) {
+  if (samePostContent(draft, content) && !forceCheckpoint) {
     writeWorkingCopy(database, draft.id, content)
     return draft
   }

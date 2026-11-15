@@ -12,6 +12,7 @@ import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './post-files'
 import { createPostStore, importPublishedPosts } from './posts'
+import { createWritingStore } from './writing-store'
 
 const script = fileURLToPath(new URL('../scripts/post-file.ts', import.meta.url))
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'))
@@ -161,6 +162,28 @@ describe('Markdown 文件与真实文章存储', () => {
     for (const exported of [exportedDraft, exportedPublished]) {
       expect(exported.source).not.toMatch(/(?:^|\n)(?:revisionId|publicationId|createdAt|updatedAt|source|stage):/)
     }
+  })
+
+  it('草稿导出读取已确认自动工作稿，未完成标题不伪造文件元数据', () => {
+    const draft = store.createDraft(content)
+    const writer = createWritingStore(database)
+    const initial = writer.getWorkingCopy(draft.id)
+    assert.ok(initial)
+    const edited = { ...content, body: '\n自动保存但尚未手动保存\r\n' }
+    const result = writer.write({
+      postId: draft.id, operationId: randomUUID(), expectedVersion: initial.version,
+      intent: 'autosave', content: edited,
+    })
+    assert.equal(result.status, 'success')
+    const exported = exportPostMarkdown(store, draft.id)
+    assert.equal(exported.status, 'success')
+    expect(parse(exported.source)).toEqual({ ...edited, id: draft.id })
+    expect(store.getDraft(draft.id)?.body).toBe(content.body)
+    writer.write({
+      postId: draft.id, operationId: randomUUID(), expectedVersion: result.value.workingCopy.version,
+      intent: 'autosave', content: { ...edited, title: '' },
+    })
+    expect(exportPostMarkdown(store, draft.id).status).toBe('invalid')
   })
 
   it('导出再导入完整保留身份和内容，重复导入不追加修订', () => {

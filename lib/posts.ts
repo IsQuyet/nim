@@ -91,17 +91,24 @@ export function createPostStore(database: AppDatabase): PostStore {
     )).get() ?? null
   }
 
-  function restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost> {
+  function restoreRevision(id: string, revisionId: number, expectedRevisionId: number, expectedWorkingVersion?: string): PostMutationResult<DraftPost> {
     return database.transaction((transaction): PostMutationResult<DraftPost> => {
       const draft = getDraft(transaction, id)
       if (!draft) return { status: 'missing' }
       const working = getWorkingCopy(transaction, id)
-      if (draft.revisionId !== expectedRevisionId || (working && !samePostContent(working, draft))) return { status: 'conflict' }
+      const matchesWorking = expectedWorkingVersion === undefined
+        ? working && samePostContent(working, draft)
+        : working?.version === expectedWorkingVersion
+      if (draft.revisionId !== expectedRevisionId || !matchesWorking) return { status: 'conflict' }
       const revision = transaction.select().from(postRevisions).where(and(
         eq(postRevisions.postId, id), eq(postRevisions.id, revisionId),
       )).get()
       if (!revision) return { status: 'missing' }
-      return { status: 'success', value: updateDraft(transaction, draft, revision, 'restore', revision.id) }
+      if (working && samePostContent(working, revision)) {
+        writeWorkingCopy(transaction, id, working)
+        return { status: 'success', value: draft }
+      }
+      return { status: 'success', value: updateDraft(transaction, draft, revision, 'restore', revision.id, true) }
     }, { behavior: 'immediate' })
   }
 
@@ -112,7 +119,8 @@ export function createPostStore(database: AppDatabase): PostStore {
       const post = transaction.select().from(posts).where(eq(posts.id, id)).get()
       if (!post) return insertDraft(transaction, id, content, 'import')
       const draft = getDraft(transaction, id)
-      if (draft) return updateDraft(transaction, draft, content, 'import')
+      const working = getWorkingCopy(transaction, id)
+      if (draft) return updateDraft(transaction, draft, content, 'import', null, !!working && !samePostContent(working, content))
       const revision = insertRevision(transaction, id, content, 'import')
       transaction.insert(postDrafts).values({ postId: id, revisionId: revision.id }).run()
       writeWorkingCopy(transaction, id, content, true)
@@ -124,6 +132,8 @@ export function createPostStore(database: AppDatabase): PostStore {
     return database.transaction(transaction => {
       const draft = getDraft(transaction, id)
       if (!draft) return null
+      const workingCopy = getWorkingCopy(transaction, id)
+      if (!workingCopy) throw new Error('文章缺少工作稿。')
       const total = transaction.select({ value: count() }).from(postRevisions)
         .where(eq(postRevisions.postId, id)).get()
       if (!total) throw new Error('无法读取文章修订数量。')
@@ -145,6 +155,7 @@ export function createPostStore(database: AppDatabase): PostStore {
         .limit(REVISION_PAGE_SIZE).offset((query.page - 1) * REVISION_PAGE_SIZE).all()
       return {
         draft,
+        workingCopy,
         published: getPublishedPost(transaction, id),
         selectedRevision,
         revisions,
@@ -194,6 +205,7 @@ export function createPostStore(database: AppDatabase): PostStore {
     publishDraft,
     restoreRevision,
     importDraft,
+    getWorkingCopy: id => getWorkingCopy(database, id),
     getDraft: id => getDraft(database, id),
     getPublishedPost: id => getPublishedPost(database, id),
     getRevision,

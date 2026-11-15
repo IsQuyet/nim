@@ -4,7 +4,7 @@ import { serializeMarkdownFile } from '@/lib/markdown-file'
 import { GET } from './route'
 
 const mocks = vi.hoisted(() => ({
-  withAdminPostStore: vi.fn(), getDraft: vi.fn(), getPublishedPost: vi.fn(),
+  withAdminPostStore: vi.fn(), getWorkingCopy: vi.fn(), getPublishedPost: vi.fn(),
 }))
 vi.mock('@/lib/admin-posts', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 
@@ -26,9 +26,9 @@ function request(query = '') {
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset()
   mocks.withAdminPostStore.mockImplementation(async operation => ({
-    authorized: true, value: await operation({ getDraft: mocks.getDraft, getPublishedPost: mocks.getPublishedPost }),
+    authorized: true, value: await operation({ getWorkingCopy: mocks.getWorkingCopy, getPublishedPost: mocks.getPublishedPost }),
   }))
-  mocks.getDraft.mockReturnValue(draft)
+  mocks.getWorkingCopy.mockReturnValue(draft)
   mocks.getPublishedPost.mockReturnValue(published)
 })
 
@@ -40,7 +40,7 @@ describe('已保存 Markdown 下载入口', () => {
     const response = await GET(request('?stage=invalid'), { params })
     expect(response.status).toBe(401)
     expect(readId).not.toHaveBeenCalled()
-    expect(mocks.getDraft).not.toHaveBeenCalled()
+    expect(mocks.getWorkingCopy).not.toHaveBeenCalled()
     expect(mocks.getPublishedPost).not.toHaveBeenCalled()
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
   })
@@ -55,7 +55,7 @@ describe('已保存 Markdown 下载入口', () => {
     expect(source).toBe(serializeMarkdownFile(draft))
     expect(source.endsWith(draft.body)).toBe(true)
     expect(source).not.toContain(draft.accessToken)
-    expect(mocks.getDraft).toHaveBeenCalledExactlyOnceWith(id)
+    expect(mocks.getWorkingCopy).toHaveBeenCalledExactlyOnceWith(id)
     expect(mocks.getPublishedPost).not.toHaveBeenCalled()
   })
 
@@ -64,34 +64,34 @@ describe('已保存 Markdown 下载入口', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe(serializeMarkdownFile(published))
     expect(mocks.getPublishedPost).toHaveBeenCalledExactlyOnceWith(id)
-    expect(mocks.getDraft).not.toHaveBeenCalled()
+    expect(mocks.getWorkingCopy).not.toHaveBeenCalled()
   })
 
   it.each(['?stage=', '?stage=other', '?stage=draft&stage=published', '?stage=draft&stage=draft'])(
     '非法或重复stage返回400，不读取快照：%s', async query => {
       const response = await GET(request(query), { params: Promise.resolve({ id }) })
       expect(response.status).toBe(400)
-      expect(mocks.getDraft).not.toHaveBeenCalled()
+      expect(mocks.getWorkingCopy).not.toHaveBeenCalled()
       expect(mocks.getPublishedPost).not.toHaveBeenCalled()
       expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     },
   )
 
   it.each(['draft', 'published'])('%s快照缺失返回404，不伪装成功或回退其他快照', async stage => {
-    mocks.getDraft.mockReturnValue(null)
+    mocks.getWorkingCopy.mockReturnValue(null)
     mocks.getPublishedPost.mockReturnValue(null)
     const response = await GET(request(`?stage=${stage}`), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(404)
     expect(response.headers.get('Content-Disposition')).toBeNull()
     if (stage === 'draft') expect(mocks.getPublishedPost).not.toHaveBeenCalled()
-    else expect(mocks.getDraft).not.toHaveBeenCalled()
+    else expect(mocks.getWorkingCopy).not.toHaveBeenCalled()
   })
 
   it.each([
     { ...draft, id: 'not-a-uuid' },
     { ...draft, title: '  ' },
   ])('已保存快照不符合文件契约时返回422而不是不安全附件', async invalid => {
-    mocks.getDraft.mockReturnValue(invalid)
+    mocks.getWorkingCopy.mockReturnValue(invalid)
     const response = await GET(request(), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(422)
     expect(await response.text()).toBe('This post does not satisfy the Markdown file format. Review its ID and content.')
@@ -101,7 +101,7 @@ describe('已保存 Markdown 下载入口', () => {
   it.each(['connection', 'query'])('%s存储故障返回500并记录原始错误，不当作401或404', async kind => {
     const error = new Error('Private SQL detail')
     if (kind === 'connection') mocks.withAdminPostStore.mockRejectedValue(error)
-    else mocks.getDraft.mockImplementation(() => { throw error })
+    else mocks.getWorkingCopy.mockImplementation(() => { throw error })
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     const response = await GET(request(), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(500)

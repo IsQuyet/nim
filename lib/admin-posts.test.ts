@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from './auth'
 import { initializeDatabase, openDatabase } from './database'
 import * as databaseModule from './database'
-import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore } from './admin-posts'
+import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, getAdminWorkingCopy, withAdminPostStore, withAdminWritingStore } from './admin-posts'
 
 vi.mock('server-only', () => ({}))
 vi.mock('./auth', () => ({ getAdminSession: vi.fn() }))
@@ -50,6 +50,7 @@ describe('管理端文章访问', () => {
     const operation = vi.fn()
 
     expect(await withAdminPostStore(operation)).toEqual({ authorized: false })
+    expect(await withAdminWritingStore(operation)).toEqual({ authorized: false })
     expect(operation).not.toHaveBeenCalled()
     expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
   })
@@ -60,6 +61,7 @@ describe('管理端文章访问', () => {
     for (const read of [
       () => getAdminPosts(),
       () => getAdminDraft('missing'),
+      () => getAdminWorkingCopy('missing'),
       () => getAdminRevisionHistory('missing', { page: '0' }),
     ]) {
       await expect(read()).rejects.toMatchObject({ digest: expect.stringMatching(/^NEXT_REDIRECT;/) })

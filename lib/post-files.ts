@@ -34,11 +34,11 @@ export function importPostMarkdown(
 }
 
 export function exportPostMarkdown(
-  store: Pick<PostStore, 'getDraft' | 'getPublishedPost'>,
+  store: Pick<PostStore, 'getWorkingCopy' | 'getPublishedPost'>,
   id: string,
   stage: PostFileStage = 'draft',
 ): { status: 'success'; source: string; filename: string } | { status: 'missing' } | InvalidFile {
-  const post = stage === 'draft' ? store.getDraft(id) : store.getPublishedPost(id)
+  const post = stage === 'draft' ? store.getWorkingCopy(id) : store.getPublishedPost(id)
   if (!post) return { status: 'missing' }
   const identity = postIdSchema.safeParse(post.id)
   const content = postContentSchema.safeParse(post)
