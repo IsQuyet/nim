@@ -4,10 +4,11 @@ import { useContext, useState, useSyncExternalStore } from 'react'
 import { unstable_rethrow } from 'next/navigation'
 import { createRecoveryStore } from '@/lib/recovery-store'
 import { WritingSession } from '@/lib/writing-session'
-import type { WorkingCopy, WritingTransport } from '@/lib/writing'
+import type { DraftPost } from '@/lib/content'
+import type { WritingTransport } from '@/lib/writing'
 import { WritingSessionsContext, type WritingBridgeSnapshot, type WritingSessionBridge } from './writing-sessions'
 
-type Options = { postId: string; isNew: boolean; initial: WorkingCopy | null; transport: WritingTransport }
+type Options = { postId: string; initial: DraftPost | null; transport: WritingTransport }
 
 function sessionBridge(options: Options, activate: () => void, release: () => void): WritingSessionBridge {
   const listeners = new Set<() => void>()

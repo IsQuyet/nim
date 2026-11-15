@@ -10,7 +10,8 @@ import { getAuthSecret, initializeAuthSecret } from './auth-secret'
 import { getAuthSecretPath } from './data-paths'
 import { initializeDatabase, openDatabase } from './database'
 import { session as sessions } from './schema'
-import { createPostStore } from './posts'
+import { createWritingStore } from './writing-store'
+import { createTestDraft } from '../test/post-commands'
 
 const next = vi.hoisted(() => ({ requestHeaders: new Headers() }))
 vi.mock('server-only', () => ({}))
@@ -427,34 +428,33 @@ describe('管理员认证与数据库会话', () => {
     const orm = openDatabase()
     const original = { title: 'Saved title', description: '', body: '# Saved body\r\n' }
     let id: string
-    let expectedVersion: string
+    let expectedRevisionId: number
+    let receipts: unknown[]
     try {
-      const store = createPostStore(orm)
-      const draft = store.createDraft(original)
+      const draft = createTestDraft(createWritingStore(orm), original)
       id = draft.id
-      const working = store.getWorkingCopy(id)
-      if (!working) throw new Error('Missing working copy')
-      expectedVersion = working.version
+      expectedRevisionId = draft.revisionId
+      receipts = orm.$client.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)
     } finally {
       orm.$client.close()
     }
     database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
-    const { writeWorkingCopyAction } = await import('../app/admin/writing-actions')
+    const { writeDraftAction } = await import('../app/admin/writing-actions')
 
-    expect(await writeWorkingCopyAction({
+    expect(await writeDraftAction({
       postId: id, operationId: randomUUID(), intent: 'save',
-      content: { ...original, body: '# Unsaved body' }, expectedVersion,
+      content: { ...original, body: '# Unsaved body' }, expectedRevisionId,
     })).toEqual({
       status: 'error',
-      message: 'Sign in to sync this draft.',
+      message: 'Sign in to save or publish this draft.',
       signInRequired: true,
     })
     expect(database.prepare(`SELECT r.title, r.description, r.body FROM post_revisions r
       INNER JOIN post_drafts d ON d.revision_id = r.id WHERE d.post_id = ?`).get(id))
       .toEqual(original)
-    expect(database.prepare('SELECT title, description, body, version FROM post_working_copies WHERE post_id = ?').get(id))
-      .toEqual({ ...original, version: expectedVersion })
-    expect(database.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)).toEqual([])
+    expect(database.prepare('SELECT revision_id FROM post_drafts WHERE post_id = ?').get(id))
+      .toEqual({ revision_id: expectedRevisionId })
+    expect(database.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)).toEqual(receipts)
   })
 
   it('不开放邮箱密码注册', async () => {

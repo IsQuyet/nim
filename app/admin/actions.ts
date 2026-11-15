@@ -15,8 +15,8 @@ export async function restoreRevisionAction(
     const result = await withAdminPostStore(store => {
       const parsed = restoreRevisionSchema.safeParse(input)
       if (!parsed.success) return { status: 'error' as const, message: parsed.error.issues[0].message }
-      const { revisionId, expectedRevisionId, expectedWorkingVersion } = parsed.data
-      return store.restoreRevision(id, revisionId, expectedRevisionId, expectedWorkingVersion)
+      const { revisionId, expectedRevisionId } = parsed.data
+      return store.restoreRevision(id, revisionId, expectedRevisionId)
     })
     if (!result.authorized) return { status: 'error', message: 'Sign in to restore this revision.', signInRequired: true }
     if (result.value.status === 'error') return result.value

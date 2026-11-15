@@ -1,11 +1,11 @@
 // @vitest-environment node
-import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from './database'
-import { createPostStore } from './posts'
+import { createWritingStore } from './writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 import { getBlogPost, getBlogPosts } from './blog'
 
 vi.mock('server-only', () => ({}))
@@ -13,7 +13,7 @@ vi.mock('next/server', () => ({ connection: async () => {} }))
 
 let directory: string
 let database: AppDatabase
-let store: ReturnType<typeof createPostStore>
+let writer: ReturnType<typeof createWritingStore>
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-blog-'))
@@ -21,7 +21,7 @@ beforeEach(async () => {
   vi.stubEnv('DATABASE_PATH', filename)
   await initializeDatabase(filename)
   database = openDatabase(filename)
-  store = createPostStore(database)
+  writer = createWritingStore(database)
 })
 
 afterEach(() => {
@@ -47,16 +47,13 @@ describe('公开文章数据来源', () => {
       description: 'Revised description.',
       body: '# Revised body',
     }
-    const draft = store.createDraft(first)
+    const draft = createTestDraft(writer, first)
 
     expect(await getBlogPosts()).toEqual([])
     expect(await getBlogPost(draft.id)).toBeNull()
 
-    const publication = store.publishDraft(draft.id, draft, draft.revisionId)
-    assert.ok(publication.status === 'success')
-    const published = publication.value
-    const saved = store.saveDraft(draft.id, second, draft.revisionId)
-    assert.ok(saved.status === 'success')
+    const published = publishTestDraft(writer, draft)
+    const saved = saveTestDraft(writer, draft, second)
 
     expect(await getBlogPost(draft.id)).toEqual(published)
     expect(await getBlogPosts()).toEqual([
@@ -68,9 +65,7 @@ describe('公开文章数据来源', () => {
       },
     ])
 
-    const republication = store.publishDraft(draft.id, second, saved.value.revisionId)
-    assert.ok(republication.status === 'success')
-    const republished = republication.value
+    const republished = publishTestDraft(writer, saved, second)
     expect(await getBlogPost(draft.id)).toEqual(republished)
     expect(await getBlogPosts()).toEqual([
       {

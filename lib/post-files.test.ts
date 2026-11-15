@@ -7,12 +7,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { PostMutationResult, PostStore } from './content'
+import type { PostStore } from './content'
 import { initializeDatabase, openDatabase, type AppDatabase } from './database'
 import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './post-files'
 import { createPostStore, importPublishedPosts } from './posts'
 import { createWritingStore } from './writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 
 const script = fileURLToPath(new URL('../scripts/post-file.ts', import.meta.url))
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'))
@@ -26,11 +27,6 @@ let directory: string
 let filename: string
 let database: AppDatabase
 let store: PostStore
-
-function success<T>(result: PostMutationResult<T>): T {
-  assert.ok(result.status === 'success')
-  return result.value
-}
 
 function parse(source: string) {
   const result = parseMarkdownFile(source)
@@ -90,8 +86,8 @@ afterEach(() => {
 
 describe('Markdown 文件与真实文章存储', () => {
   it('明确 ID 完整替换同一草稿，追加导入修订但不改变公开版本', () => {
-    const draft = store.createDraft(content)
-    const published = success(store.publishDraft(draft.id, draft, draft.revisionId))
+    const draft = createTestDraft(createWritingStore(database), content)
+    const published = publishTestDraft(createWritingStore(database), draft)
     const replacement = { id: draft.id, title: 'Imported title', description: '', body: '# Imported\r\n\n' }
     const imported = importPostMarkdown(store, serializeMarkdownFile(replacement), randomUUID())
     assert.ok(imported.status === 'success')
@@ -136,7 +132,7 @@ describe('Markdown 文件与真实文章存储', () => {
     '---\ntitle: "   "\n---\n',
     '---\ntitle: Title\nunknown: value\n---\n',
   ])('无效文件不改变任何文章或历史记录 %#', source => {
-    store.createDraft(content)
+    createTestDraft(createWritingStore(database), content)
     const before = snapshot()
     expect(importPostMarkdown(store, source, randomUUID()).status).toBe('invalid')
     expect(snapshot()).toEqual(before)
@@ -149,10 +145,10 @@ describe('Markdown 文件与真实文章存储', () => {
   })
 
   it('默认导出草稿，显式公开导出只读取公开引用，均不携带内部元数据', () => {
-    const draft = store.createDraft(content)
-    success(store.publishDraft(draft.id, draft, draft.revisionId))
+    const draft = createTestDraft(createWritingStore(database), content)
+    publishTestDraft(createWritingStore(database), draft)
     const edited = { ...content, title: 'Private title', description: 'Private summary', body: '# Private body\r\n' }
-    success(store.saveDraft(draft.id, edited, draft.revisionId))
+    saveTestDraft(createWritingStore(database), draft, edited)
     const exportedDraft = exportPostMarkdown(store, draft.id)
     const exportedPublished = exportPostMarkdown(store, draft.id, 'published')
     assert.ok(exportedDraft.status === 'success' && exportedPublished.status === 'success')
@@ -164,30 +160,26 @@ describe('Markdown 文件与真实文章存储', () => {
     }
   })
 
-  it('草稿导出读取已确认自动工作稿，未完成标题不伪造文件元数据', () => {
-    const draft = store.createDraft(content)
+  it('草稿导出只读明确保存的修订，未完成标题不能替换已保存内容', () => {
     const writer = createWritingStore(database)
-    const initial = writer.getWorkingCopy(draft.id)
-    assert.ok(initial)
-    const edited = { ...content, body: '\n自动保存但尚未手动保存\r\n' }
-    const result = writer.write({
-      postId: draft.id, operationId: randomUUID(), expectedVersion: initial.version,
-      intent: 'autosave', content: edited,
-    })
-    assert.equal(result.status, 'success')
+    const draft = createTestDraft(writer, content)
+    const edited = { ...content, body: '\n明确保存的正文\r\n' }
+    const saved = saveTestDraft(writer, draft, edited)
+    const before = snapshot()
     const exported = exportPostMarkdown(store, draft.id)
     assert.equal(exported.status, 'success')
     expect(parse(exported.source)).toEqual({ ...edited, id: draft.id })
-    expect(store.getDraft(draft.id)?.body).toBe(content.body)
-    writer.write({
-      postId: draft.id, operationId: randomUUID(), expectedVersion: result.value.workingCopy.version,
-      intent: 'autosave', content: { ...edited, title: '' },
-    })
-    expect(exportPostMarkdown(store, draft.id).status).toBe('invalid')
+    expect(store.getDraft(draft.id)).toEqual(saved)
+    expect(writer.write({
+      postId: draft.id, operationId: randomUUID(), expectedRevisionId: saved.revisionId,
+      intent: 'save', content: { ...edited, title: '' },
+    }).status).toBe('invalid')
+    expect(snapshot()).toEqual(before)
+    expect(exportPostMarkdown(store, draft.id)).toEqual(exported)
   })
 
   it('导出再导入完整保留身份和内容，重复导入不追加修订', () => {
-    const draft = store.createDraft(content)
+    const draft = createTestDraft(createWritingStore(database), content)
     const exported = exportPostMarkdown(store, draft.id)
     assert.ok(exported.status === 'success')
     const before = snapshot()
@@ -200,7 +192,7 @@ describe('Markdown 文件与真实文章存储', () => {
 
   it('缺失文章或公开版本返回 missing，不回退到草稿', () => {
     expect(exportPostMarkdown(store, randomUUID())).toEqual({ status: 'missing' })
-    const draft = store.createDraft(content)
+    const draft = createTestDraft(createWritingStore(database), content)
     expect(exportPostMarkdown(store, draft.id, 'published')).toEqual({ status: 'missing' })
   })
 
@@ -248,8 +240,8 @@ describe('文件 CLI 与隔离数据库', () => {
   }, 15_000)
 
   it('导入以元数据 ID 而非文件名确定目标，不发布且只输出身份结果', async () => {
-    const draft = store.createDraft(content)
-    const published = success(store.publishDraft(draft.id, draft, draft.revisionId))
+    const draft = createTestDraft(createWritingStore(database), content)
+    const published = publishTestDraft(createWritingStore(database), draft)
     const file = join(directory, 'unrelated-name.md')
     const imported = { id: draft.id, title: 'CLI title', description: '', body: '# CLI_PRIVATE_BODY\r\n' }
     writeFileSync(file, serializeMarkdownFile(imported))
@@ -293,10 +285,10 @@ describe('文件 CLI 与隔离数据库', () => {
   }, 20_000)
 
   it('导出默认草稿，--published 显式导出公开内容，并自动创建输出目录', async () => {
-    const draft = store.createDraft(content)
-    success(store.publishDraft(draft.id, draft, draft.revisionId))
+    const draft = createTestDraft(createWritingStore(database), content)
+    publishTestDraft(createWritingStore(database), draft)
     const edited = { ...content, body: '# CLI private draft\r\n' }
-    success(store.saveDraft(draft.id, edited, draft.revisionId))
+    saveTestDraft(createWritingStore(database), draft, edited)
     const output = join(directory, 'nested', 'draft.md')
     const publishedOutput = join(directory, 'nested', 'published.md')
     const first = await runCli(['export', draft.id, output])
@@ -310,7 +302,7 @@ describe('文件 CLI 与隔离数据库', () => {
   }, 20_000)
 
   it('默认拒绝覆盖既有文件，显式覆盖完成后才报告成功，且清理临时文件', async () => {
-    const draft = store.createDraft(content)
+    const draft = createTestDraft(createWritingStore(database), content)
     const outputDirectory = join(directory, 'exports')
     mkdirSync(outputDirectory)
     const output = join(outputDirectory, 'post.md')
@@ -327,7 +319,7 @@ describe('文件 CLI 与隔离数据库', () => {
   }, 20_000)
 
   it('输出替换失败时不打印成功，清理自己的临时文件且不删除用户目标', async () => {
-    const draft = store.createDraft(content)
+    const draft = createTestDraft(createWritingStore(database), content)
     const outputDirectory = join(directory, 'exports')
     const target = join(outputDirectory, 'occupied')
     mkdirSync(target, { recursive: true })
@@ -340,7 +332,7 @@ describe('文件 CLI 与隔离数据库', () => {
   }, 15_000)
 
   it('未发布文章不能用 --published 导出，不创建输出路径', async () => {
-    const draft = store.createDraft(content)
+    const draft = createTestDraft(createWritingStore(database), content)
     const output = join(directory, 'not-created', 'public.md')
     const result = await runCli(['export', draft.id, output, '--published'])
     expect(result.code).not.toBe(0)

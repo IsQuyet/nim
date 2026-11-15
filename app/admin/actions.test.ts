@@ -9,7 +9,7 @@ vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(), redirect: mocks.redirect,
 }))
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
-const input = { revisionId: 4, expectedRevisionId: 1, expectedWorkingVersion: 'working-version' }
+const input = { revisionId: 4, expectedRevisionId: 1 }
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset()
@@ -34,7 +34,7 @@ describe('修订恢复入口', () => {
     null, {},
     { ...input, revisionId: '4' }, { ...input, revisionId: 0 },
     { ...input, expectedRevisionId: null }, { ...input, expectedRevisionId: 1.5 },
-    { revisionId: 4, expectedRevisionId: 1 }, { ...input, expectedWorkingVersion: '' },
+    { revisionId: 4 }, { ...input, expectedRevisionId: undefined },
   ])('非法或缺失编辑基线拒绝写入：%j', async invalid => {
     expect((await restoreRevisionAction(id, invalid, { status: 'idle' })).status).toBe('error')
     expect(mocks.restoreRevision).not.toHaveBeenCalled()
@@ -44,7 +44,7 @@ describe('修订恢复入口', () => {
 
   it('绑定目标与完整编辑基线，成功后仅刷新管理页面并导航', async () => {
     await expect(restoreRevisionAction(id, input, { status: 'idle' })).rejects.toThrow(`Redirect: /admin/posts/${id}`)
-    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1, 'working-version')
+    expect(mocks.restoreRevision).toHaveBeenCalledExactlyOnceWith(id, 4, 1)
     expect(mocks.revalidatePath.mock.calls).toEqual([['/admin'], [`/admin/posts/${id}`], [`/admin/posts/${id}/history`]])
     expect(mocks.redirect).toHaveBeenCalledExactlyOnceWith(`/admin/posts/${id}`)
   })

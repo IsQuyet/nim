@@ -10,10 +10,9 @@ const time = '2026-11-15T12:00:00.000Z'
 
 function copy(overrides: Partial<RecoveryCopy> = {}): RecoveryCopy {
   return {
-    format: 'nim-recovery/v1',
+    format: 'nim-recovery/v2',
     sessionId,
     postId,
-    isNew: true,
     content: { title: '', description: '', body: '  原始正文\r\n' },
     remote: null,
     pending: null,
@@ -28,8 +27,7 @@ function remote(id = postId) {
     title: '远端标题',
     description: '',
     body: '远端正文',
-    version: 'working-1',
-    checkpointRevisionId: null,
+    revisionId: 1,
     createdAt: time,
     updatedAt: time,
   }
@@ -37,11 +35,11 @@ function remote(id = postId) {
 
 function pending(id = postId): NonNullable<RecoveryCopy['pending']> {
   return {
-    intent: 'autosave',
+    intent: 'save',
     postId: id,
     operationId: '33333333-3333-4333-8333-333333333333',
-    expectedVersion: 'working-1',
-    content: { title: '', description: '', body: '待确认的正文' },
+    expectedRevisionId: 1,
+    content: { title: '明确保存的标题', description: '', body: '待确认的正文' },
   }
 }
 
@@ -59,10 +57,12 @@ describe('本机恢复副本的纯 schema 边界', () => {
     expect(parsed.content.body).toBe('  原始正文\r\n')
   })
 
-  it('现有文章允许历史 ID，新稿必须具有 UUID 身份', () => {
-    const existing = copy({ postId: 'legacy-post', isNew: false, remote: remote('legacy-post'), pending: pending('legacy-post') })
+  it('新稿与已有稿均要求 UUID 文档身份，服务器草稿是明确保存的修订', () => {
+    const existing = copy({ remote: remote(), pending: pending() })
     expect(recoveryCopySchema.parse(existing)).toEqual(existing)
-    expect(recoveryCopySchema.safeParse({ ...existing, isNew: true }).success).toBe(false)
+    expect(recoveryCopySchema.safeParse({ ...existing, postId: 'legacy-post' }).success).toBe(false)
+    expect(recoveryCopySchema.safeParse(copy({ postId: 'legacy-post' })).success).toBe(false)
+    expect(recoveryCopySchema.safeParse(copy({ remote: remote() })).success).toBe(true)
   })
 
   it.each([
@@ -73,13 +73,19 @@ describe('本机恢复副本的纯 schema 边界', () => {
     copy({ postId: '' }),
     copy({ updatedAt: 'not-a-time' }),
     copy({ updatedAt: '2026-02-30T12:00:00.000Z' }),
-    { ...copy(), format: 'nim-recovery/v2' },
-    { ...copy(), isNew: 'true' },
+    { ...copy(), format: 'nim-recovery/v1' },
+    { ...copy(), format: 'nim-recovery/v3' },
+    { ...copy(), isNew: true },
     { ...copy(), content: { title: '', description: '', body: 123 } },
-    { ...copy(), remote: { ...remote(), checkpointRevisionId: 0 } },
+    { ...copy(), remote: { ...remote(), revisionId: 0 } },
+    { ...copy(), remote: { ...remote(), version: 'working-1' } },
     { ...copy(), pending: { ...pending(), operationId: 'not-a-uuid' } },
+    { ...copy(), pending: { ...pending(), intent: 'autosave' } },
     copy({ remote: remote('another-post') }),
     copy({ pending: pending('another-post') }),
+    copy({ remote: remote(), pending: { ...pending(), expectedRevisionId: 2 } }),
+    copy({ pending: pending() }),
+    copy({ remote: remote(), pending: { ...pending(), expectedRevisionId: null } }),
   ])('拒绝损坏、未来版本或身份不一致的记录 %#', input => {
     expect(recoveryCopySchema.safeParse(input).success).toBe(false)
   })
@@ -88,21 +94,19 @@ describe('本机恢复副本的纯 schema 边界', () => {
     { ...copy(), future: 'unknown' },
     { ...copy(), content: { ...copy().content, future: 'unknown' } },
     { ...copy(), remote: { ...remote(), future: 'unknown' } },
-    { ...copy(), pending: { ...pending(), future: 'unknown' } },
-    { ...copy(), pending: { ...pending(), content: { ...pending().content, future: 'unknown' } } },
+    { ...copy({ remote: remote() }), pending: { ...pending(), future: 'unknown' } },
+    { ...copy({ remote: remote() }), pending: { ...pending(), content: { ...pending().content, future: 'unknown' } } },
   ])('拒绝未知字段，不以剥离数据伪装成功解析 %#', input => {
     expect(recoveryCopySchema.safeParse(input).success).toBe(false)
   })
 
-  it('待确认请求继续遵守各 intent 的内容契约', () => {
-    const autosave = pending()
-    expect(recoveryCopySchema.safeParse(copy({ pending: autosave })).success).toBe(true)
-    for (const intent of ['save', 'publish'] as const) {
-      expect(recoveryCopySchema.safeParse(copy({ pending: { ...autosave, intent } })).success).toBe(false)
-      expect(recoveryCopySchema.safeParse(copy({
-        pending: { ...autosave, intent, content: { ...autosave.content, title: '标题' } },
-      })).success).toBe(true)
-    }
+  it.each(['save', 'publish'] as const)('pending 只容纳明确的 %s 命令，空文本副本仍可携带原请求', intent => {
+    const command = { ...pending(), expectedRevisionId: null, intent }
+    const value = copy({ content: { title: '', description: '', body: '' }, pending: command })
+    expect(recoveryCopySchema.parse(value)).toEqual(value)
+    expect(recoveryCopySchema.safeParse(copy({ pending: {
+      ...command, content: { ...command.content, title: '  ' },
+    } })).success).toBe(false)
   })
 })
 
@@ -130,7 +134,7 @@ describe('恢复适配器的非浏览器边界', () => {
       await expect(store.list()).rejects.toThrow('当前环境不支持 IndexedDB')
       await expect(store.remove('not-a-uuid')).rejects.toMatchObject({ name: 'ZodError' })
       await expect(store.put(copy())).rejects.toThrow('当前环境不支持 IndexedDB')
-      await expect(store.list('legacy-post')).rejects.toThrow('当前环境不支持 IndexedDB')
+      await expect(store.list(postId)).rejects.toThrow('当前环境不支持 IndexedDB')
     } finally {
       store.close()
     }

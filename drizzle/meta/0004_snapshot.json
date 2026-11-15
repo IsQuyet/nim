@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "112a7eef-3c60-4ee4-9579-fa277115200c",
+  "id": "e3c8c88c-b347-451b-9438-7123dc87f5b0",
   "prevId": "c0665d0c-d3a0-4421-8a3f-9dc5ce4ee71e",
   "tables": {
     "account": {
@@ -220,6 +220,15 @@
             "id"
           ],
           "isUnique": true
+        },
+        "post_publications_post_id_revision_id_id_unique": {
+          "name": "post_publications_post_id_revision_id_id_unique",
+          "columns": [
+            "post_id",
+            "revision_id",
+            "id"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -431,72 +440,6 @@
         }
       }
     },
-    "post_working_copies": {
-      "name": "post_working_copies",
-      "columns": {
-        "post_id": {
-          "name": "post_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "post_working_copies_post_id_posts_id_fk": {
-          "name": "post_working_copies_post_id_posts_id_fk",
-          "tableFrom": "post_working_copies",
-          "tableTo": "posts",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "post_write_receipts": {
       "name": "post_write_receipts",
       "columns": {
@@ -521,23 +464,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "revision_id": {
           "name": "revision_id",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -545,13 +474,6 @@
         "publication_id": {
           "name": "publication_id",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -595,16 +517,18 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "post_write_receipts_post_id_publication_id_post_publications_post_id_id_fk": {
-          "name": "post_write_receipts_post_id_publication_id_post_publications_post_id_id_fk",
+        "post_write_receipts_post_id_revision_id_publication_id_post_publications_post_id_revision_id_id_fk": {
+          "name": "post_write_receipts_post_id_revision_id_publication_id_post_publications_post_id_revision_id_id_fk",
           "tableFrom": "post_write_receipts",
           "tableTo": "post_publications",
           "columnsFrom": [
             "post_id",
+            "revision_id",
             "publication_id"
           ],
           "columnsTo": [
             "post_id",
+            "revision_id",
             "id"
           ],
           "onDelete": "no action",
@@ -613,12 +537,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "post_write_receipts_publication_check": {
-          "name": "post_write_receipts_publication_check",
-          "value": "(\"post_write_receipts\".\"publication_id\" is null) = (\"post_write_receipts\".\"published_at\" is null)"
-        }
-      }
+      "checkConstraints": {}
     },
     "posts": {
       "name": "posts",

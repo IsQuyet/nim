@@ -13,7 +13,7 @@ import { z } from 'zod'
 import type { PostStore } from '../lib/content'
 import { openDatabase } from '../lib/database'
 import { createPostStore } from '../lib/posts'
-import { postDrafts, postPublications, postPublished, postRevisions, posts, postWorkingCopies, postWriteReceipts, session } from '../lib/schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts, postWriteReceipts, session } from '../lib/schema'
 import { createWritingStore } from '../lib/writing-store'
 import type { WritingStore } from '../lib/writing'
 
@@ -51,7 +51,6 @@ export function snapshot(runtime: Runtime, id: string) {
       drafts: database.select().from(postDrafts).where(eq(postDrafts.postId, id)).all(),
       publications: database.select().from(postPublications).where(eq(postPublications.postId, id)).orderBy(asc(postPublications.id)).all(),
       published: database.select().from(postPublished).where(eq(postPublished.postId, id)).all(),
-      workingCopies: database.select().from(postWorkingCopies).where(eq(postWorkingCopies.postId, id)).all(),
       receipts: database.select().from(postWriteReceipts).where(eq(postWriteReceipts.postId, id)).orderBy(asc(postWriteReceipts.operationId)).all(),
     }
   } finally {

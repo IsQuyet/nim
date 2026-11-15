@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { AppDatabase } from './database'
 import { samePostContent, type DraftPost, type PostContent, type PostRevision, type PublishedPost } from './content'
-import type { WorkingCopy } from './writing'
-import { postDrafts, postPublications, postPublished, postRevisions, posts, postWorkingCopies } from './schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 
 export type PostDatabase = Pick<AppDatabase, 'select' | 'insert' | 'update'>
 
@@ -23,36 +21,6 @@ export function getDraft(database: PostDatabase, id: string): DraftPost | null {
   }).from(posts).innerJoin(postDrafts, eq(postDrafts.postId, posts.id))
     .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
     .where(eq(posts.id, id)).get() ?? null
-}
-
-export function getWorkingCopy(database: PostDatabase, id: string): WorkingCopy | null {
-  return database.select({
-    id: posts.id,
-    version: postWorkingCopies.version,
-    checkpointRevisionId: postDrafts.revisionId,
-    createdAt: posts.createdAt,
-    updatedAt: postWorkingCopies.updatedAt,
-    title: postWorkingCopies.title,
-    description: postWorkingCopies.description,
-    body: postWorkingCopies.body,
-  }).from(posts).innerJoin(postWorkingCopies, eq(postWorkingCopies.postId, posts.id))
-    .leftJoin(postDrafts, eq(postDrafts.postId, posts.id))
-    .where(eq(posts.id, id)).get() ?? null
-}
-
-export function writeWorkingCopy(database: PostDatabase, id: string, content: PostContent, checkpointChanged = false, updatedAt = new Date().toISOString()): WorkingCopy {
-  const current = getWorkingCopy(database, id)
-  const contentChanged = !current || !samePostContent(current, content)
-  const values = {
-    ...contentOf(content),
-    version: randomUUID(),
-    updatedAt: current && !contentChanged && !checkpointChanged ? current.updatedAt : updatedAt,
-  }
-  database.insert(postWorkingCopies).values({ postId: id, ...values })
-    .onConflictDoUpdate({ target: postWorkingCopies.postId, set: values }).run()
-  const written = getWorkingCopy(database, id)
-  if (!written) throw new Error('无法读取已写入的工作稿。')
-  return written
 }
 
 export function getPublishedPost(database: PostDatabase, id: string): PublishedPost | null {
@@ -88,7 +56,6 @@ export function insertDraft(database: PostDatabase, id: string, content: PostCon
   database.insert(posts).values({ id, createdAt }).run()
   const revision = insertRevision(database, id, content, source)
   database.insert(postDrafts).values({ postId: id, revisionId: revision.id }).run()
-  writeWorkingCopy(database, id, content, false, revision.createdAt)
   return { id, revisionId: revision.id, createdAt, updatedAt: revision.createdAt, ...contentOf(content) }
 }
 
@@ -98,15 +65,10 @@ export function updateDraft(
   content: PostContent,
   source: PostRevision['source'],
   restoredFromRevisionId: number | null = null,
-  forceCheckpoint = false,
 ): DraftPost {
-  if (samePostContent(draft, content) && !forceCheckpoint) {
-    writeWorkingCopy(database, draft.id, content)
-    return draft
-  }
+  if (samePostContent(draft, content)) return draft
   const revision = insertRevision(database, draft.id, content, source, restoredFromRevisionId)
   database.update(postDrafts).set({ revisionId: revision.id }).where(eq(postDrafts.postId, draft.id)).run()
-  writeWorkingCopy(database, draft.id, content, true, revision.createdAt)
   return { ...draft, ...contentOf(content), revisionId: revision.id, updatedAt: revision.createdAt }
 }
 

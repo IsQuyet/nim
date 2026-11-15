@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import type { WorkingCopy } from './writing'
 
 const text = z.string({ error: 'The draft fields must contain text.' })
 
@@ -23,7 +22,6 @@ export function samePostContent(left: PostContent, right: PostContent) {
 
 export const postIdSchema = z.uuid({ error: 'The post ID must be a UUID.' })
 export const revisionIdSchema = z.number().int().positive().safe()
-export const workingVersionSchema = z.string().min(1)
 
 export const revisionSources = ['create', 'save', 'publish', 'import', 'restore', 'migration'] as const
 export const revisionSourceSchema = z.enum(revisionSources)
@@ -40,7 +38,6 @@ export type PostRevisionSummary = Omit<PostRevision, 'body' | 'description'>
 
 export type PostRevisionHistory = {
   draft: DraftPost
-  workingCopy: WorkingCopy
   published: PublishedPost | null
   selectedRevision: PostRevision
   revisions: PostRevisionSummary[]
@@ -49,12 +46,14 @@ export type PostRevisionHistory = {
   revisionCount: number
 }
 
-export type DraftPost = PostContent & {
-  id: string
-  revisionId: number
-  createdAt: string
-  updatedAt: string
-}
+export const draftPostSchema = postContentSchema.extend({
+  id: z.string().min(1),
+  revisionId: revisionIdSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+}).strict()
+
+export type DraftPost = z.infer<typeof draftPostSchema>
 
 export type PublishedPost = PostContent & {
   id: string
@@ -83,8 +82,7 @@ export type RestoreFormState =
 export const restoreRevisionSchema = z.object({
   revisionId: revisionIdSchema,
   expectedRevisionId: revisionIdSchema,
-  expectedWorkingVersion: workingVersionSchema,
-})
+}).strict()
 
 const revisionQueryNumber = z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(revisionIdSchema)
 
@@ -119,13 +117,9 @@ export type ImportDraftInput = PostContent & {
 }
 
 export type PostStore = {
-  createDraft(content: PostContent): DraftPost
-  createDraftOnce(id: string, content: PostContent, source?: 'create' | 'import'): PostMutationResult<DraftPost>
-  saveDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<DraftPost>
-  publishDraft(id: string, content: PostContent, expectedRevisionId: number): PostMutationResult<PublishedPost>
-  restoreRevision(id: string, revisionId: number, expectedRevisionId: number, expectedWorkingVersion?: string): PostMutationResult<DraftPost>
+  createImportedDraftOnce(id: string, content: PostContent): PostMutationResult<DraftPost>
+  restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>
   importDraft(input: ImportPostInput): DraftPost
-  getWorkingCopy(id: string): WorkingCopy | null
   getDraft(id: string): DraftPost | null
   getPublishedPost(id: string): PublishedPost | null
   getRevision(id: string, revisionId: number): PostRevision | null

@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WritingSession } from './writing-session'
-import type { PostContent } from './content'
-import type { RecoveryCopy, RecoveryStore, WorkingCopy, WritingCommand, WritingFeedback, WritingTransport } from './writing'
+import type { DraftPost, PostContent } from './content'
+import type { OperationIdentity, ReceiptFeedback, RecoveryCopy, RecoveryStore, WritingCommand, WritingFeedback, WritingTransport } from './writing'
 
 function deferred<Value>() {
   let resolve!: (value: Value) => void
@@ -14,19 +14,22 @@ function deferred<Value>() {
 const date = '2026-11-15T00:00:00.000Z'
 const text = (body = '正文', title = '标题'): PostContent => ({ title, description: '', body })
 const blank = (): PostContent => ({ title: '', description: '', body: '' })
-function working(id: string = crypto.randomUUID(), version = 'v1', content = text()): WorkingCopy {
-  return { id, version, ...content, checkpointRevisionId: null, createdAt: date, updatedAt: date }
+function draft(id: string = crypto.randomUUID(), revisionId = 1, content = text()): DraftPost {
+  return { id, revisionId, ...content, createdAt: date, updatedAt: date }
 }
 function recovery(input: Partial<RecoveryCopy> = {}): RecoveryCopy {
   return {
-    format: 'nim-recovery/v1', sessionId: crypto.randomUUID(), postId: crypto.randomUUID(), isNew: true,
+    format: 'nim-recovery/v2', sessionId: crypto.randomUUID(), postId: crypto.randomUUID(),
     content: text(), remote: null, pending: null, updatedAt: date, ...input,
   }
 }
-function success(command: WritingCommand, version = 'v2'): WritingFeedback {
+function command(remote: DraftPost | null, postId = remote?.id ?? crypto.randomUUID()): WritingCommand {
+  return { postId, operationId: crypto.randomUUID(), expectedRevisionId: remote?.revisionId ?? null, intent: 'save', content: text('原请求') }
+}
+function success(command: WritingCommand, revisionId = 2): Extract<WritingFeedback, { status: 'success' }> {
   return {
     status: 'success', value: {
-      workingCopy: { ...working(command.postId, version, command.content), checkpointRevisionId: command.intent === 'autosave' ? null : 1 },
+      draft: draft(command.postId, revisionId, command.content),
       publication: command.intent === 'publish' ? { id: 1, publishedAt: date } : null,
     },
   }
@@ -65,6 +68,7 @@ class ControlledTransport implements WritingTransport {
   events: string[] = []
   reads: { postId: string; result: ReturnType<typeof deferred<ReadResult>> }[] = []
   writes: { command: WritingCommand; result: ReturnType<typeof deferred<WritingFeedback>> }[] = []
+  inspections: { operation: OperationIdentity; result: ReturnType<typeof deferred<ReceiptFeedback>> }[] = []
   read = vi.fn((postId: string) => {
     this.events.push('read')
     const result = deferred<ReadResult>()
@@ -77,96 +81,72 @@ class ControlledTransport implements WritingTransport {
     this.writes.push({ command, result })
     return result.promise
   })
-  answerWrite(index: number, version = `v${index + 2}`) {
+  inspect = vi.fn((operation: OperationIdentity) => {
+    this.events.push('inspect')
+    const result = deferred<ReceiptFeedback>()
+    this.inspections.push({ operation, result })
+    return result.promise
+  })
+  answerWrite(index: number, revisionId = index + 2) {
     const call = this.writes[index]
-    call.result.resolve(success(call.command, version))
+    call.result.resolve(success(call.command, revisionId))
   }
-  answerRead(index: number, value: WorkingCopy | null) {
+  answerRead(index: number, value: DraftPost | null) {
     this.reads[index].result.resolve({ status: 'success', value })
   }
 }
 
 const sessions: WritingSession[] = []
-function fixture(initial: WorkingCopy | null = null, isNew = initial === null, store = new MemoryRecovery(), transport = new ControlledTransport(), handleControlFlow?: (error: unknown) => boolean) {
-  const session = new WritingSession({ postId: initial?.id ?? crypto.randomUUID(), isNew, initial, recovery: store, transport, handleControlFlow })
+function fixture(initial: DraftPost | null = null, store = new MemoryRecovery(), transport = new ControlledTransport(), handleControlFlow?: (error: unknown) => boolean) {
+  const session = new WritingSession({ postId: initial?.id ?? crypto.randomUUID(), initial, recovery: store, transport, handleControlFlow })
   sessions.push(session)
   return { session, store, transport }
 }
+type Fixture = ReturnType<typeof fixture>
 async function flush() {
-  for (let index = 0; index < 30; index++) await Promise.resolve()
+  for (let index = 0; index < 40; index++) await Promise.resolve()
 }
-async function start(f: ReturnType<typeof fixture>, current: WorkingCopy | null = f.session.getSnapshot().remote) {
+async function start(f: Fixture, current: DraftPost | null = f.session.getSnapshot().remote) {
   const started = f.session.start()
   await flush()
   expect(f.transport.reads).toHaveLength(1)
   f.transport.answerRead(0, current)
   await started
   await flush()
+  expect(f.transport.write).not.toHaveBeenCalled()
 }
-async function pause() {
-  await vi.advanceTimersByTimeAsync(1000)
+async function pauseWithoutWrites(f: Fixture, expected = 0) {
+  await vi.advanceTimersByTimeAsync(60_000)
   await flush()
+  expect(f.transport.write).toHaveBeenCalledTimes(expected)
+}
+async function makeUnknown(f: Fixture) {
+  f.session.edit(text('原请求'))
+  f.session.submit('save')
+  await flush()
+  const original = f.transport.writes[0].command
+  f.transport.writes[0].result.reject(new Error('响应丢失'))
+  await flush()
+  return original
 }
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => {
   for (const session of sessions.splice(0)) session.dispose()
+  vi.clearAllTimers()
   vi.useRealTimers()
 })
 
-describe('恢复边界回归', () => {
-  it('新稿清空输入后仍能发现带未确认发布请求的恢复副本', async () => {
-    const postId = crypto.randomUUID()
-    const pending: WritingCommand = { postId, operationId: crypto.randomUUID(), expectedVersion: null, intent: 'publish', content: text('已提交正文') }
-    const copy = recovery({ postId, content: blank(), pending })
-    const store = new MemoryRecovery()
-    store.copies.set(copy.sessionId, copy)
-    const f = fixture(null, true, store)
-    await start(f)
-    expect(f.session.getSnapshot().candidates).toEqual([copy])
-  })
-
-  it('本机失败但服务器已同步后，重试仍重新持久化本机快照', async () => {
-    const f = fixture(working())
-    await start(f)
-    f.store.putFailure = 'quota'
-    f.session.edit(text('已同步但缺本机副本'))
-    f.session.submit('save')
-    await flush()
-    f.transport.answerWrite(0)
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'synced', localStatus: 'failed' })
-    const before = f.store.puts.length
-    f.store.putFailure = null
-    const retrying = f.session.retry()
-    await flush()
-    f.transport.answerRead(1, f.session.getSnapshot().remote)
-    await retrying
-    expect(f.store.puts.length).toBeGreaterThan(before)
-    expect(f.session.getSnapshot()).toMatchObject({ localStatus: 'saved', localError: null, shouldWarn: false })
-  })
-
-  it('未知响应状态是无法确认，不能丢弃原操作身份', async () => {
-    const f = fixture(working())
-    await start(f)
-    f.session.submit('save')
-    await flush()
-    const pending = f.session.getSnapshot().pending
-    // @ts-expect-error 外部协议损坏不受 TypeScript 返回类型约束。
-    f.transport.writes[0].result.resolve({ status: 'future-protocol-status' })
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'error', pending })
-  })
-})
-
-describe('独立身份、快照与启动', () => {
-  it('每次构造分配不同会话，新稿空白无写入、无离开警告，快照及订阅稳定', async () => {
+describe('独立身份、稳定快照与只读启动', () => {
+  it('每次 mount 分配独立会话，空白启动、任意停顿均不写服务器，快照稳定冻结', async () => {
     const f = fixture()
     const other = fixture()
-    expect(f.session.getSnapshot().sessionId).not.toBe(other.session.getSnapshot().sessionId)
-    expect(f.session.getSnapshot().content).toEqual(blank())
-    expect(f.session.getSnapshot().shouldWarn).toBe(false)
     const initial = f.session.getSnapshot()
+    expect(initial).toMatchObject({ isNew: true, content: blank(), serverStatus: 'idle', shouldWarn: false })
+    expect(initial.sessionId).not.toBe(other.session.getSnapshot().sessionId)
+    expect(Object.isFrozen(initial)).toBe(true)
+    expect(Object.isFrozen(initial.content)).toBe(true)
+    expect(Object.isFrozen(initial.candidates)).toBe(true)
     expect(f.session.getSnapshot()).toBe(initial)
     const listener = vi.fn()
     const unsubscribe = f.session.subscribe(listener)
@@ -180,460 +160,508 @@ describe('独立身份、快照与启动', () => {
     expect(f.session.getSnapshot()).toBe(ready)
     expect(listener).toHaveBeenCalledTimes(count)
     expect(f.store.puts).toEqual([])
-    expect(f.session.getSnapshot().shouldWarn).toBe(false)
     expect(f.transport.read).toHaveBeenCalledTimes(1)
+    await pauseWithoutWrites(f)
     unsubscribe()
     f.session.edit(text())
     expect(listener).toHaveBeenCalledTimes(count)
   })
 
-  it('先列出候选，再检查服务器，候选未处理时不自动同步', async () => {
+  it('先 list 再 read，候选在远端挂起时已经可见，未处理候选不能提交', async () => {
     const store = new MemoryRecovery()
     const copy = recovery()
-    store.copies.set(copy.sessionId, copy)
-    const list = deferred<RecoveryCopy[]>()
-    store.list.mockImplementationOnce(() => list.promise)
-    const f = fixture(null, true, store)
-    const started = f.session.start()
+    const listing = deferred<RecoveryCopy[]>()
+    store.list.mockImplementationOnce(() => listing.promise)
+    const f = fixture(null, store)
+    const starting = f.session.start()
     f.session.edit(text('当前输入'))
-    await pause()
+    await pauseWithoutWrites(f)
     expect(f.transport.read).not.toHaveBeenCalled()
-    list.resolve([copy])
+    listing.resolve([copy])
     await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ candidates: [copy], recoveryRequired: true, serverStatus: 'checking' })
     expect(f.transport.read).toHaveBeenCalledTimes(1)
-    f.transport.answerRead(0, null)
-    await started
-    expect(f.session.getSnapshot().candidates).toEqual([copy])
-    expect(f.transport.write).not.toHaveBeenCalled()
-    const skipped = f.session.skipRecovery()
-    await flush()
-    expect(f.transport.writes[0].command.content.body).toBe('当前输入')
-    f.transport.answerWrite(0)
-    await skipped
-    expect(store.copies.has(copy.sessionId)).toBe(true)
+    f.session.submit('save')
+    await pauseWithoutWrites(f)
+    f.transport.reads[0].result.reject(new Error('离线'))
+    await starting
+    expect(f.session.getSnapshot()).toMatchObject({ candidates: [copy], recoveryRequired: true })
+    await f.session.skipRecovery()
+    await pauseWithoutWrites(f)
     expect(store.remove).not.toHaveBeenCalled()
   })
 
-  it('已有稿候选按文档和各自基线筛选，其他标签的已同步副本不阻塞', async () => {
-    const initial = working()
-    const command: WritingCommand = { postId: initial.id, operationId: crypto.randomUUID(), expectedVersion: initial.version, intent: 'autosave', content: text() }
-    const clean = recovery({ postId: initial.id, isNew: false, content: text(), remote: initial })
-    const pending = recovery({ ...clean, sessionId: crypto.randomUUID(), pending: command })
-    const dirty = recovery({ ...clean, sessionId: crypto.randomUUID(), content: text('未同步') })
-    const unrelated = recovery({ isNew: false })
+  it('已有稿候选按各副本自己的基线筛选，不接管其他标签的恢复键', async () => {
+    const initial = draft()
+    const clean = recovery({ postId: initial.id, content: text(), remote: initial })
+    const unknown = recovery({ ...clean, sessionId: crypto.randomUUID(), pending: command(initial) })
+    const dirty = recovery({ ...clean, sessionId: crypto.randomUUID(), content: text('未明确保存') })
+    const local = recovery({ postId: initial.id, content: text('本机分支') })
+    const blankLocal = recovery({ postId: initial.id, content: blank() })
+    const unrelated = recovery()
     const store = new MemoryRecovery()
-    for (const copy of [clean, pending, dirty, unrelated]) store.copies.set(copy.sessionId, copy)
-    const f = fixture(initial, false, store)
+    for (const copy of [clean, unknown, dirty, local, blankLocal, unrelated]) store.copies.set(copy.sessionId, copy)
+    const f = fixture(initial, store)
     await start(f)
-    expect(f.session.getSnapshot().candidates.map(copy => copy.sessionId)).toEqual([pending.sessionId, dirty.sessionId])
+    expect(f.session.getSnapshot().candidates).toEqual([unknown, dirty, local, blankLocal])
     expect(store.list).toHaveBeenCalledWith(initial.id)
+    expect(f.session.getSnapshot().sessionId).not.toBe(clean.sessionId)
+    await pauseWithoutWrites(f)
   })
 
-  it('新稿列表包含已自动同步但尚未明确 save 的非空副本', async () => {
-    const remote = working()
-    const auto = recovery({ postId: remote.id, content: text(), remote })
-    const saved = recovery({ isNew: false })
-    const empty = recovery({ content: blank() })
+  it('新稿候选只取 remote=null 的非空副本或带明确 pending 的空副本', async () => {
+    const emptyPending = command(null)
+    const wanted = [recovery(), recovery({ postId: emptyPending.postId, content: blank(), pending: emptyPending })]
+    const saved = draft()
+    const excluded = [recovery({ postId: saved.id, remote: saved }), recovery({ content: blank() })]
     const store = new MemoryRecovery()
-    for (const copy of [auto, saved, empty]) store.copies.set(copy.sessionId, copy)
-    const f = fixture(null, true, store)
+    for (const copy of [...wanted, ...excluded]) store.copies.set(copy.sessionId, copy)
+    const f = fixture(null, store)
     await start(f)
-    expect(f.session.getSnapshot().candidates).toEqual([auto])
+    expect(f.session.getSnapshot().candidates).toEqual(wanted)
     expect(store.list).toHaveBeenCalledWith(undefined)
+    await pauseWithoutWrites(f)
   })
 
-  it('损坏列表明确失败并阻止远端检查和写入，显式跳过保留错误和旧副本', async () => {
+  it('损坏列表独立阻止恢复闸门，read 挂起也显示本机失败，不删除原数据', async () => {
+    const store = new MemoryRecovery()
+    store.list.mockResolvedValueOnce([Object.assign(recovery(), { format: 'nim-recovery/v1' })])
+    const f = fixture(null, store)
+    const starting = f.session.start()
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ recoveryRequired: true, localStatus: 'failed', shouldWarn: true })
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    f.session.edit(text())
+    f.session.submit('publish')
+    await pauseWithoutWrites(f)
+    f.transport.answerRead(0, null)
+    await starting
+    await f.session.skipRecovery()
+    expect(f.session.getSnapshot()).toMatchObject({ recoveryRequired: false, localStatus: 'failed' })
+    await pauseWithoutWrites(f)
+    expect(store.remove).not.toHaveBeenCalled()
+  })
+
+  it('retryLocal 重试本机列表与 put，不读取或写入服务器', async () => {
     const store = new MemoryRecovery()
     store.listFailure = '恢复副本损坏'
-    const f = fixture(null, true, store)
-    await f.session.start()
-    f.session.edit(text())
-    await pause()
-    expect(f.session.getSnapshot()).toMatchObject({ localStatus: 'failed', localError: '恢复副本损坏' })
-    expect(f.transport.read).not.toHaveBeenCalled()
-    expect(f.transport.write).not.toHaveBeenCalled()
-    const skipping = f.session.skipRecovery()
-    await flush()
-    f.transport.answerRead(0, null)
-    await flush()
-    f.transport.answerWrite(0)
-    await skipping
-    expect(f.session.getSnapshot().localError).toBe('恢复副本损坏')
-    expect(store.remove).not.toHaveBeenCalled()
-  })
-
-  it('列表失败可以 retry，不能把损坏对象当成空候选', async () => {
-    const store = new MemoryRecovery()
-    store.list.mockResolvedValueOnce([Object.assign(recovery(), { format: 'unknown' })])
-    const f = fixture(null, true, store)
-    await f.session.start()
-    expect(f.session.getSnapshot().localStatus).toBe('failed')
-    expect(f.transport.read).not.toHaveBeenCalled()
-    const retrying = f.session.retry()
-    await flush()
-    f.transport.answerRead(0, null)
-    await retrying
-    expect(f.session.getSnapshot().localError).toBeNull()
+    const f = fixture(null, store)
+    await start(f)
+    const copy = recovery()
+    store.copies.set(copy.sessionId, copy)
+    store.listFailure = null
+    await f.session.retryLocal()
     expect(store.list).toHaveBeenCalledTimes(2)
+    expect(f.session.getSnapshot()).toMatchObject({ candidates: [copy], recoveryRequired: true, localStatus: 'saved', localError: null })
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    expect(f.transport.inspect).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f)
   })
 
-  it('start 检查期间的输入不被远端覆盖，版本不同进入冲突', async () => {
-    const initial = working()
+  it('start 期间输入不被远端覆盖，不同修订进入 conflict', async () => {
+    const initial = draft()
     const f = fixture(initial)
-    const started = f.session.start()
+    const starting = f.session.start()
     await flush()
     f.session.edit(text('读请求期间输入'))
-    const other = working(initial.id, 'other', text('其他标签'))
-    f.transport.answerRead(0, other)
-    await started
-    expect(f.session.getSnapshot()).toMatchObject({
-      content: text('读请求期间输入'), remote: initial, conflict: { current: other }, syncStatus: 'conflict',
-    })
-    await pause()
-    expect(f.transport.write).not.toHaveBeenCalled()
+    const current = draft(initial.id, 2, text('其他标签'))
+    f.transport.answerRead(0, current)
+    await starting
+    expect(f.session.getSnapshot()).toMatchObject({ content: text('读请求期间输入'), remote: initial, conflict: { current }, serverStatus: 'conflict' })
+    await pauseWithoutWrites(f)
   })
 
-  it('没有初始基线的已有稿只在无编辑时由首次读取初始化', async () => {
-    const f = fixture(null, false)
-    const started = f.session.start()
-    await flush()
-    const current = working(f.session.getSnapshot().postId)
-    f.transport.answerRead(0, current)
-    await started
-    expect(f.session.getSnapshot()).toMatchObject({ content: text(), remote: current, shouldWarn: false })
-    const g = fixture(null, false)
-    const loading = g.session.start()
-    await flush()
-    g.session.edit(text('本机'))
-    g.transport.answerRead(0, working(g.session.getSnapshot().postId))
-    await loading
-    expect(g.session.getSnapshot()).toMatchObject({ content: text('本机'), syncStatus: 'conflict' })
+  it('新稿 UUID 已被服务器占用时只报告冲突，不隐式接管服务器稿', async () => {
+    const f = fixture()
+    const current = draft(f.session.getSnapshot().postId)
+    await start(f, current)
+    expect(f.session.getSnapshot()).toMatchObject({ remote: null, content: blank(), isNew: true, conflict: { current } })
+    f.session.submit('save')
+    await pauseWithoutWrites(f)
   })
 })
 
-describe('停笔、本机副本与单写队列', () => {
-  it('持续输入每次立即保存本机，只在最后停笔 1000ms 后自动同步，空标题合法', async () => {
+describe('本机即时保护与明确手动保存', () => {
+  it('持续输入、空标题、原始空白与清空都立即保留，任意停顿绝不上传', async () => {
     const f = fixture()
     await start(f)
-    for (const body of ['一', '二', '三']) {
-      f.session.edit(text(body, ''))
-      expect(f.store.puts.at(-1)?.content).toEqual(text(body, ''))
+    for (const content of [text('一', ''), text('二\r\n  ', '  '), text('三', ''), blank()]) {
+      f.session.edit(content)
+      expect(f.store.puts.at(-1)?.content).toEqual(content)
       await vi.advanceTimersByTimeAsync(900)
     }
-    expect(f.transport.write).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(99)
-    expect(f.transport.write).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    await flush()
-    expect(f.transport.writes[0].command).toMatchObject({ intent: 'autosave', content: text('三', '') })
-    const persisted = f.store.puts.find(copy => copy.pending !== null)
-    expect(persisted?.pending).toEqual(f.transport.writes[0].command)
-    expect(Object.isFrozen(f.transport.writes[0].command)).toBe(true)
-    expect(Object.isFrozen(f.transport.writes[0].command.content)).toBe(true)
-    f.transport.answerWrite(0)
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ isNew: true, syncStatus: 'synced', shouldWarn: false })
-    expect(f.store.copies.get(f.session.getSnapshot().sessionId)?.isNew).toBe(true)
+    await pauseWithoutWrites(f)
+    expect(f.store.puts).toHaveLength(4)
+    expect(f.store.puts.every(copy => copy.format === 'nim-recovery/v2' && copy.pending === null)).toBe(true)
+    expect(f.session.getSnapshot()).toMatchObject({ content: blank(), localStatus: 'saved', serverStatus: 'idle', shouldWarn: false })
   })
 
-  it('本机旧写完成不能声称新输入已经保存', async () => {
+  it.each(['save', 'publish'] as const)('%s 只提交点击快照，先落本机固定 pending，ACK 不覆盖较新输入', async intent => {
+    const f = fixture()
+    await start(f)
+    f.session.edit(text('点击稿'))
+    await flush()
+    f.store.hold = true
+    f.session.submit(intent)
+    await flush()
+    const pending = f.session.getSnapshot().pending
+    expect(pending).toMatchObject({ intent, expectedRevisionId: null, content: text('点击稿') })
+    expect(Object.isFrozen(pending)).toBe(true)
+    expect(Object.isFrozen(pending?.content)).toBe(true)
+    expect(f.store.puts.at(-1)?.pending).toEqual(pending)
+    expect(f.transport.write).not.toHaveBeenCalled()
+    f.session.edit(text('继续输入'))
+    f.session.submit('save')
+    f.store.holds[0].resolve()
+    await flush()
+    expect(f.transport.writes).toHaveLength(1)
+    expect(f.transport.writes[0].command).toEqual(pending)
+    expect(f.session.getSnapshot()).toMatchObject({ content: text('继续输入'), manualBusy: true, serverStatus: 'saving' })
+    f.store.hold = false
+    f.transport.answerWrite(0)
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({
+      isNew: false, remote: { revisionId: 2, ...text('点击稿') }, content: text('继续输入'),
+      manualBusy: false, serverStatus: 'unsaved', pending: null,
+      lastConfirmed: { intent, content: text('点击稿'), operationId: pending?.operationId, via: 'write' },
+    })
+    await pauseWithoutWrites(f, 1)
+    expect(f.transport.inspect).not.toHaveBeenCalled()
+  })
+
+  it('初始只读检查与手动请求共用队列，连续按钮不重复提交，捕获按钮当时内容', async () => {
+    const f = fixture()
+    const starting = f.session.start()
+    await flush()
+    f.session.edit(text('点击时'))
+    f.session.submit('publish')
+    f.session.edit(text('后来'))
+    f.session.submit('save')
+    await flush()
+    expect(f.transport.writes).toHaveLength(0)
+    f.transport.answerRead(0, null)
+    await flush()
+    expect(f.transport.writes).toHaveLength(1)
+    expect(f.transport.writes[0].command).toMatchObject({ intent: 'publish', content: text('点击时') })
+    f.transport.answerWrite(0)
+    await starting
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it.each(['save', 'publish'] as const)('%s 校验非空标题，但不丢弃本机空标题输入', async intent => {
+    const f = fixture()
+    await start(f)
+    f.session.edit(text('未完成', '  '))
+    f.session.submit(intent)
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ feedback: { status: 'invalid', message: 'Enter a title.' }, manualBusy: false, content: text('未完成', '  ') })
+    expect(f.store.puts.at(-1)?.content).toEqual(text('未完成', '  '))
+    await pauseWithoutWrites(f)
+  })
+
+  it('本机失败不阻止明确服务器保存，确认后仍明确 failed 与警告，retryLocal 只重做本机 put', async () => {
+    const f = fixture(draft())
+    await start(f)
+    f.store.putFailure = '空间不足'
+    f.session.edit(text('明确保存'))
+    f.session.submit('save')
+    await flush()
+    expect(f.transport.writes).toHaveLength(1)
+    expect(f.session.getSnapshot().pending).toEqual(f.transport.writes[0].command)
+    f.transport.answerWrite(0)
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ serverStatus: 'saved', localStatus: 'failed', localError: '空间不足', shouldWarn: true })
+    const count = f.store.puts.length
+    f.store.putFailure = null
+    await f.session.retryLocal()
+    expect(f.store.puts).toHaveLength(count + 1)
+    expect(f.session.getSnapshot()).toMatchObject({ localStatus: 'saved', localError: null, shouldWarn: false })
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    expect(f.transport.inspect).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it('本机旧 put 完成不能宣称新文本已保存，旧失败也不能污染已保存的新快照', async () => {
     const f = fixture()
     await start(f)
     f.store.hold = true
     f.session.edit(text('旧'))
     f.session.edit(text('新'))
-    expect(f.store.holds).toHaveLength(2)
     f.store.holds[0].resolve()
     await flush()
     expect(f.session.getSnapshot()).toMatchObject({ content: text('新'), localStatus: 'saving', shouldWarn: true })
     f.store.holds[1].resolve()
     await flush()
     expect(f.session.getSnapshot().localStatus).toBe('saved')
-    expect(f.session.getSnapshot().shouldWarn).toBe(true)
+    f.session.edit(text('更旧'))
+    f.session.edit(text('最新'))
+    f.store.holds[3].resolve()
+    await flush()
+    f.store.holds[2].reject(new Error('旧写失败'))
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ content: text('最新'), localStatus: 'saved', localError: null })
+    await pauseWithoutWrites(f)
   })
 
-  it('服务器发送前等待 pending 持久化，输入仍然可写', async () => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text('A'))
-    await flush()
-    f.store.hold = true
-    await pause()
-    expect(f.session.getSnapshot().pending?.content).toEqual(text('A'))
-    expect(f.transport.write).not.toHaveBeenCalled()
-    f.session.edit(text('B'))
-    f.store.holds[0].resolve()
-    await flush()
-    expect(f.transport.writes[0].command.content).toEqual(text('A'))
-    expect(f.session.getSnapshot().content).toEqual(text('B'))
-  })
-
-  it('本机写失败仍可同步服务器，失败状态和离开警告明确保留', async () => {
-    const f = fixture()
-    await start(f)
-    f.store.putFailure = '磁盘不可用'
-    f.session.edit(text())
-    await pause()
-    expect(f.transport.writes).toHaveLength(1)
-    f.transport.answerWrite(0)
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'synced', localStatus: 'failed', localError: '磁盘不可用', shouldWarn: true })
-    f.store.putFailure = null
-    f.session.edit(text('继续'))
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ localStatus: 'saved', localError: null })
-  })
-
-  it('本机旧失败不污染已经确认的新快照', async () => {
-    const f = fixture()
-    await start(f)
-    f.store.hold = true
-    f.session.edit(text('旧'))
-    f.session.edit(text('新'))
-    f.store.holds[1].resolve()
-    await flush()
-    f.store.holds[0].reject(new Error('旧写失败'))
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ localStatus: 'saved', localError: null, content: text('新') })
-  })
-
-  it('自动写进行时，手动优先并捕获点击内容，旧 ACK 只推进 remote', async () => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text('A'))
-    await pause()
-    f.session.edit(text('点击稿'))
-    f.session.submit('publish')
-    expect(f.session.getSnapshot().manualBusy).toBe(true)
-    f.session.edit(text('继续写'))
-    await pause()
-    expect(f.transport.writes).toHaveLength(1)
-    f.transport.answerWrite(0, 'auto-ack')
-    await flush()
-    expect(f.session.getSnapshot().content).toEqual(text('继续写'))
-    expect(f.transport.writes[1].command).toMatchObject({ intent: 'publish', expectedVersion: 'auto-ack', content: text('点击稿') })
-    expect(f.transport.writes).toHaveLength(2)
-    f.transport.answerWrite(1, 'manual-ack')
-    await flush()
-    expect(f.transport.writes[2].command).toMatchObject({ intent: 'autosave', expectedVersion: 'manual-ack', content: text('继续写') })
-    expect(f.session.getSnapshot()).toMatchObject({ isNew: false, manualBusy: false, content: text('继续写') })
-    f.transport.answerWrite(2)
-    await flush()
-    expect(f.session.getSnapshot().shouldWarn).toBe(false)
-  })
-
-  it.each(['save', 'publish'] as const)('%s 先使用契约校验，不阻碍空标题自动写', async intent => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text('未完成', '  '))
-    f.session.submit(intent)
-    expect(f.session.getSnapshot().feedback).toMatchObject({ status: 'invalid', message: 'Enter a title.' })
-    expect(f.session.getSnapshot().manualBusy).toBe(false)
-    await pause()
-    expect(f.transport.writes[0].command.intent).toBe('autosave')
-  })
-
-  it('明确 save 成功才退出 new 身份，自动写不会退出', async () => {
+  it('明确 invalid 清除已知被拒绝的 pending，不自动发送修改后的文本', async () => {
     const f = fixture()
     await start(f)
     f.session.edit(text())
     f.session.submit('save')
     await flush()
-    expect(f.session.getSnapshot().isNew).toBe(true)
-    f.transport.answerWrite(0)
+    f.transport.writes[0].result.resolve({ status: 'invalid', message: '明确拒绝' })
     await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ isNew: false, manualBusy: false, shouldWarn: false })
-    expect(f.store.puts.at(-1)?.isNew).toBe(false)
+    expect(f.session.getSnapshot()).toMatchObject({ pending: null, serverStatus: 'invalid', manualBusy: false })
+    const checking = f.session.checkServer()
+    await flush()
+    f.transport.answerRead(1, null)
+    await checking
+    expect(f.session.getSnapshot()).toMatchObject({ serverStatus: 'invalid', feedback: { status: 'invalid' } })
+    f.session.edit(text('修正内容'))
+    await pauseWithoutWrites(f, 1)
+    f.session.submit('save')
+    await flush()
+    expect(f.transport.writes).toHaveLength(2)
+    expect(f.transport.writes[1].command.operationId).not.toBe(f.transport.writes[0].command.operationId)
   })
 })
 
-describe('结果未知、重放与远端检查', () => {
-  it.each(['reject', 'authorization'] as const)('%s 保留原 pending，重放确认后必须先 read 再发送较晚文本', async mode => {
+describe('未知结果、只读回执与明确重试', () => {
+  it.each(['network', 'authorization', 'unknown', 'wrong-document', 'wrong-content', 'wrong-publication'] as const)('%s 保留原固定请求，新 submit 不能替换或偷偷重试', async mode => {
+    const f = fixture(draft())
+    await start(f)
+    f.session.edit(text('原请求'))
+    f.session.submit('save')
+    await flush()
+    const original = f.transport.writes[0].command
+    const result = success(original)
+    if (mode === 'network') f.transport.writes[0].result.reject(new Error('断开'))
+    else if (mode === 'authorization') f.transport.writes[0].result.resolve({ status: 'error', message: '需要登录', signInRequired: true })
+    else if (mode === 'unknown') {
+      // @ts-expect-error 外部协议必须接受运行时校验，不能依赖静态类型。
+      f.transport.writes[0].result.resolve({ status: 'future-protocol-status' })
+    } else {
+      if (mode === 'wrong-document') result.value.draft.id = crypto.randomUUID()
+      if (mode === 'wrong-content') result.value.draft.body = '不是请求中的内容'
+      if (mode === 'wrong-publication') result.value.publication = { id: 1, publishedAt: date }
+      f.transport.writes[0].result.resolve(result)
+    }
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ pending: original, serverStatus: 'unconfirmed', manualBusy: false, signInRequired: mode === 'authorization' })
+    f.session.edit(text('更晚文本', ''))
+    f.session.submit('publish')
+    expect(f.session.getSnapshot()).toMatchObject({ pending: original, feedback: { status: 'error', message: expect.stringContaining('原操作') } })
+    const latest = f.store.puts.at(-1)
+    expect(latest).toMatchObject({ pending: original, content: text('更晚文本', '') })
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it('online、重登或 checkServer 只 inspect，未收到回执时保持 pending，绝不代执行', async () => {
     const f = fixture()
     await start(f)
     f.session.edit(text('原请求'))
-    await pause()
-    const original = structuredClone(f.transport.writes[0].command)
-    if (mode === 'reject') f.transport.writes[0].result.reject(new Error('连接断开'))
-    else f.transport.writes[0].result.resolve({ status: 'error', message: '请登录', signInRequired: true })
+    f.session.submit('publish')
     await flush()
-    expect(f.session.getSnapshot().pending).toEqual(original)
-    expect(f.session.getSnapshot().signInRequired).toBe(mode === 'authorization')
-    f.session.edit(text('较晚文本'))
-    await pause()
-    expect(f.transport.writes).toHaveLength(1)
-    const retrying = f.session.retry()
+    const original = f.transport.writes[0].command
+    f.transport.writes[0].result.resolve({ status: 'error', message: '需要登录', signInRequired: true })
     await flush()
-    expect(f.transport.writes[1].command).toEqual(original)
-    expect(f.transport.reads).toHaveLength(1)
-    f.transport.answerWrite(1, 'confirmed')
-    await flush()
-    expect(f.transport.reads).toHaveLength(2)
-    expect(f.transport.writes).toHaveLength(2)
-    const confirmed = working(original.postId, 'confirmed', original.content)
-    f.transport.answerRead(1, confirmed)
-    await flush()
-    expect(f.transport.events).toEqual(['read', 'autosave', 'autosave', 'read', 'autosave'])
-    expect(f.transport.writes[2].command).toMatchObject({ content: text('较晚文本'), expectedVersion: 'confirmed' })
-    expect(f.transport.writes[2].command.operationId).not.toBe(original.operationId)
-    f.transport.answerWrite(2)
-    await retrying
-    expect(f.session.getSnapshot().shouldWarn).toBe(false)
+    expect(f.session.getSnapshot().signInRequired).toBe(true)
+    f.session.edit(blank())
+    for (let index = 0; index < 2; index++) {
+      const checking = f.session.checkServer()
+      await flush()
+      expect(f.transport.inspections[index].operation).toEqual({ postId: original.postId, operationId: original.operationId })
+      f.transport.inspections[index].result.resolve({ status: 'unconfirmed' })
+      await checking
+      expect(f.session.getSnapshot()).toMatchObject({ pending: original, serverStatus: 'unconfirmed', feedback: { status: 'unconfirmed' }, content: blank() })
+      await pauseWithoutWrites(f, 1)
+    }
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    expect(f.store.puts.at(-1)?.pending).toEqual(original)
   })
 
-  it('重放原 ACK 后如果另一个标签已更新则冲突，不提交较晚文本', async () => {
-    const f = fixture()
+  it.each(['save', 'publish'] as const)('%s 回执确认已提交只更新基线和本机元数据，随后 read 检测另一标签的新修订', async intent => {
+    const f = fixture(draft())
     await start(f)
-    f.session.edit(text('A'))
-    await pause()
+    f.session.edit(text('原请求'))
+    f.session.submit(intent)
+    await flush()
+    const original = f.transport.writes[0].command
     f.transport.writes[0].result.reject(new Error('响应丢失'))
     await flush()
-    f.session.edit(text('本机后来'))
-    await pause()
-    const retrying = f.session.retry()
+    f.session.edit(text('更晚本机输入'))
+    const checking = f.session.checkServer()
     await flush()
-    f.transport.answerWrite(1, 'receipt-version')
+    f.transport.inspections[0].result.resolve(success(original, 2))
     await flush()
-    const other = working(f.session.getSnapshot().postId, 'other-tab', text('其他标签'))
-    f.transport.answerRead(1, other)
+    expect(f.session.getSnapshot()).toMatchObject({ pending: null, remote: { revisionId: 2 }, content: text('更晚本机输入'), lastConfirmed: { intent, content: original.content, operationId: original.operationId, via: 'receipt' } })
+    expect(Object.isFrozen(f.session.getSnapshot().remote)).toBe(true)
+    expect(f.transport.reads).toHaveLength(2)
+    const current = draft(original.postId, 3, text('其他标签'))
+    f.transport.answerRead(1, current)
+    await checking
+    expect(f.session.getSnapshot()).toMatchObject({ remote: { revisionId: 2 }, conflict: { current }, serverStatus: 'conflict', content: text('更晚本机输入') })
+    expect(f.store.puts.at(-1)).toMatchObject({ pending: null, remote: { revisionId: 2 } })
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it.each(['reject', 'authorization', 'invalid', 'wrong-document', 'wrong-content', 'wrong-publication', 'unknown'] as const)('inspect %s 不改变原基线与 pending，也不 write', async mode => {
+    const baseline = draft()
+    const f = fixture(baseline)
+    await start(f)
+    const original = await makeUnknown(f)
+    const checking = f.session.checkServer()
+    await flush()
+    const inspect = f.transport.inspections[0].result
+    if (mode === 'reject') inspect.reject(new Error('无法读取回执'))
+    else if (mode === 'authorization') inspect.resolve({ status: 'error', message: '请登录', signInRequired: true })
+    else if (mode === 'invalid') inspect.resolve({ status: 'invalid', message: '无法查询' })
+    else if (mode === 'unknown') {
+      // @ts-expect-error 未知回执协议不能被当作未提交或成功。
+      inspect.resolve({ status: 'future-receipt' })
+    } else {
+      const result = success(original)
+      if (mode === 'wrong-document') result.value.draft.id = crypto.randomUUID()
+      if (mode === 'wrong-content') result.value.draft.body = '错误内容'
+      if (mode === 'wrong-publication') result.value.publication = { id: 1, publishedAt: date }
+      inspect.resolve(result)
+    }
+    await checking
+    expect(f.session.getSnapshot()).toMatchObject({ remote: baseline, pending: original, lastConfirmed: null, serverStatus: 'unconfirmed' })
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it('只有 retryPending 明确重放原请求，成功后必须 read，不上传后续输入', async () => {
+    const f = fixture()
+    await start(f)
+    const original = await makeUnknown(f)
+    f.session.edit(text('更晚内容'))
+    const retrying = f.session.retryPending()
+    f.session.submit('publish')
+    await flush()
+    expect(f.transport.writes).toHaveLength(2)
+    expect(f.transport.writes[1].command).toEqual(original)
+    f.transport.answerWrite(1, 2)
+    await flush()
+    expect(f.transport.reads).toHaveLength(2)
+    expect(f.transport.events).toEqual(['read', 'save', 'save', 'read'])
+    f.transport.answerRead(1, draft(original.postId, 2, original.content))
     await retrying
-    expect(f.session.getSnapshot()).toMatchObject({ content: text('本机后来'), remote: { version: 'receipt-version' }, conflict: { current: other } })
+    expect(f.session.getSnapshot()).toMatchObject({ pending: null, content: text('更晚内容'), serverStatus: 'unsaved', lastConfirmed: { operationId: original.operationId, via: 'write' } })
+    await pauseWithoutWrites(f, 2)
+    await f.session.retryPending()
     expect(f.transport.writes).toHaveLength(2)
   })
 
-  it('无 pending 的重连也先 read，读取拒绝不改基线、不写入', async () => {
-    const initial = working()
+  it('显式重试得到旧 ACK 后 read 发现新修订，保留两边并 conflict', async () => {
+    const f = fixture()
+    await start(f)
+    const original = await makeUnknown(f)
+    f.session.edit(text('本机后来'))
+    const retrying = f.session.retryPending()
+    await flush()
+    f.transport.answerWrite(1, 2)
+    await flush()
+    const current = draft(original.postId, 3, text('服务器后来'))
+    f.transport.answerRead(1, current)
+    await retrying
+    expect(f.session.getSnapshot()).toMatchObject({ content: text('本机后来'), remote: { revisionId: 2 }, conflict: { current }, serverStatus: 'conflict' })
+    await pauseWithoutWrites(f, 2)
+  })
+
+  it('无 pending 的重连只 read，远端失败不改基线，retryLocal 不重试网络', async () => {
+    const initial = draft()
     const f = fixture(initial)
     await start(f)
     f.session.edit(text('离线输入'))
-    const retrying = f.session.retry()
+    const checking = f.session.checkServer()
     await flush()
-    expect(f.transport.writes).toEqual([])
     f.transport.reads[1].result.reject(new Error('仍然离线'))
-    await retrying
-    expect(f.session.getSnapshot()).toMatchObject({ remote: initial, content: text('离线输入'), syncStatus: 'error' })
-    expect(f.transport.writes).toEqual([])
+    await checking
+    expect(f.session.getSnapshot()).toMatchObject({ remote: initial, content: text('离线输入'), serverStatus: 'error' })
+    await f.session.retryLocal()
+    expect(f.transport.read).toHaveBeenCalledTimes(2)
+    expect(f.transport.inspect).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f)
   })
 
-  it('已知 invalid 清理 pending，不自动重试同一文本，修改后可再写', async () => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text())
-    await pause()
-    f.transport.writes[0].result.resolve({ status: 'invalid', message: '定性拒绝' })
-    await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ pending: null, syncStatus: 'invalid' })
-    await pause()
-    const retrying = f.session.retry()
-    await flush()
-    f.transport.answerRead(1, null)
-    await retrying
-    expect(f.transport.writes).toHaveLength(1)
-    f.session.edit(text('修改后'))
-    await pause()
-    expect(f.transport.writes).toHaveLength(2)
+  it('同一修订返回不同内容是协议失败，不静默推进编辑基线', async () => {
+    const initial = draft()
+    const f = fixture(initial)
+    await start(f, { ...initial, body: '另一份内容' })
+    expect(f.session.getSnapshot()).toMatchObject({ remote: initial, content: text(), serverStatus: 'error' })
+    await pauseWithoutWrites(f)
   })
 
-  it('已有文档消失时不能把 expectedVersion=null 当新稿重建', async () => {
-    const initial = working()
+  it('已有稿消失仍保留原基线，不得降格为新稿重建', async () => {
+    const initial = draft()
     const f = fixture(initial)
     await start(f, null)
     f.session.edit(text('保留内容'))
-    await pause()
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'missing', remote: initial, content: text('保留内容') })
+    f.session.submit('save')
     await f.session.useServer()
-    expect(f.session.getSnapshot().feedback).toMatchObject({ status: 'error' })
-    expect(f.transport.write).not.toHaveBeenCalled()
+    expect(f.session.getSnapshot()).toMatchObject({ remote: initial, isNew: false, conflict: { current: null }, serverStatus: 'missing', content: text('保留内容') })
+    await pauseWithoutWrites(f)
   })
 })
 
-describe('恢复与冲突分支', () => {
-  it('恢复保留当前输入和原副本，复制旧文档身份、基线和固定请求到新 session', async () => {
-    const baseline = working()
-    const pending: WritingCommand = {
-      intent: 'save', postId: baseline.id, operationId: crypto.randomUUID(), expectedVersion: baseline.version, content: text('原请求'),
-    }
-    const copy = recovery({ postId: baseline.id, isNew: true, content: text('恢复时较晚输入'), remote: baseline, pending })
+describe('恢复与本机分支隔离', () => {
+  it('恢复带 pending 的空副本只复制身份、原基线和原请求，启动 inspect 不重放', async () => {
+    const baseline = draft()
+    const pending = { ...command(baseline), intent: 'publish' as const }
+    const copy = recovery({ postId: baseline.id, content: blank(), remote: baseline, pending })
     const f = fixture()
     f.store.copies.set(copy.sessionId, copy)
     await start(f)
     f.session.edit(text('当前入口输入'))
-    const previousSession = f.session.getSnapshot().sessionId
+    const oldSession = f.session.getSnapshot().sessionId
     const restoring = f.session.recover(copy)
     await flush()
     const restored = f.session.getSnapshot()
-    expect(restored.sessionId).not.toBe(previousSession)
+    expect(restored.sessionId).not.toBe(oldSession)
     expect(restored.sessionId).not.toBe(copy.sessionId)
-    expect(restored).toMatchObject({ postId: baseline.id, isNew: true, content: copy.content, remote: baseline, pending })
-    expect(f.store.copies.get(previousSession)?.content).toEqual(text('当前入口输入'))
+    expect(restored).toMatchObject({ postId: baseline.id, isNew: false, content: blank(), remote: baseline, pending })
+    expect(f.store.copies.get(oldSession)?.content).toEqual(text('当前入口输入'))
     expect(f.store.copies.get(copy.sessionId)).toEqual(copy)
-    expect(f.store.puts.find(value => value.sessionId === restored.sessionId)).toMatchObject({
-      sessionId: restored.sessionId, postId: copy.postId, isNew: copy.isNew,
-      content: copy.content, remote: copy.remote, pending: copy.pending,
-    })
-    expect(f.transport.writes[0].command).toEqual(pending)
-    expect(f.transport.reads).toHaveLength(1)
-    f.transport.answerWrite(0, 'confirmed')
+    expect(f.store.copies.get(restored.sessionId)).toMatchObject({ postId: baseline.id, content: blank(), remote: baseline, pending })
+    expect(f.transport.inspections[0].operation).toEqual({ postId: baseline.id, operationId: pending.operationId })
+    f.transport.inspections[0].result.resolve({ status: 'unconfirmed' })
+    await restoring
+    expect(f.session.getSnapshot().pending).toEqual(pending)
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    await pauseWithoutWrites(f)
+  })
+
+  it('恢复无 pending 的副本只 read，服务器不同修订时保留文本与原基线并冲突', async () => {
+    const baseline = draft()
+    const copy = recovery({ postId: baseline.id, remote: baseline, content: text('本机分支') })
+    const f = fixture()
+    await start(f)
+    const restoring = f.session.recover(copy)
     await flush()
     expect(f.transport.reads[1].postId).toBe(baseline.id)
-    f.transport.answerRead(1, { ...baseline, ...pending.content, version: 'confirmed', checkpointRevisionId: 1 })
-    await flush()
-    expect(f.transport.writes[1].command).toMatchObject({ intent: 'autosave', postId: baseline.id, expectedVersion: 'confirmed', content: copy.content })
-    f.transport.answerWrite(1)
-    await restoring
-    expect(f.session.getSnapshot().isNew).toBe(false)
-    expect(f.store.copies.get(copy.sessionId)).toEqual(copy)
-  })
-
-  it('恢复历史非 UUID 文档 ID 不换文档，只新建本机会话键', async () => {
-    const baseline = working('legacy-post-id')
-    const copy = recovery({ postId: baseline.id, isNew: false, content: text('旧稿未同步'), remote: baseline })
-    const f = fixture()
-    await start(f)
-    const restoring = f.session.recover(copy)
-    await flush()
-    expect(f.transport.reads[1].postId).toBe('legacy-post-id')
-    f.transport.answerRead(1, baseline)
-    await flush()
-    expect(f.transport.writes[0].command).toMatchObject({ postId: 'legacy-post-id', expectedVersion: baseline.version, content: copy.content })
-    expect(f.session.getSnapshot().sessionId).not.toBe(copy.sessionId)
-    f.transport.answerWrite(0)
-    await restoring
-    expect(f.session.getSnapshot().postId).toBe('legacy-post-id')
-  })
-
-  it('恢复无 pending 的副本也先校验版本，远端已变则保留本机并冲突', async () => {
-    const baseline = working()
-    const copy = recovery({ postId: baseline.id, isNew: false, remote: baseline, content: text('本机分支') })
-    const f = fixture()
-    await start(f)
-    const restoring = f.session.recover(copy)
-    await flush()
-    expect(f.transport.write).not.toHaveBeenCalled()
-    const current = working(baseline.id, 'changed', text('服务器分支'))
+    const current = draft(baseline.id, 2, text('服务器分支'))
     f.transport.answerRead(1, current)
     await restoring
     expect(f.session.getSnapshot()).toMatchObject({ content: copy.content, remote: baseline, conflict: { current } })
+    await pauseWithoutWrites(f)
   })
 
-  it('useServer 先保留本机分支，再更换 session 并选择服务器，不删除旧副本', async () => {
-    const initial = working()
-    const f = fixture(initial)
-    await start(f)
+  it('useServer 等本机最新输入保留成功才采用远端，独立 session 不删除原分支', async () => {
+    const baseline = draft()
+    const current = draft(baseline.id, 2, text('服务器分支'))
+    const f = fixture(baseline)
+    await start(f, current)
     f.session.edit(text('本机分支'))
-    await pause()
-    const current = working(initial.id, 'other', text('服务器分支'))
-    f.transport.writes[0].result.resolve({ status: 'conflict', current })
     await flush()
     const oldSession = f.session.getSnapshot().sessionId
     f.store.hold = true
     const selecting = f.session.useServer()
     await flush()
-    expect(f.session.getSnapshot().sessionId).toBe(oldSession)
     f.session.edit(text('保留前继续输入'))
     f.store.holds[0].resolve()
     await flush()
-    // 编辑副本和分支保留重试都必须完成，才能丢弃当前输入。
     expect(f.store.holds).toHaveLength(3)
     expect(f.session.getSnapshot().sessionId).toBe(oldSession)
     f.store.hold = false
@@ -643,253 +671,197 @@ describe('恢复与冲突分支', () => {
     expect(f.session.getSnapshot()).toMatchObject({ content: text('服务器分支'), remote: current, pending: null })
     expect(f.session.getSnapshot().sessionId).not.toBe(oldSession)
     expect(f.store.copies.get(oldSession)?.content).toEqual(text('保留前继续输入'))
+    expect(f.store.copies.get(f.session.getSnapshot().sessionId)?.remote).toEqual(current)
     f.transport.answerRead(1, current)
     await selecting
     expect(f.session.getSnapshot().shouldWarn).toBe(false)
     expect(f.store.remove).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f)
   })
 
-  it('本机分支保留失败时，useServer 不切换身份也不丢弃输入', async () => {
-    const initial = working()
+  it.each(['useServer', 'forkLocal', 'recover'] as const)('%s 保留当前分支失败就不切换，不覆盖或抛弃输入', async action => {
+    const initial = draft()
     const f = fixture(initial)
-    const current = working(initial.id, 'other')
-    await start(f, current)
+    await start(f, draft(initial.id, 2))
     f.session.edit(text('必须保留'))
-    const before = f.session.getSnapshot().sessionId
+    const before = f.session.getSnapshot()
     f.store.putFailure = '空间不足'
-    await f.session.useServer()
-    expect(f.session.getSnapshot()).toMatchObject({ sessionId: before, content: text('必须保留'), syncStatus: 'conflict', localStatus: 'failed' })
+    if (action === 'recover') await f.session.recover(recovery())
+    else await f.session[action]()
+    expect(f.session.getSnapshot()).toMatchObject({ sessionId: before.sessionId, postId: before.postId, content: text('必须保留'), remote: initial, localStatus: 'failed' })
+    await pauseWithoutWrites(f)
   })
 
-  it('forkLocal 使用新文档和会话，保留输入、原 pending 和旧副本，旧 ACK 不落新稿', async () => {
-    const initial = working()
-    const f = fixture(initial)
+  it('forkLocal 仅换 UUID 与 session、清空 remote/pending，保留原未知请求，不建服务器文章', async () => {
+    const f = fixture(draft())
     await start(f)
-    f.session.edit(text('待确认输入'))
-    await pause()
+    const original = await makeUnknown(f)
+    f.session.edit(text('带入新分支'))
     const oldSession = f.session.getSnapshot().sessionId
-    const original = structuredClone(f.session.getSnapshot().pending)
-    const forking = f.session.forkLocal()
-    await flush()
+    await f.session.forkLocal()
     const forked = f.session.getSnapshot()
-    expect(forked.postId).not.toBe(initial.id)
     expect(forked.sessionId).not.toBe(oldSession)
-    expect(forked).toMatchObject({ content: text('待确认输入'), remote: null, pending: null, isNew: true })
-    expect(f.store.copies.get(oldSession)?.pending).toEqual(original)
-    expect(f.transport.reads).toHaveLength(1)
-    f.transport.answerWrite(0, 'old-document-ack')
-    await flush()
-    expect(f.session.getSnapshot().remote).toBeNull()
-    expect(f.transport.reads[1].postId).toBe(forked.postId)
-    f.transport.answerRead(1, null)
-    await flush()
-    expect(f.transport.writes[1].command).toMatchObject({ postId: forked.postId, expectedVersion: null, content: text('待确认输入') })
-    f.transport.answerWrite(1, 'new-document-ack')
-    await forking
-    expect(f.session.getSnapshot().remote?.id).toBe(forked.postId)
-    expect(f.store.copies.get(oldSession)?.pending).toEqual(original)
+    expect(forked.postId).not.toBe(original.postId)
+    expect(forked).toMatchObject({ remote: null, pending: null, isNew: true, content: text('带入新分支'), lastConfirmed: null })
+    expect(f.store.copies.get(oldSession)).toMatchObject({ postId: original.postId, pending: original, content: text('带入新分支') })
+    expect(f.store.copies.get(forked.sessionId)).toMatchObject({ postId: forked.postId, remote: null, pending: null })
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    expect(f.transport.inspect).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f, 1)
   })
 
-  it('显式 skipRecovery 不用候选覆盖当前输入，也不删除候选', async () => {
+  it('显式跳过与删除副本均不上传，删完候选仍独立要求选择，失败不删除或清空', async () => {
     const f = fixture()
     const copy = recovery()
     f.store.copies.set(copy.sessionId, copy)
     await start(f)
-    const identity = f.session.getSnapshot().postId
-    const skipping = f.session.skipRecovery()
-    await skipping
-    expect(f.session.getSnapshot()).toMatchObject({ postId: identity, content: blank(), candidates: [], shouldWarn: false })
-    expect(f.store.copies.get(copy.sessionId)).toEqual(copy)
-    expect(f.store.puts).toEqual([])
-  })
-})
-
-describe('跨标签与 UI 状态契约', () => {
-  it('两个标签各写自己的恢复键，只有先提交者推进版本，后提交者保留输入并冲突', async () => {
-    const initial = working()
-    const first = fixture(initial)
-    const second = fixture(initial)
-    await start(first)
-    await start(second)
-    first.session.edit(text('标签一'))
-    second.session.edit(text('标签二'))
-    await pause()
-    first.transport.answerWrite(0, 'first-tab-version')
-    await flush()
-    const current = first.session.getSnapshot().remote
-    second.transport.writes[0].result.resolve({ status: 'conflict', current })
-    await flush()
-    expect(second.session.getSnapshot()).toMatchObject({ content: text('标签二'), remote: initial, conflict: { current }, pending: null })
-    expect(first.session.getSnapshot().sessionId).not.toBe(second.session.getSnapshot().sessionId)
-    expect(first.store.copies.get(first.session.getSnapshot().sessionId)?.content).toEqual(text('标签一'))
-    expect(second.store.copies.get(second.session.getSnapshot().sessionId)?.content).toEqual(text('标签二'))
-    const retrying = second.session.retry()
-    await flush()
-    second.transport.answerRead(1, current)
-    await retrying
-    expect(second.transport.writes).toHaveLength(1)
-  })
-
-  it.each(['autosave', 'save', 'publish'] as const)('lastConfirmed 精确记录 %s 的请求和内容，继续编辑不伪造新确认', async intent => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text('已提交快照'))
-    if (intent === 'autosave') await pause()
-    else {
-      f.session.submit(intent)
-      await flush()
-    }
-    const original = f.transport.writes[0].command
-    f.session.edit(text('继续输入'))
-    f.transport.answerWrite(0)
-    await flush()
-    expect(f.session.getSnapshot().lastConfirmed).toEqual({ intent, content: text('已提交快照'), operationId: original.operationId })
-    expect(f.session.getSnapshot().content).toEqual(text('继续输入'))
-  })
-
-  it('客户端标题校验不能抹去服务端尚未解决的登录需求', async () => {
-    const f = fixture()
-    await start(f)
-    f.session.edit(text())
-    await pause()
-    f.transport.writes[0].result.resolve({ status: 'error', message: '需要登录', signInRequired: true })
-    await flush()
-    f.session.edit(text('继续输入', ''))
-    f.session.submit('save')
-    expect(f.session.getSnapshot()).toMatchObject({ signInRequired: true, feedback: { status: 'invalid' } })
-    expect(f.session.getSnapshot().pending).toEqual(f.transport.writes[0].command)
-  })
-
-  it('分支切换保留尚未编辑过的初始内容，useServer 的 new 身份有独立副本', async () => {
-    const initial = working()
-    const f = fixture(initial, true)
-    const current = working(initial.id, 'other', text('另一个版本'))
-    await start(f, current)
-    const oldSession = f.session.getSnapshot().sessionId
-    const selecting = f.session.useServer()
-    await flush()
-    const selected = f.session.getSnapshot()
-    expect(f.store.copies.get(oldSession)?.content).toEqual(text())
-    expect(f.store.copies.get(selected.sessionId)).toMatchObject({ isNew: true, content: text('另一个版本'), remote: current })
-    f.transport.answerRead(1, current)
-    await selecting
-    expect(selected.sessionId).not.toBe(oldSession)
-  })
-
-  it('只删除当前候选，删完后仍需显式 skipRecovery 开启同步', async () => {
-    const f = fixture()
-    const copy = recovery()
-    f.store.copies.set(copy.sessionId, copy)
-    await start(f)
-    f.session.edit(text('当前输入'))
-    await pause()
+    f.session.edit(text('当前分支'))
     await f.session.discardRecovery(crypto.randomUUID())
     await f.session.discardRecovery(f.session.getSnapshot().sessionId)
     expect(f.store.remove).not.toHaveBeenCalled()
-    await f.session.discardRecovery(copy.sessionId)
-    expect(f.store.remove).toHaveBeenCalledExactlyOnceWith(copy.sessionId)
-    expect(f.session.getSnapshot()).toMatchObject({ candidates: [], syncStatus: 'recovery', content: text('当前输入') })
-    expect(f.transport.writes).toHaveLength(0)
-    const skipping = f.session.skipRecovery()
-    await flush()
-    expect(f.transport.writes[0].command.content).toEqual(text('当前输入'))
-    f.transport.answerWrite(0)
-    await skipping
-  })
-
-  it('删除候选失败保留候选和 localError，后续 edit 的成功 put 不会抹去删除错误', async () => {
-    const f = fixture()
-    const copy = recovery()
-    f.store.copies.set(copy.sessionId, copy)
-    await start(f)
     f.store.remove.mockRejectedValueOnce(new Error('删除失败'))
     await f.session.discardRecovery(copy.sessionId)
-    f.session.edit(text('当前输入'))
+    f.session.edit(text('新的当前输入'))
     await flush()
-    expect(f.session.getSnapshot()).toMatchObject({ candidates: [copy], localStatus: 'failed', localError: '删除失败' })
-    expect(f.store.copies.has(copy.sessionId)).toBe(true)
+    expect(f.session.getSnapshot()).toMatchObject({ candidates: [copy], localStatus: 'failed', localError: '删除失败', recoveryRequired: true })
     await f.session.discardRecovery(copy.sessionId)
-    expect(f.session.getSnapshot()).toMatchObject({ candidates: [], localError: null, syncStatus: 'recovery' })
-  })
-})
-
-describe('框架控制流的端口交接', () => {
-  it('read 特殊 signal 只交给 UI，队列暂停，不变普通失败或未处理拒绝', async () => {
-    const signal = { redirect: '/login' }
-    const boundary = vi.fn()
-    const hook = vi.fn((error: unknown) => {
-      if (error !== signal) return false
-      boundary(error)
-      return true
-    })
-    const f = fixture(null, true, new MemoryRecovery(), new ControlledTransport(), hook)
-    const starting = f.session.start()
-    await flush()
-    f.transport.reads[0].result.reject(signal)
-    await starting
-    expect(boundary).toHaveBeenCalledExactlyOnceWith(signal)
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'interrupted', feedback: null, pending: null })
-    f.session.edit(text())
-    await pause()
-    expect(f.transport.writes).toHaveLength(0)
-    const retrying = f.session.retry()
-    await flush()
-    f.transport.answerRead(1, null)
-    await flush()
-    f.transport.answerWrite(0)
-    await retrying
-    expect(f.session.getSnapshot().syncStatus).toBe('synced')
+    expect(f.session.getSnapshot()).toMatchObject({ candidates: [], recoveryRequired: true, localError: null })
+    await pauseWithoutWrites(f)
+    await f.session.skipRecovery()
+    expect(f.session.getSnapshot()).toMatchObject({ recoveryRequired: false, content: text('新的当前输入') })
+    await pauseWithoutWrites(f)
   })
 
-  it('后台 write 特殊 signal 保留固定请求，retry 先重放再 read，不抛出后台拒绝', async () => {
-    const signal = { navigation: 'refresh' }
-    const boundary = vi.fn()
-    const f = fixture(null, true, new MemoryRecovery(), new ControlledTransport(), error => {
-      if (error !== signal) return false
-      boundary(error)
-      return true
-    })
+  it('pending 落本机期间出现损坏副本时撤销未发出的写授权，跳过恢复也不自动补发', async () => {
+    const f = fixture()
     await start(f)
     f.session.edit(text())
-    await pause()
-    const original = structuredClone(f.transport.writes[0].command)
-    f.transport.writes[0].result.reject(signal)
     await flush()
-    expect(boundary).toHaveBeenCalledExactlyOnceWith(signal)
-    expect(f.session.getSnapshot()).toMatchObject({ syncStatus: 'interrupted', feedback: null, pending: original, shouldWarn: true })
-    const retrying = f.session.retry()
+    f.store.hold = true
+    f.session.submit('save')
     await flush()
-    expect(f.transport.writes[1].command).toEqual(original)
-    f.transport.answerWrite(1, 'confirmed')
+    const pending = f.session.getSnapshot().pending
+    await f.session.recover(Object.assign(recovery(), { format: 'nim-recovery/v1' }))
+    f.store.holds[0].resolve()
     await flush()
-    f.transport.answerRead(1, working(original.postId, 'confirmed', original.content))
-    await retrying
-    expect(f.session.getSnapshot().pending).toBeNull()
-    expect(f.session.getSnapshot().shouldWarn).toBe(false)
+    expect(f.session.getSnapshot()).toMatchObject({ recoveryRequired: true, pending, manualBusy: false })
+    await f.session.skipRecovery()
+    await pauseWithoutWrites(f)
+    expect(f.session.getSnapshot().pending).toEqual(pending)
   })
 
-  it('钩子不接管普通网络错误，dispose 后的晚到 signal 不再交接 UI', async () => {
-    const boundary = vi.fn(() => false)
-    const f = fixture(null, true, new MemoryRecovery(), new ControlledTransport(), boundary)
-    const starting = f.session.start()
+  it('新稿清空文本后恢复原发布请求，只读回执可确认，不创建或重放服务器文章', async () => {
+    const pending = { ...command(null), intent: 'publish' as const }
+    const copy = recovery({ postId: pending.postId, content: blank(), pending })
+    const f = fixture()
+    f.store.copies.set(copy.sessionId, copy)
+    await start(f)
+    expect(f.session.getSnapshot().candidates).toEqual([copy])
+    const restoring = f.session.recover(copy)
     await flush()
-    const error = new Error('普通网络错误')
-    f.transport.reads[0].result.reject(error)
-    await starting
-    expect(boundary).toHaveBeenCalledExactlyOnceWith(error)
-    expect(f.session.getSnapshot().feedback).toMatchObject({ status: 'error', message: '普通网络错误' })
-    const retrying = f.session.retry()
+    expect(f.session.getSnapshot()).toMatchObject({ remote: null, isNew: true, content: blank(), pending })
+    f.transport.inspections[0].result.resolve(success(pending, 1))
     await flush()
-    f.session.dispose()
-    f.transport.reads[1].result.reject({ redirect: '/late' })
-    await retrying
-    expect(boundary).toHaveBeenCalledTimes(1)
+    f.transport.answerRead(1, draft(pending.postId, 1, pending.content))
+    await restoring
+    expect(f.session.getSnapshot()).toMatchObject({
+      isNew: false, pending: null, content: blank(), remote: { revisionId: 1 },
+      lastConfirmed: { intent: 'publish', operationId: pending.operationId, via: 'receipt' },
+    })
+    const networks = [f.transport.read.mock.calls.length, f.transport.inspect.mock.calls.length]
+    await f.session.retryLocal()
+    expect([f.transport.read.mock.calls.length, f.transport.inspect.mock.calls.length]).toEqual(networks)
+    expect(f.store.copies.get(copy.sessionId)).toEqual(copy)
+    await pauseWithoutWrites(f)
+  })
+
+  it('损坏恢复输入保留当前分支及原记录，不接受旧格式或额外字段', async () => {
+    const f = fixture()
+    await start(f)
+    f.session.edit(text('当前输入'))
+    const before = f.session.getSnapshot()
+    const copy = recovery()
+    await f.session.recover(Object.assign(copy, { isNew: true }))
+    expect(f.session.getSnapshot()).toMatchObject({ sessionId: before.sessionId, content: text('当前输入'), localStatus: 'failed', recoveryRequired: true })
+    expect(f.store.remove).not.toHaveBeenCalled()
+    await pauseWithoutWrites(f)
   })
 })
 
-describe('销毁与晚到结果', () => {
-  it('读取收尾时订阅者重入切换分支，新分支的检查不会丢失调度', async () => {
-    const initial = working()
+describe('epoch、串行网络与框架控制流', () => {
+  it('fork 的旧 ACK 不进入新 epoch，新的明确保存也必须等旧网络完成后发送', async () => {
+    const initial = draft()
+    const f = fixture(initial)
+    await start(f)
+    f.session.edit(text('在途写'))
+    f.session.submit('save')
+    await flush()
+    const original = f.transport.writes[0].command
+    const oldSession = f.session.getSnapshot().sessionId
+    await f.session.forkLocal()
+    const forked = f.session.getSnapshot()
+    f.session.submit('publish')
+    await flush()
+    expect(f.transport.writes).toHaveLength(1)
+    f.transport.answerWrite(0)
+    await flush()
+    expect(f.session.getSnapshot()).toMatchObject({ postId: forked.postId, remote: null, lastConfirmed: null })
+    expect(f.transport.writes[1].command).toMatchObject({ postId: forked.postId, expectedRevisionId: null, intent: 'publish' })
+    expect(f.store.copies.get(oldSession)?.pending).toEqual(original)
+    f.transport.answerWrite(1, 3)
+    await flush()
+    expect(f.session.getSnapshot().remote?.id).toBe(forked.postId)
+    await pauseWithoutWrites(f, 2)
+  })
+
+  it('旧 epoch 的 inspect 与 read 结果不会覆盖新分支或调度新请求', async () => {
+    const f = fixture()
+    await start(f)
+    const original = await makeUnknown(f)
+    const checking = f.session.checkServer()
+    await flush()
+    await f.session.forkLocal()
+    const forked = f.session.getSnapshot()
+    f.transport.inspections[0].result.resolve(success(original))
+    await checking
+    expect(f.session.getSnapshot()).toBe(forked)
+    expect(f.transport.read).toHaveBeenCalledTimes(1)
+    await pauseWithoutWrites(f, 1)
+
+    const g = fixture(draft())
+    const starting = g.session.start()
+    await flush()
+    await g.session.forkLocal()
+    const next = g.session.getSnapshot()
+    g.transport.answerRead(0, draft(g.transport.reads[0].postId, 3))
+    await starting
+    expect(g.session.getSnapshot()).toBe(next)
+    await pauseWithoutWrites(g)
+  })
+
+  it('分支保留失败不取消尚未发送的明确请求，也不另开写队列', async () => {
+    const f = fixture()
+    await start(f)
+    f.store.hold = true
+    f.session.edit(text())
+    f.session.submit('save')
+    await flush()
+    expect(f.store.holds).toHaveLength(2)
+    const postId = f.session.getSnapshot().postId
+    const forking = f.session.forkLocal()
+    await flush()
+    f.store.holds[0].resolve()
+    f.store.holds[2].reject(new Error('保留失败'))
+    await forking
+    f.store.holds[1].resolve()
+    await flush()
+    expect(f.session.getSnapshot().postId).toBe(postId)
+    expect(f.transport.writes).toHaveLength(1)
+    expect(f.transport.writes[0].command.postId).toBe(postId)
+  })
+
+  it('read 收尾订阅者重入 useServer，新分支的检查仍进入同一队列', async () => {
+    const initial = draft()
     const f = fixture(initial)
     let selecting = Promise.resolve()
     let began = false
@@ -901,38 +873,90 @@ describe('销毁与晚到结果', () => {
     })
     const starting = f.session.start()
     await flush()
-    const current = working(initial.id, 'other', text('新远端'))
+    const current = draft(initial.id, 2, text('新远端'))
     f.transport.answerRead(0, current)
     await flush()
     expect(f.transport.reads).toHaveLength(2)
     f.transport.answerRead(1, current)
     await starting
     await selecting
-    expect(f.session.getSnapshot()).toMatchObject({ content: text('新远端'), remote: current, syncStatus: 'synced' })
+    expect(f.session.getSnapshot()).toMatchObject({ content: text('新远端'), remote: current, serverStatus: 'saved' })
+    await pauseWithoutWrites(f)
   })
 
-  it('分支保留失败不取消尚未发出的原请求，也不会另开第二条写队列', async () => {
-    const f = fixture()
-    await start(f)
-    f.store.hold = true
+  it('read 控制流交给 UI 并暂停，不变普通 error，之后 checkServer 仍只读', async () => {
+    const signal = { redirect: '/login' }
+    const hook = vi.fn((error: unknown) => error === signal)
+    const f = fixture(null, new MemoryRecovery(), new ControlledTransport(), hook)
+    const starting = f.session.start()
+    await flush()
+    f.transport.reads[0].result.reject(signal)
+    await starting
+    expect(hook).toHaveBeenCalledExactlyOnceWith(signal)
+    expect(f.session.getSnapshot()).toMatchObject({ serverStatus: 'interrupted', feedback: null, pending: null })
     f.session.edit(text())
-    await pause()
-    expect(f.store.holds).toHaveLength(2)
-    const identity = f.session.getSnapshot().postId
-    const forking = f.session.forkLocal()
+    await pauseWithoutWrites(f)
+    const checking = f.session.checkServer()
     await flush()
-    expect(f.store.holds).toHaveLength(3)
-    f.store.holds[0].resolve()
-    f.store.holds[2].reject(new Error('保留失败'))
-    await forking
-    f.store.holds[1].resolve()
-    await flush()
-    expect(f.session.getSnapshot().postId).toBe(identity)
-    expect(f.transport.writes).toHaveLength(1)
-    expect(f.transport.writes[0].command.postId).toBe(identity)
+    f.transport.answerRead(1, null)
+    await checking
+    expect(f.session.getSnapshot().serverStatus).toBe('unsaved')
+    await pauseWithoutWrites(f)
   })
 
-  it('dispose 取消定时器和通知，已接受本机写继续完成', async () => {
+  it.each(['write', 'inspect'] as const)('%s 控制流保留固定 pending，checkServer 不重放，也不产生未处理拒绝', async source => {
+    const signal = { navigation: 'refresh' }
+    const hook = vi.fn((error: unknown) => error === signal)
+    const f = fixture(null, new MemoryRecovery(), new ControlledTransport(), hook)
+    await start(f)
+    f.session.edit(text())
+    f.session.submit('save')
+    await flush()
+    const original = f.transport.writes[0].command
+    if (source === 'write') f.transport.writes[0].result.reject(signal)
+    else {
+      f.transport.writes[0].result.reject(new Error('响应丢失'))
+      await flush()
+      const checking = f.session.checkServer()
+      await flush()
+      f.transport.inspections[0].result.reject(signal)
+      await checking
+    }
+    await flush()
+    expect(hook).toHaveBeenCalledWith(signal)
+    expect(f.session.getSnapshot()).toMatchObject({ serverStatus: 'interrupted', pending: original, shouldWarn: true })
+    const checking = f.session.checkServer()
+    await flush()
+    f.transport.inspections.at(-1)?.result.resolve({ status: 'unconfirmed' })
+    await checking
+    expect(f.session.getSnapshot()).toMatchObject({ pending: original, serverStatus: 'unconfirmed' })
+    await pauseWithoutWrites(f, 1)
+  })
+
+  it('普通网络错误不交接控制流，dispose 后晚到 signal 不再调用 UI 钩子', async () => {
+    const hook = vi.fn(() => false)
+    const f = fixture(null, new MemoryRecovery(), new ControlledTransport(), hook)
+    const starting = f.session.start()
+    await flush()
+    const error = new Error('普通网络错误')
+    f.transport.reads[0].result.reject(error)
+    await starting
+    expect(hook).toHaveBeenCalledExactlyOnceWith(error)
+    expect(f.session.getSnapshot().feedback).toMatchObject({ status: 'error', message: error.message })
+    const checking = f.session.checkServer()
+    await flush()
+    f.session.dispose()
+    const snapshot = f.session.getSnapshot()
+    f.transport.reads[1].result.reject({ redirect: '/late' })
+    await checking
+    expect(hook).toHaveBeenCalledTimes(1)
+    expect(f.session.getSnapshot()).toBe(snapshot)
+    await pauseWithoutWrites(f)
+  })
+})
+
+describe('dispose 与已接受的操作', () => {
+  it('dispose 关闭自己的 store，已接受本机 put 继续，但不再通知或启动任何网络', async () => {
     const f = fixture()
     await start(f)
     f.store.hold = true
@@ -942,48 +966,56 @@ describe('销毁与晚到结果', () => {
     const count = listener.mock.calls.length
     f.session.dispose()
     f.session.dispose()
-    f.store.holds[0].resolve()
-    await pause()
-    expect(f.store.copies.get(f.session.getSnapshot().sessionId)?.content).toEqual(text())
-    expect(f.transport.write).not.toHaveBeenCalled()
-    expect(listener).toHaveBeenCalledTimes(count)
-    expect(f.store.close).toHaveBeenCalledTimes(1)
-    expect(f.session.getSnapshot().syncStatus).toBe('disposed')
     const snapshot = f.session.getSnapshot()
+    f.store.holds[0].resolve()
+    await flush()
+    expect(f.store.copies.get(snapshot.sessionId)?.content).toEqual(text())
+    expect(f.store.close).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledTimes(count)
+    expect(snapshot.serverStatus).toBe('disposed')
     f.session.edit(text('忽略'))
+    f.session.submit('save')
     await f.session.start()
-    await f.session.retry()
+    await f.session.checkServer()
+    await f.session.retryPending()
+    await f.session.retryLocal()
+    await f.session.forkLocal()
+    await pauseWithoutWrites(f)
     expect(f.session.getSnapshot()).toBe(snapshot)
   })
 
-  it('销毁不取消服务端在途写，晚到 ACK 不通知、不调度排队手动或自动写', async () => {
+  it('dispose 不伪取消在途服务器写，晚到 ACK 不落本机、不通知、不发后续请求', async () => {
     const f = fixture()
     await start(f)
-    f.session.edit(text('A'))
-    await pause()
-    f.session.edit(text('B'))
-    f.session.submit('publish')
+    f.session.edit(text('在途内容'))
+    f.session.submit('save')
+    await flush()
+    f.session.edit(text('更晚内容'))
     const listener = vi.fn()
     f.session.subscribe(listener)
     f.session.dispose()
+    const snapshot = f.session.getSnapshot()
     const puts = f.store.puts.length
     f.transport.answerWrite(0)
-    await pause()
-    expect(f.transport.writes).toHaveLength(1)
+    await pauseWithoutWrites(f, 1)
     expect(f.store.puts).toHaveLength(puts)
     expect(listener).not.toHaveBeenCalled()
-    expect(f.session.getSnapshot().pending?.content).toEqual(text('A'))
+    expect(f.session.getSnapshot()).toBe(snapshot)
+    expect(snapshot.pending?.content).toEqual(text('在途内容'))
   })
 
-  it('start 的晚到读取在 dispose 后不改快照或发起请求', async () => {
+  it('pending 本机落盘期间 dispose 不再发服务器请求，已接受 put 仍完成', async () => {
     const f = fixture()
-    const starting = f.session.start()
+    await start(f)
+    f.session.edit(text())
     await flush()
+    f.store.hold = true
+    f.session.submit('publish')
+    await flush()
+    const pending = f.session.getSnapshot().pending
     f.session.dispose()
-    const snapshot = f.session.getSnapshot()
-    f.transport.answerRead(0, working(f.session.getSnapshot().postId))
-    await starting
-    expect(f.session.getSnapshot()).toBe(snapshot)
-    expect(f.transport.write).not.toHaveBeenCalled()
+    f.store.holds[0].resolve()
+    await pauseWithoutWrites(f)
+    expect(f.store.copies.get(f.session.getSnapshot().sessionId)?.pending).toEqual(pending)
   })
 })

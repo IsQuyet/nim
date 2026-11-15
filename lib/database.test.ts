@@ -12,6 +12,7 @@ import { initializeDatabase, openDatabase } from './database'
 import { account, session, user, verification } from './schema'
 import { createPostStore } from './posts'
 import { createWritingStore } from './writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 
 const migration = vi.hoisted(() => ({ folder: undefined as string | undefined }))
 vi.mock('drizzle-orm/better-sqlite3/migrator', async importOriginal => {
@@ -32,7 +33,7 @@ const journalSchema = z.object({
     idx: z.number(), version: z.string(), when: z.number(), tag: z.string(), breakpoints: z.boolean(),
   })),
 })
-const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'post_working_copies', 'post_write_receipts', 'user', 'session', 'account', 'verification']
+const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'post_write_receipts', 'user', 'session', 'account', 'verification']
 const authTables = ['user', 'session', 'account', 'verification']
 let directory: string
 let filename: string
@@ -105,9 +106,20 @@ describe('数据库结构与迁移', () => {
         expect.objectContaining({ name: 'created_at', pk: 0, notnull: 1 }),
       ])
       expect(client.pragma('foreign_keys', { simple: true })).toBe(1)
+      expect(client.pragma('table_info(post_drafts)')).toEqual([
+        expect.objectContaining({ name: 'post_id', pk: 1, notnull: 1 }),
+        expect.objectContaining({ name: 'revision_id', notnull: 1 }),
+      ])
+      expect(client.pragma('table_info(post_write_receipts)')).toEqual([
+        expect.objectContaining({ name: 'operation_id', pk: 1, notnull: 1 }),
+        expect.objectContaining({ name: 'post_id', notnull: 1 }),
+        expect.objectContaining({ name: 'request_hash', notnull: 1 }),
+        expect.objectContaining({ name: 'revision_id', notnull: 1 }),
+        expect.objectContaining({ name: 'publication_id', notnull: 0 }),
+      ])
       expect(client.prepare('SELECT * FROM __drizzle_migrations').all())
         .toHaveLength(readMigrationFiles({ migrationsFolder: './drizzle' }).length)
-      const draft = createPostStore(database).createDraft({ title: 'Draft', description: '', body: '# Draft\r\n' })
+      const draft = createTestDraft(createWritingStore(database),{ title: 'Draft', description: '', body: '# Draft\r\n' })
       const insert = client.prepare('INSERT INTO post_revisions (post_id, title, description, body, created_at, source) VALUES (?, ?, ?, ?, ?, ?)')
       expect(() => insert.run(draft.id, '', '', '', '2026-11-14', 'invalid')).toThrow()
       expect(() => insert.run('missing', '', '', '', '2026-11-14', 'create')).toThrow()
@@ -125,10 +137,10 @@ describe('数据库结构与迁移', () => {
     const createdAt = new Date('2026-11-14T00:00:00Z')
     const expiresAt = new Date('2099-01-01T00:00:00Z')
     try {
-      const store = createPostStore(database)
-      const draft = store.createDraft({ title: 'Published', description: 'Description', body: '# Published\r\n' })
-      store.publishDraft(draft.id, draft, draft.revisionId)
-      store.saveDraft(draft.id, { title: 'Edited', description: '', body: '# Edited\n' }, draft.revisionId)
+      const writer = createWritingStore(database)
+      const draft = createTestDraft(writer, { title: 'Published', description: 'Description', body: '# Published\r\n' })
+      publishTestDraft(writer, draft)
+      saveTestDraft(writer, draft, { title: 'Edited', description: '', body: '# Edited\n' })
       database.insert(user).values({
         id: 'admin', name: 'Admin', email: 'admin@example.test', emailVerified: true, createdAt, updatedAt: createdAt,
       }).run()
@@ -173,11 +185,7 @@ describe('数据库结构与迁移', () => {
         createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-10T00:00:00.000Z',
       })
       expect(store.getPublishedPost('draft-only')).toBeNull()
-      expect(createWritingStore(database).getWorkingCopy('draft-only')).toMatchObject({
-        id: 'draft-only', title: '  Draft  ', description: '', body: '    code\r\n\n',
-        checkpointRevisionId: unpublished?.revisionId,
-        updatedAt: '2026-11-10T00:00:00.000Z', version: expect.any(String),
-      })
+      expect(createWritingStore(database).getDraft('draft-only')).toEqual(unpublished)
       expect(store.getDraft('modified')).toMatchObject({ title: 'Edited', body: '# New\r\n', updatedAt: '2026-11-12T00:00:00.000Z' })
       expect(store.getPublishedPost('modified')).toMatchObject({ title: 'Published', body: '# Old\n', publishedAt: '2026-11-11T00:00:00.000Z' })
       expect(store.listRevisions('modified')).toHaveLength(2)
@@ -233,7 +241,7 @@ describe('数据库结构与迁移', () => {
     await initializeDatabase(filename)
     const database = openDatabase(filename)
     try {
-      createPostStore(database).createDraft({ title: 'Existing', description: '', body: '# Existing\r\n' })
+      createTestDraft(createWritingStore(database),{ title: 'Existing', description: '', body: '# Existing\r\n' })
     } finally {
       database.$client.close()
     }

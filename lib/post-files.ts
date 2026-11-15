@@ -21,7 +21,7 @@ export function decodeMarkdownBytes(bytes: ArrayBuffer | Uint8Array):
 }
 
 export function importPostMarkdown(
-  store: Pick<PostStore, 'importDraft' | 'createDraftOnce'>,
+  store: Pick<PostStore, 'importDraft' | 'createImportedDraftOnce'>,
   source: string,
   newPostId: string,
 ): PostMutationResult<DraftPost> | InvalidFile {
@@ -32,15 +32,15 @@ export function importPostMarkdown(
   }
   const identity = postIdSchema.safeParse(newPostId)
   if (!identity.success) return { status: 'invalid', message: identity.error.issues[0].message }
-  return store.createDraftOnce(identity.data, parsed.data, 'import')
+  return store.createImportedDraftOnce(identity.data, parsed.data)
 }
 
 export function exportPostMarkdown(
-  store: Pick<PostStore, 'getWorkingCopy' | 'getPublishedPost'>,
+  store: Pick<PostStore, 'getDraft' | 'getPublishedPost'>,
   id: string,
   stage: PostFileStage = 'draft',
 ): { status: 'success'; source: string; filename: string } | { status: 'missing' } | InvalidFile {
-  const post = stage === 'draft' ? store.getWorkingCopy(id) : store.getPublishedPost(id)
+  const post = stage === 'draft' ? store.getDraft(id) : store.getPublishedPost(id)
   if (!post) return { status: 'missing' }
   const identity = postIdSchema.safeParse(post.id)
   const content = postContentSchema.safeParse(post)

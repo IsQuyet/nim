@@ -43,24 +43,12 @@ export const postDrafts = sqliteTable('post_drafts', {
   }),
 ])
 
-export const postWorkingCopies = sqliteTable('post_working_copies', {
-  postId: text('post_id').primaryKey().references(() => posts.id, { onDelete: 'cascade' }),
-  version: text('version').notNull(),
-  title: text('title').notNull(),
-  description: text('description').notNull(),
-  body: text('body').notNull(),
-  updatedAt: text('updated_at').notNull(),
-})
-
 export const postWriteReceipts = sqliteTable('post_write_receipts', {
   operationId: text('operation_id').primaryKey(),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   requestHash: text('request_hash').notNull(),
-  version: text('version').notNull(),
-  revisionId: integer('revision_id'),
-  updatedAt: text('updated_at').notNull(),
+  revisionId: integer('revision_id').notNull(),
   publicationId: integer('publication_id'),
-  publishedAt: text('published_at'),
 }, table => [
   index('post_write_receipts_post_id_idx').on(table.postId),
   foreignKey({
@@ -68,10 +56,9 @@ export const postWriteReceipts = sqliteTable('post_write_receipts', {
     foreignColumns: [postRevisions.postId, postRevisions.id],
   }),
   foreignKey({
-    columns: [table.postId, table.publicationId],
-    foreignColumns: [postPublications.postId, postPublications.id],
+    columns: [table.postId, table.revisionId, table.publicationId],
+    foreignColumns: [postPublications.postId, postPublications.revisionId, postPublications.id],
   }),
-  check('post_write_receipts_publication_check', sql`(${table.publicationId} is null) = (${table.publishedAt} is null)`),
 ])
 
 export const postPublications = sqliteTable('post_publications', {
@@ -81,6 +68,7 @@ export const postPublications = sqliteTable('post_publications', {
   publishedAt: text('published_at').notNull(),
 }, table => [
   unique('post_publications_post_id_id_unique').on(table.postId, table.id),
+  unique('post_publications_post_id_revision_id_id_unique').on(table.postId, table.revisionId, table.id),
   foreignKey({
     columns: [table.postId, table.revisionId],
     foreignColumns: [postRevisions.postId, postRevisions.id],

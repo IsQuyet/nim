@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getAdminWorkingCopy } from '@/lib/admin-posts'
+import { getAdminDraft } from '@/lib/admin-posts'
 import { PostEditor } from '../../post-editor'
 
 export const metadata: Metadata = { title: 'Edit draft' }
@@ -12,7 +12,7 @@ type EditDraftPageProps = {
 
 export default async function EditDraftPage({ params }: EditDraftPageProps) {
   const { id } = await params
-  const draft = await getAdminWorkingCopy(id)
+  const draft = await getAdminDraft(id)
   if (!draft) notFound()
 
   return (

@@ -27,7 +27,7 @@ function createRegistry(): Registry {
     acquire(postId, create) {
       for (const bridge of bridges) {
         const snapshot = bridge.session.getSnapshot()
-        if (snapshot.postId === postId && snapshot.syncStatus !== 'disposed') return bridge
+        if (snapshot.postId === postId && snapshot.serverStatus !== 'disposed') return bridge
       }
       const bridge = create(() => { bridges.add(bridge) }, () => { bridges.delete(bridge) })
       return bridge

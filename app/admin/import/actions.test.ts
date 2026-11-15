@@ -6,7 +6,7 @@ import { importMarkdownAction } from './actions'
 const mocks = vi.hoisted(() => ({
   withAdminPostStore: vi.fn(),
   importDraft: vi.fn(),
-  createDraftOnce: vi.fn(),
+  createImportedDraftOnce: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
 }))
@@ -36,10 +36,10 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset()
   mocks.withAdminPostStore.mockImplementation(async operation => ({
     authorized: true,
-    value: await operation({ importDraft: mocks.importDraft, createDraftOnce: mocks.createDraftOnce }),
+    value: await operation({ importDraft: mocks.importDraft, createImportedDraftOnce: mocks.createImportedDraftOnce }),
   }))
   mocks.importDraft.mockReturnValue(draft)
-  mocks.createDraftOnce.mockReturnValue({ status: 'success', value: draft })
+  mocks.createImportedDraftOnce.mockReturnValue({ status: 'success', value: draft })
   mocks.redirect.mockImplementation(path => { throw new Error(`Redirect: ${path}`) })
 })
 
@@ -56,7 +56,7 @@ describe('Markdown 文件上传入口', () => {
     expect(fields).not.toHaveBeenCalled()
     expect(read).not.toHaveBeenCalled()
     expect(mocks.importDraft).not.toHaveBeenCalled()
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -65,7 +65,7 @@ describe('Markdown 文件上传入口', () => {
       expect(await importMarkdownAction({ status: 'idle' }, input)).toEqual({
         status: 'error', message: 'Choose exactly one Markdown file.',
       })
-      expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+      expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
       expect(mocks.importDraft).not.toHaveBeenCalled()
     },
   )
@@ -79,7 +79,7 @@ describe('Markdown 文件上传入口', () => {
     expect(await importMarkdownAction({ status: 'idle' }, input)).toEqual({
       status: 'error', message: 'Choose exactly one Markdown file.',
     })
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.importDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
@@ -92,7 +92,7 @@ describe('Markdown 文件上传入口', () => {
     const read = vi.spyOn(file, 'arrayBuffer')
     expect((await importMarkdownAction({ status: 'idle' }, input)).status).toBe('error')
     expect(read).not.toHaveBeenCalled()
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -103,7 +103,7 @@ describe('Markdown 文件上传入口', () => {
       status: 'error', message: `The Markdown file exceeds the ${MAX_MARKDOWN_UPLOAD_BYTES / 1024 / 1024} MiB limit.`,
     })
     expect(read).not.toHaveBeenCalled()
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -112,7 +112,7 @@ describe('Markdown 文件上传入口', () => {
     expect(await importMarkdownAction({ status: 'idle' }, input)).toEqual({
       status: 'error', message: 'Save the Markdown file with UTF-8 encoding.',
     })
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.importDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
@@ -122,7 +122,7 @@ describe('Markdown 文件上传入口', () => {
     expect(await importMarkdownAction({ status: 'idle' }, input)).toEqual({
       status: 'error', message: 'Start the file with YAML front matter containing a title.',
     })
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.importDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
     expect(mocks.redirect).not.toHaveBeenCalled()
@@ -131,8 +131,8 @@ describe('Markdown 文件上传入口', () => {
   it('无文件ID时以同一会话ID创建草稿，保留正文，成功只刷新管理页面', async () => {
     await expect(importMarkdownAction({ status: 'idle' }, upload()))
       .rejects.toThrow(`Redirect: /admin/posts/${newPostId}`)
-    expect(mocks.createDraftOnce).toHaveBeenCalledExactlyOnceWith(
-      newPostId, { title: 'Imported title', description: '', body }, 'import',
+    expect(mocks.createImportedDraftOnce).toHaveBeenCalledExactlyOnceWith(
+      newPostId, { title: 'Imported title', description: '', body },
     )
     expect(mocks.importDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath.mock.calls).toEqual([
@@ -148,20 +148,20 @@ describe('Markdown 文件上传入口', () => {
     expect(mocks.importDraft).toHaveBeenCalledExactlyOnceWith({
       id: targetId, title: 'Imported title', description: '', body,
     })
-    expect(mocks.createDraftOnce).not.toHaveBeenCalled()
+    expect(mocks.createImportedDraftOnce).not.toHaveBeenCalled()
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ['/admin'], [`/admin/posts/${targetId}`], [`/admin/posts/${targetId}/history`], ['/admin/import'],
     ])
   })
 
   it('同次无ID导入内容冲突给检查链接，不刷新或重建另一篇', async () => {
-    mocks.createDraftOnce.mockReturnValue({ status: 'conflict' })
+    mocks.createImportedDraftOnce.mockReturnValue({ status: 'conflict' })
     expect(await importMarkdownAction({ status: 'idle' }, upload())).toEqual({
       status: 'error',
       message: 'A draft already exists for this import attempt with different content. Your file selection is preserved. Check the saved draft or start a new import.',
       reviewPostId: newPostId,
     })
-    expect(mocks.createDraftOnce).toHaveBeenCalledTimes(1)
+    expect(mocks.createImportedDraftOnce).toHaveBeenCalledTimes(1)
     expect(mocks.importDraft).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
     expect(mocks.redirect).not.toHaveBeenCalled()
@@ -171,7 +171,7 @@ describe('Markdown 文件上传入口', () => {
     const error = new Error('Private storage detail')
     const input = upload()
     if (kind === 'open') mocks.withAdminPostStore.mockRejectedValue(error)
-    if (kind === 'write') mocks.createDraftOnce.mockImplementation(() => { throw error })
+    if (kind === 'write') mocks.createImportedDraftOnce.mockImplementation(() => { throw error })
     if (kind === 'read') {
       const file = input.get('file')
       if (!(file instanceof File)) throw new Error('Invalid test fixture')

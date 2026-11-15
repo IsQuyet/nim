@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from './auth'
 import { initializeDatabase, openDatabase } from './database'
 import * as databaseModule from './database'
-import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, getAdminWorkingCopy, withAdminPostStore, withAdminWritingStore } from './admin-posts'
+import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore, withAdminWritingStore } from './admin-posts'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 
 vi.mock('server-only', () => ({}))
 vi.mock('./auth', () => ({ getAdminSession: vi.fn() }))
@@ -61,7 +62,6 @@ describe('管理端文章访问', () => {
     for (const read of [
       () => getAdminPosts(),
       () => getAdminDraft('missing'),
-      () => getAdminWorkingCopy('missing'),
       () => getAdminRevisionHistory('missing', { page: '0' }),
     ]) {
       await expect(read()).rejects.toMatchObject({ digest: expect.stringMatching(/^NEXT_REDIRECT;/) })
@@ -93,17 +93,17 @@ describe('管理端文章访问', () => {
       description: 'Description.',
       body: '# First body',
     }
-    const created = await withAdminPostStore(store => store.createDraft(first))
+    const created = await withAdminWritingStore(store => createTestDraft(store, first))
     assert.ok(created.authorized)
     const draft = created.value
     expect(await getAdminDraft(draft.id)).toEqual(draft)
     expect(await getAdminDraft('missing')).toBeNull()
 
-    const saved = await withAdminPostStore(store =>
-      store.saveDraft(draft.id, { ...first, body: '# Edited body' }, draft.revisionId),
+    const saved = await withAdminWritingStore(store =>
+      saveTestDraft(store, draft, { ...first, body: '# Edited body' }),
     )
-    assert.ok(saved.authorized && saved.value.status === 'success')
-    const edited = saved.value.value
+    assert.ok(saved.authorized)
+    const edited = saved.value
     expect(await getAdminDraft(draft.id)).toEqual(edited)
     expect(await getAdminPosts()).toEqual([
       {
@@ -121,13 +121,11 @@ describe('管理端文章访问', () => {
   it('历史查询返回同一快照的草稿、公开指针和选中修订，列表仅含摘要', async () => {
     await initializeDatabase()
     const first = { title: 'Initial title', description: 'Original summary', body: '# Original body' }
-    const result = await withAdminPostStore(store => {
-      const draft = store.createDraft(first)
-      const edited = store.saveDraft(draft.id, { ...first, body: '# Changed body' }, draft.revisionId)
-      assert.ok(edited.status === 'success')
-      const published = store.publishDraft(draft.id, edited.value, edited.value.revisionId)
-      assert.ok(published.status === 'success')
-      return { draft, edited: edited.value, published: published.value }
+    const result = await withAdminWritingStore(store => {
+      const draft = createTestDraft(store, first)
+      const edited = saveTestDraft(store, draft, { ...first, body: '# Changed body' })
+      const published = publishTestDraft(store, edited)
+      return { draft, edited, published }
     })
     assert.ok(result.authorized)
     const { draft, edited, published } = result.value
@@ -149,7 +147,7 @@ describe('管理端文章访问', () => {
 
   it('历史页只接受共享schema定义的查询，非法查询或不存在的选择返回缺失结果', async () => {
     await initializeDatabase()
-    const result = await withAdminPostStore(store => store.createDraft({
+    const result = await withAdminWritingStore(store => createTestDraft(store, {
       title: 'History query', description: '', body: '# Body',
     }))
     assert.ok(result.authorized)
@@ -179,11 +177,11 @@ describe('管理端文章访问', () => {
     const entered = Promise.withResolvers<void>()
     const resume = Promise.withResolvers<void>()
     const content = { title: 'Async draft', description: '', body: '# Async body' }
-    const pending = withAdminPostStore(async store => {
+    const pending = withAdminWritingStore(async store => {
       entered.resolve()
       await resume.promise
       expect(database.$client.open).toBe(true)
-      return store.createDraft(content)
+      return createTestDraft(store, content)
     })
 
     await entered.promise

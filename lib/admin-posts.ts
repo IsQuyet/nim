@@ -32,12 +32,6 @@ export function withAdminWritingStore<T>(operation: (store: WritingStore) => T) 
   return withAdminDatabase(database => operation(createWritingStore(database)))
 }
 
-export async function getAdminWorkingCopy(id: string) {
-  const result = await withAdminWritingStore(store => store.getWorkingCopy(id))
-  if (!result.authorized) redirect('/admin/login')
-  return result.value
-}
-
 export async function getAdminPosts() {
   const result = await withAdminPostStore(store => store.listPosts())
   if (!result.authorized) redirect('/admin/login')

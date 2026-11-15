@@ -1,19 +1,48 @@
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { AppDatabase } from './database'
-import { postIdSchema } from './content'
-import { contentOf, getDraft, getWorkingCopy, insertRevision, updateDraft, writePublication, writeWorkingCopy } from './post-storage'
-import { postDrafts, posts, postWriteReceipts } from './schema'
-import { writingCommandSchema, type WritingAcknowledgement, type WritingCommand, type WritingResult, type WritingStore } from './writing'
+import { contentOf, getDraft, insertDraft, updateDraft, writePublication, type PostDatabase } from './post-storage'
+import { postPublications, postRevisions, posts, postWriteReceipts } from './schema'
+import {
+  operationIdentitySchema,
+  writingCommandSchema,
+  type OperationIdentity,
+  type ReceiptResult,
+  type WritingAcknowledgement,
+  type WritingCommand,
+  type WritingResult,
+  type WritingStore,
+} from './writing'
 
 function requestHash(command: WritingCommand) {
   return createHash('sha256').update(JSON.stringify({
     postId: command.postId,
     operationId: command.operationId,
-    expectedVersion: command.expectedVersion,
+    expectedRevisionId: command.expectedRevisionId,
     intent: command.intent,
     content: contentOf(command.content),
   })).digest('hex')
+}
+
+function getReceipt(database: PostDatabase, operationId: string) {
+  return database.select({
+    postId: postWriteReceipts.postId,
+    requestHash: postWriteReceipts.requestHash,
+    draft: {
+      id: posts.id,
+      revisionId: postRevisions.id,
+      createdAt: posts.createdAt,
+      updatedAt: postRevisions.createdAt,
+      title: postRevisions.title,
+      description: postRevisions.description,
+      body: postRevisions.body,
+    },
+    publication: { id: postPublications.id, publishedAt: postPublications.publishedAt },
+  }).from(postWriteReceipts)
+    .innerJoin(posts, eq(posts.id, postWriteReceipts.postId))
+    .innerJoin(postRevisions, eq(postRevisions.id, postWriteReceipts.revisionId))
+    .leftJoin(postPublications, eq(postPublications.id, postWriteReceipts.publicationId))
+    .where(eq(postWriteReceipts.operationId, operationId)).get() ?? null
 }
 
 export function createWritingStore(database: AppDatabase): WritingStore {
@@ -23,76 +52,49 @@ export function createWritingStore(database: AppDatabase): WritingStore {
     const command = parsed.data
     const hash = requestHash(command)
     return database.transaction((transaction): WritingResult => {
-      const current = getWorkingCopy(transaction, command.postId)
-      const receipt = transaction.select().from(postWriteReceipts)
-        .where(eq(postWriteReceipts.operationId, command.operationId)).get()
+      const receipt = getReceipt(transaction, command.operationId)
       if (receipt) {
         if (receipt.postId !== command.postId || receipt.requestHash !== hash) {
           return { status: 'invalid', message: 'This operation ID belongs to a different request.' }
         }
-        if (!current) throw new Error('已确认的工作稿缺少文档身份。')
-        // 回执只保留请求摘要和确认元数据，正文由经摘要核对的原请求重建。
-        return {
-          status: 'success',
-          value: {
-            workingCopy: {
-              id: receipt.postId,
-              ...contentOf(command.content),
-              version: receipt.version,
-              checkpointRevisionId: receipt.revisionId,
-              createdAt: current.createdAt,
-              updatedAt: receipt.updatedAt,
-            },
-            publication: receipt.publicationId !== null && receipt.publishedAt !== null
-              ? { id: receipt.publicationId, publishedAt: receipt.publishedAt }
-              : null,
-          },
-        }
+        return { status: 'success', value: { draft: receipt.draft, publication: receipt.publication } }
       }
-      if ((current?.version ?? null) !== command.expectedVersion) return { status: 'conflict', current }
+
+      const current = getDraft(transaction, command.postId)
+      if ((current?.revisionId ?? null) !== command.expectedRevisionId) return { status: 'conflict', current }
       if (!current) {
         const identity = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, command.postId)).get()
         if (identity) return { status: 'conflict', current: null }
-        if (!postIdSchema.safeParse(command.postId).success) {
-          return { status: 'invalid', message: 'A new post ID must be a UUID.' }
-        }
-        transaction.insert(posts).values({ id: command.postId, createdAt: new Date().toISOString() }).run()
       }
-
+      const draft = current
+        ? updateDraft(transaction, current, command.content, command.intent)
+        : insertDraft(transaction, command.postId, command.content, 'create')
       let publication: WritingAcknowledgement['publication'] = null
-      if (command.intent === 'autosave') {
-        writeWorkingCopy(transaction, command.postId, command.content)
-      } else {
-        const previous = getDraft(transaction, command.postId)
-        let draft
-        if (previous) {
-          draft = updateDraft(transaction, previous, command.content, command.intent === 'save' ? 'save' : 'publish')
-        } else {
-          const revision = insertRevision(transaction, command.postId, command.content, 'create')
-          transaction.insert(postDrafts).values({ postId: command.postId, revisionId: revision.id }).run()
-          const working = writeWorkingCopy(transaction, command.postId, command.content, true, revision.createdAt)
-          draft = { id: working.id, ...contentOf(working), revisionId: revision.id, createdAt: working.createdAt, updatedAt: revision.createdAt }
-        }
-        if (command.intent === 'publish') {
-          const published = writePublication(transaction, draft)
-          publication = { id: published.publicationId, publishedAt: published.publishedAt }
-        }
+      if (command.intent === 'publish') {
+        const published = writePublication(transaction, draft)
+        publication = { id: published.publicationId, publishedAt: published.publishedAt }
       }
-      const workingCopy = getWorkingCopy(transaction, command.postId)
-      if (!workingCopy) throw new Error('无法确认工作稿写入结果。')
       transaction.insert(postWriteReceipts).values({
         operationId: command.operationId,
         postId: command.postId,
         requestHash: hash,
-        version: workingCopy.version,
-        revisionId: workingCopy.checkpointRevisionId,
-        updatedAt: workingCopy.updatedAt,
+        revisionId: draft.revisionId,
         publicationId: publication?.id ?? null,
-        publishedAt: publication?.publishedAt ?? null,
       }).run()
-      return { status: 'success', value: { workingCopy, publication } }
+      return { status: 'success', value: { draft, publication } }
     }, { behavior: 'immediate' })
   }
 
-  return { getWorkingCopy: id => getWorkingCopy(database, id), write }
+  function inspect(input: OperationIdentity): ReceiptResult {
+    const parsed = operationIdentitySchema.safeParse(input)
+    if (!parsed.success) return { status: 'invalid', message: parsed.error.issues[0].message }
+    const receipt = getReceipt(database, parsed.data.operationId)
+    if (!receipt) return { status: 'unconfirmed' }
+    if (receipt.postId !== parsed.data.postId) {
+      return { status: 'invalid', message: 'This operation ID belongs to a different post.' }
+    }
+    return { status: 'success', value: { draft: receipt.draft, publication: receipt.publication } }
+  }
+
+  return { getDraft: id => getDraft(database, id), write, inspect }
 }

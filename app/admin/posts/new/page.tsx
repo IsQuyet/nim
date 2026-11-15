@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { requireAdminSession } from '@/lib/auth'
-import { getAdminWorkingCopy } from '@/lib/admin-posts'
+import { getAdminDraft } from '@/lib/admin-posts'
 import { postIdSchema } from '@/lib/content'
 import { PostEditor } from '../../post-editor'
 
@@ -17,7 +17,7 @@ export default async function NewDraftPage({ searchParams }: {
   if (!identity.success) notFound()
   if (!identity.data) redirect(`/admin/posts/new?draft=${randomUUID()}`)
   const id = identity.data
-  const initial = await getAdminWorkingCopy(id)
+  const initial = await getAdminDraft(id)
 
   return (
     <main className="space-y-8">
@@ -33,7 +33,7 @@ export default async function NewDraftPage({ searchParams }: {
           Write in Markdown and save a draft.
         </p>
       </section>
-      <PostEditor key={id} postId={id} initial={initial} isNew={initial === null || initial.checkpointRevisionId === null} />
+      <PostEditor key={id} postId={id} initial={initial} />
     </main>
   )
 }
