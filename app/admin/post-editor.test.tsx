@@ -9,7 +9,7 @@ import { WritingSessionsProvider } from './writing-sessions'
 import { useWritingSession } from './use-writing-session'
 
 function render(ui: ReactNode) { return renderComponent(ui, { wrapper: WritingSessionsProvider }) }
-const routing = vi.hoisted(() => ({ replace: vi.fn() }))
+const routing = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }))
 const comparisonAction = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('next/navigation', async importOriginal => ({ ...await importOriginal<typeof import('next/navigation')>(), useRouter: () => routing }))
 const local = vi.hoisted(() => ({ copies: new Map<string, RecoveryCopy>(), failure: false }))
@@ -91,6 +91,7 @@ function copy(bodyText: string, pending: WritingCommand | null = null): Recovery
 
 beforeEach(() => {
   routing.replace.mockReset().mockImplementation((url: string) => window.history.replaceState(null, '', url))
+  routing.push.mockReset()
   comparisonAction.read.mockReset().mockResolvedValue({ status: 'success', value: published })
   local.copies.clear()
   local.failure = false
@@ -358,16 +359,28 @@ describe('明确保存与本机恢复编辑器', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('未提交内容的离开提醒可取消，下载与新标签不拦截', async () => {
+  it('站内离开使用AlertDialog，取消保留输入、确认恢复目标导航，刷新仍受原生保护', async () => {
     render(<div onClick={event => event.preventDefault()}><a href="/admin">Back to posts</a><a href="/admin/login" target="_blank" rel="noopener noreferrer">New tab login</a><PostEditor postId={id} initial={initial} transport={connection} /></div>)
     await ready()
     fireEvent.change(body(), { target: { value: 'Unsaved text' } })
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const nativeConfirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     fireEvent.click(screen.getByRole('link', { name: 'Download saved draft' }))
     fireEvent.click(screen.getByRole('link', { name: 'New tab login' }))
-    expect(confirm).not.toHaveBeenCalled()
+    expect(nativeConfirm).not.toHaveBeenCalled()
+
     fireEvent.click(screen.getByRole('link', { name: 'Back to posts' }))
-    expect(confirm).toHaveBeenCalledTimes(1)
+    let dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(/changes have not been submitted to the server/)).toBeDefined()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stay on page' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(body().value).toBe('Unsaved text')
+    expect(routing.push).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to posts' }))
+    dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Leave page' }))
+    expect(routing.push).toHaveBeenCalledExactlyOnceWith('http://localhost:3000/admin', { scroll: false })
+    expect(nativeConfirm).not.toHaveBeenCalled()
     const event = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(true)

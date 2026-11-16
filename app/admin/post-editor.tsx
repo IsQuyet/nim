@@ -1,7 +1,17 @@
 'use client'
 
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { MarkdownComparison } from '@/components/markdown-comparison'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/lib/content'
@@ -33,7 +43,8 @@ export function PostEditor({ postId, initial, transport: connection = transport 
   const [comparisonFeedback, setComparisonFeedback] = useState<ReturnType<typeof publishedPostReadSchema.parse> | null>(null)
   const { session, snapshot } = useWritingSession({ postId, initial, transport: connection })
   const { content, remote, candidates, feedback, lastConfirmed, pending } = snapshot
-  useWritingLeaveGuard(snapshot.shouldWarn)
+  const navigate = useCallback((href: string) => router.push(href, { scroll: false }), [router])
+  const { pendingNavigation, cancelNavigation, confirmNavigation, leaveDescription } = useWritingLeaveGuard(snapshot.shouldWarn, navigate)
 
   useEffect(() => {
     const check = () => { void session.checkServer() }
@@ -94,7 +105,8 @@ export function PostEditor({ postId, initial, transport: connection = transport 
   }[snapshot.serverStatus]
 
   return (
-    <form aria-label="Draft" method="post" onSubmit={handleSubmit} className="space-y-6">
+    <>
+      <form aria-label="Draft" method="post" onSubmit={handleSubmit} className="space-y-6">
       {snapshot.recoveryRequired && (
         <section aria-label="Local recovery copies" className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
           <h2 className="font-medium">Local recovery copies</h2>
@@ -217,6 +229,31 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         <a href={`/admin/posts/${snapshot.postId}/history`} className="underline underline-offset-4">Revision history</a>
         <a href={`/admin/posts/${snapshot.postId}/export`} download className="underline underline-offset-4">Download saved draft</a>
       </nav>}
-    </form>
+      </form>
+      <AlertDialog
+        open={pendingNavigation !== null}
+        onOpenChange={open => { if (!open) cancelNavigation() }}
+      >
+        <AlertDialogContent className="!border-zinc-200 !bg-white !text-zinc-950 dark:!border-zinc-800 dark:!bg-zinc-950 dark:!text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave this page?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-600 dark:text-zinc-400">
+              {leaveDescription} Leaving will not retry an unconfirmed save or publish.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="!border-zinc-200 !bg-zinc-100 !text-zinc-950 focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-offset-2 focus-visible:!outline-zinc-950 dark:!border-zinc-700 dark:!bg-zinc-800 dark:!text-zinc-100 dark:focus-visible:!outline-zinc-100">
+              Stay on page
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmNavigation}
+              className="!bg-zinc-950 !text-zinc-50 focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-offset-2 focus-visible:!outline-zinc-950 dark:!bg-zinc-100 dark:!text-zinc-950 dark:focus-visible:!outline-zinc-100"
+            >
+              Leave page
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
