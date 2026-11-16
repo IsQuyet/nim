@@ -1,12 +1,10 @@
 'use client'
 
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { MarkdownPreviewLoader } from '@/components/markdown-preview-loader'
-import { MarkdownProse } from '@/components/markdown-prose'
+import { MarkdownEditor } from '@/components/markdown-editor'
 import { samePostContent, type DraftPost, type PostContent } from '@/lib/content'
 import type { WritingTransport } from '@/lib/writing'
-import { cn } from '@/lib/utils'
 import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing-actions'
 import { useWritingSession } from './use-writing-session'
 import { useWritingLeaveGuard } from './use-writing-leave-guard'
@@ -26,7 +24,6 @@ const BUTTON_CLASS_NAME =
 export function PostEditor({ postId, initial, transport: connection = transport }: PostEditorProps) {
   const prefix = useId()
   const router = useRouter()
-  const [preview, setPreview] = useState(false)
   const { session, snapshot } = useWritingSession({ postId, initial, transport: connection })
   const { content, remote, candidates, feedback, lastConfirmed, pending } = snapshot
   useWritingLeaveGuard(snapshot.shouldWarn)
@@ -143,20 +140,14 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         <label htmlFor={`${prefix}-description`} className="text-sm font-medium">Description</label>
         <textarea id={`${prefix}-description`} name="description" rows={2} value={content.description} onChange={event => edit('description', event.target.value)} className={FIELD_CLASS_NAME} />
       </div>
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <label htmlFor={`${prefix}-body`} className="text-sm font-medium">Body</label>
-          <div role="group" aria-label="Body view" className="flex gap-2">
-            {[{ label: 'Edit', value: false }, { label: 'Preview', value: true }].map(view => (
-              <button key={view.label} type="button" aria-pressed={preview === view.value} onClick={() => setPreview(view.value)} className={cn(
-                'rounded-full px-3 py-1 text-sm transition-colors',
-                preview === view.value ? 'bg-zinc-100 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100',
-              )}>{view.label}</button>
-            ))}
-          </div>
-        </div>
-        <textarea id={`${prefix}-body`} name="body" rows={18} hidden={preview} value={content.body} onChange={event => edit('body', event.target.value)} className={cn(FIELD_CLASS_NAME, 'min-h-80 resize-y font-mono text-sm leading-6')} />
-        {preview && <section aria-label="Markdown preview"><MarkdownProse className="min-h-80 max-w-none rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">{content.body ? <MarkdownPreviewLoader source={content.body} /> : <p>Nothing to preview yet.</p>}</MarkdownProse></section>}
+      <div className="space-y-2">
+        <label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`} className="text-sm font-medium">Body</label>
+        <MarkdownEditor
+          id={`${prefix}-body`}
+          labelId={`${prefix}-body-label`}
+          value={content.body}
+          onChange={value => edit('body', value)}
+        />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" name="intent" value="save" disabled={blocked} aria-busy={snapshot.manualBusy} className={BUTTON_CLASS_NAME}>Save draft</button>

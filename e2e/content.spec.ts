@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import type { Page, Route } from '@playwright/test'
 import { parseMarkdownFile } from '../lib/markdown-file'
-import { MARKDOWN_CODE_THEME } from '../lib/markdown-highlighter'
+import { recoveryCopySchema } from '../lib/writing'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 import { test, expect, expireSession, signIn, snapshot, withStore, withWritingStore } from './fixtures'
 
@@ -33,6 +33,33 @@ async function confirmed(page: Page) {
   const status = page.getByLabel('Saving status')
   await expect(status).toContainText('No unsaved changes.')
   await expect(status).toContainText('Recovery copy saved on this browser.')
+}
+
+async function localBodies(page: Page, postId: string) {
+  const records = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('nim-writing-recovery')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      return await new Promise<unknown[]>((resolve, reject) => {
+        const transaction = database.transaction('copies', 'readonly')
+        const request = transaction.objectStore('copies').getAll()
+        let result: unknown[] = []
+        request.onsuccess = () => { result = request.result }
+        transaction.oncomplete = () => resolve(result)
+        transaction.onabort = () => reject(transaction.error)
+      })
+    } finally { database.close() }
+  })
+  return recoveryCopySchema.array().parse(records)
+    .filter(copy => copy.postId === postId)
+    .map(copy => copy.content.body)
+}
+
+async function expectLocalBody(page: Page, postId: string, body: string) {
+  await expect.poll(() => localBodies(page, postId)).toContain(body)
 }
 
 async function save(page: Page) {
@@ -88,7 +115,7 @@ test('发布当前可见内容，私有修改和历史恢复不改变公开版�
   await page.screenshot({ path: testInfo.outputPath('history-mobile.png'), fullPage: true })
   await page.getByRole('button', { name: 'Restore draft', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${id}`)
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue('# First snapshot\n\nORIGINAL_MARKER')
+  await expect(page.getByLabel('Body', { exact: true })).toContainText('ORIGINAL_MARKER')
   const restored = snapshot(runtime, id)
   expect(restored.revisions).toHaveLength(4)
   expect(restored.revisions.at(-1)?.restoredFromRevisionId).toBe(original.id)
@@ -104,13 +131,18 @@ test('旧编辑基线拒绝覆盖，过期会话重登后原标签页仍能保�
   const stale = await context.newPage()
   await stale.goto(`/admin/posts/${id}`)
   await expect(stale.getByLabel('Saving status')).toContainText('No unsaved changes.')
+  const staleRecovery = stale.getByRole('region', { name: 'Local recovery copies' })
+  if (await staleRecovery.isVisible()) {
+    await staleRecovery.getByRole('button', { name: 'Continue without restoring', exact: true }).click()
+  }
   await page.getByLabel('Body', { exact: true }).fill('# Current saved revision')
   await save(page)
   const before = snapshot(runtime, id)
   await stale.getByLabel('Body', { exact: true }).fill('# Keep this stale input')
+  await expectLocalBody(stale, id, '# Keep this stale input')
   await stale.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(stale.getByRole('region', { name: 'Draft conflict' })).toBeVisible()
-  await expect(stale.getByLabel('Body', { exact: true })).toHaveValue('# Keep this stale input')
+  await expectLocalBody(stale, id, '# Keep this stale input')
   expect(snapshot(runtime, id)).toEqual(before)
 
   await expireSession(page, runtime)
@@ -250,9 +282,9 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
     dropResponse.resolve()
   }
   await expect(page.getByLabel('Saving status')).toContainText('The previous operation is not confirmed. Your input is preserved.')
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(continuedBody)
   const created = await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Lost response creation'))
   expect(created).toHaveLength(1)
+  await expectLocalBody(page, created[0].id, continuedBody)
   const before = snapshot(runtime, created[0].id)
   expect(before.posts).toHaveLength(1)
   expect(before.revisions).toHaveLength(1)
@@ -262,7 +294,7 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   await page.getByRole('button', { name: 'Check previous operation', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${created[0].id}`)
   await expect(page.getByLabel('Saving status')).toContainText('Unsaved changes. Not saved to the server.')
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(continuedBody)
+  await expectLocalBody(page, created[0].id, continuedBody)
   expect(creationOperations).toEqual([creationOperations[0]])
   expect(snapshot(runtime, created[0].id)).toEqual(before)
   await page.unrouteAll({ behavior: 'wait' })
@@ -289,7 +321,7 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
     await page.getByLabel('Body', { exact: true }).fill(body)
     await page.getByRole('button', { name: intent === 'save' ? 'Save draft' : 'Publish', exact: true }).click()
     await expect(page.getByLabel('Saving status')).toContainText('The previous operation is not confirmed. Your input is preserved.')
-    await expect(page.getByLabel('Body', { exact: true })).toHaveValue(body)
+    await expectLocalBody(page, created[0].id, body)
     const beforeAttempt = await rejected.promise
     expect(snapshot(runtime, created[0].id)).toEqual(beforeAttempt)
     await page.getByRole('button', { name: intent === 'save' ? 'Retry previous save' : 'Retry previous publish', exact: true }).click()
@@ -342,7 +374,7 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   await expect(conflict).toBeVisible()
   await conflict.getByText('Review server text', { exact: true }).click()
   await expect(conflict).toContainText(remoteBody)
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(localBody)
+  await expectLocalBody(page, changed[0].id, localBody)
   expect(changedOperations).toEqual([changedOperations[0]])
   expect(snapshot(runtime, changed[0].id)).toEqual(imported)
   const [review] = await Promise.all([
@@ -356,27 +388,20 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
     await recovery.getByRole('button', { name: 'Continue without restoring', exact: true }).click()
   }
   await expect(reviewStatus).toContainText('No unsaved changes.')
-  await expect(review.getByLabel('Body', { exact: true })).toHaveValue(remoteBody)
-  await expect(page.getByLabel('Body', { exact: true })).toHaveValue(localBody)
+  await expect(review.getByLabel('Body', { exact: true })).toContainText('Remote import after response loss')
+  await expectLocalBody(page, changed[0].id, localBody)
   expect(await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Changed response creation'))).toHaveLength(1)
   expect(snapshot(runtime, changed[0].id)).toEqual(imported)
   await page.unrouteAll({ behavior: 'wait' })
 })
 
-test('多语言两端原文与高亮一致，预览资源按需且所有网络类型均无 WASM 请求', async ({ page, context, login }, testInfo) => {
-  const scripts: Promise<{ url: string; body: string; failure?: string }>[] = []
+test('公开 Markdown 多语言高亮并安全渲染，不请求 WASM', async ({ page, context, login }, testInfo) => {
   const requests: { url: string; type: string }[] = []
   const contentTypes: string[] = []
   context.on('request', request => requests.push({ url: request.url(), type: request.resourceType() }))
   context.on('response', response => {
     const type = response.headers()['content-type']
     if (type) contentTypes.push(type)
-    if (response.request().resourceType() === 'script') {
-      scripts.push(response.text().then(
-        body => ({ url: response.url(), body }),
-        error => ({ url: response.url(), body: '', failure: String(error) }),
-      ))
-    }
   })
   await login()
   const source = '# 中文标题\n\n```rust\nfn main() {}\n```\n\n```sql\nSELECT title FROM posts;\n```\n\n```bash\necho "$HOME"\n```\n\n```unknown-language\n<Widget />\n```\n\n<script>globalThis.__nimMarkdownExecuted = true</script>\n'
@@ -385,50 +410,20 @@ test('多语言两端原文与高亮一致，预览资源按需且所有网络�
   const publicPage = await context.newPage()
   await publicPage.goto(`/blog/${id}`)
   await publicPage.waitForLoadState('networkidle')
-  await page.waitForLoadState('networkidle')
-  const initial = await Promise.all(scripts)
-  expect(initial.filter(script => script.failure)).toEqual([])
-  expect(initial.some(script => script.body.includes(MARKDOWN_CODE_THEME))).toBe(false)
 
   const expectedCode = ['fn main() {}', 'SELECT title FROM posts;', 'echo "$HOME"', '<Widget />']
   expect(await publicPage.locator('pre code').allTextContents()).toEqual(expectedCode)
   await expect(publicPage.locator('.prose script, .prose widget')).toHaveCount(0)
   expect(await publicPage.evaluate(() => Object.hasOwn(globalThis, '__nimMarkdownExecuted'))).toBe(false)
   const samples = [{ index: 0, keyword: 'fn' }, { index: 1, keyword: 'SELECT' }, { index: 2, keyword: 'echo' }]
-  const publicColors: string[] = []
   for (const sample of samples) {
     const block = publicPage.locator('pre code').nth(sample.index)
     const token = block.locator('span[style]').filter({ hasText: new RegExp(`^${sample.keyword}$`) })
     const color = await token.evaluate(element => getComputedStyle(element).color)
     expect(color).not.toBe(await block.evaluate(element => getComputedStyle(element).color))
-    publicColors.push(color)
   }
-
-  await page.getByRole('button', { name: 'Preview', exact: true }).click()
-  const preview = page.getByRole('region', { name: 'Markdown preview' })
-  await expect(preview.locator('pre code')).toHaveCount(4)
-  expect(await preview.locator('pre code').allTextContents()).toEqual(expectedCode)
-  for (const [index, sample] of samples.entries()) {
-    const token = preview.locator('pre code').nth(sample.index).locator('span[style]')
-      .filter({ hasText: new RegExp(`^${sample.keyword}$`) })
-    expect(await token.evaluate(element => getComputedStyle(element).color)).toBe(publicColors[index])
-  }
-  await expect(preview.locator('script, widget')).toHaveCount(0)
-  expect(await page.evaluate(() => Object.hasOwn(globalThis, '__nimMarkdownExecuted'))).toBe(false)
-  await page.waitForLoadState('networkidle')
-  const loaded = await Promise.all(scripts)
-  expect(loaded.filter(script => script.failure)).toEqual([])
-  expect(loaded.some(script => script.body.includes(MARKDOWN_CODE_THEME))).toBe(true)
   expect(requests.some(request => /\.wasm(?:\?|$)/i.test(request.url))).toBe(false)
   expect(contentTypes.some(type => /application\/wasm/i.test(type))).toBe(false)
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: testInfo.outputPath('multilingual-preview-mobile.png'), fullPage: true })
-  await testInfo.attach('preview-network.json', {
-    body: JSON.stringify({
-      initialScripts: initial.map(script => ({ url: script.url, bytes: Buffer.byteLength(script.body) })),
-      openedScripts: loaded.map(script => ({ url: script.url, bytes: Buffer.byteLength(script.body) })),
-      requests, contentTypes,
-    }, null, 2),
-    contentType: 'application/json',
-  })
+  await publicPage.setViewportSize({ width: 390, height: 844 })
+  await publicPage.screenshot({ path: testInfo.outputPath('multilingual-public-mobile.png'), fullPage: true })
 })

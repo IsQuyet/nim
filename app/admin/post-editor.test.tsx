@@ -23,6 +23,16 @@ vi.mock('@/lib/recovery-store', () => ({
     close() {},
   }),
 }))
+vi.mock('@/components/markdown-editor', () => ({
+  MarkdownEditor: ({ id, labelId, value, onChange }: {
+    id: string
+    labelId: string
+    value: string
+    onChange: (value: string) => void
+  }) => (
+    <textarea id={id} aria-labelledby={labelId} value={value} onChange={event => onChange(event.target.value)} />
+  ),
+}))
 vi.mock('./writing-actions', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
 
 class EditorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, { failed: boolean }> {
@@ -346,17 +356,12 @@ describe('明确保存与本机恢复编辑器', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('预览保持同一份原文和 GFM 规则，不保存到服务器', async () => {
+  it('保留输入的 Markdown 原文且不因编辑而保存到服务器', async () => {
     render(<PostEditor postId={id} initial={initial} transport={connection} />)
     await ready()
     const source = '# Preview heading\n\n| Name | Value |\n| --- | --- |\n| Example | 1 |'
     fireEvent.change(body(), { target: { value: source } })
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
-    const preview = screen.getByRole('region', { name: 'Markdown preview' })
-    expect(await within(preview).findByText('Preview heading', { selector: 'h1' }, { timeout: 10_000 })).toBeDefined()
-    expect(within(preview).getByRole('table')).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     expect(body().value).toBe(source)
     expect(write).not.toHaveBeenCalled()
-  }, 15_000)
+  })
 })
