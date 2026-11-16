@@ -55,13 +55,15 @@ export const draftPostSchema = postContentSchema.extend({
 
 export type DraftPost = z.infer<typeof draftPostSchema>
 
-export type PublishedPost = PostContent & {
-  id: string
-  revisionId: number
-  publicationId: number
-  createdAt: string
-  publishedAt: string
-}
+export const publishedPostSchema = postContentSchema.extend({
+  id: postIdSchema,
+  revisionId: revisionIdSchema,
+  publicationId: revisionIdSchema,
+  createdAt: z.iso.datetime(),
+  publishedAt: z.iso.datetime(),
+}).strict()
+
+export type PublishedPost = z.infer<typeof publishedPostSchema>
 
 export type PostPublication = {
   id: number

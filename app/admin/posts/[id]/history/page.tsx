@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { MarkdownContent } from '@/components/markdown-content'
-import { MarkdownProse } from '@/components/markdown-prose'
+import { MarkdownComparison } from '@/components/markdown-comparison'
 import { getAdminRevisionHistory } from '@/lib/admin-posts'
 import { samePostContent, type PostRevisionSummary } from '@/lib/content'
 import { restoreRevisionAction } from '../../../actions'
@@ -118,7 +117,7 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
           </Link>
         )}
       </nav>
-      <section aria-label="Selected revision" className="space-y-4 border-t border-zinc-100 pt-6 dark:border-zinc-800">
+      <section aria-label="Revision details" className="space-y-4 border-t border-zinc-100 pt-6 dark:border-zinc-800">
         <h2 className="text-lg font-medium">{selectedRevision.title}</h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
           <span>Revision {selectedRevision.id}</span>
@@ -151,9 +150,17 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
           })}
           disabled={samePostContent(selectedRevision, draft)}
         />
-        <MarkdownProse className="max-w-none">
-          <MarkdownContent source={selectedRevision.body} />
-        </MarkdownProse>
+        <MarkdownComparison
+          published={published}
+          compared={{
+            label: 'Selected revision',
+            revisionId: selectedRevision.id,
+            detail: `${sourceLabels[selectedRevision.source]} · ${dateFormatter.format(new Date(selectedRevision.createdAt))} UTC`,
+            title: selectedRevision.title,
+            description: selectedRevision.description,
+            body: selectedRevision.body,
+          }}
+        />
       </section>
     </main>
   )

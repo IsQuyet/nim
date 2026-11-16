@@ -7,10 +7,6 @@ const mocks = vi.hoisted(() => ({
   getAdminRevisionHistory: vi.fn(),
   restoreRevisionAction: vi.fn(),
 }))
-vi.mock('@/components/markdown-content', async () => {
-  const { MarkdownPreview } = await import('@/components/markdown-preview')
-  return { MarkdownContent: MarkdownPreview }
-})
 vi.mock('@/lib/admin-posts', () => ({ getAdminRevisionHistory: mocks.getAdminRevisionHistory }))
 vi.mock('../../../actions', () => ({ restoreRevisionAction: mocks.restoreRevisionAction }))
 
@@ -60,7 +56,10 @@ async function renderHistory(query: Record<string, string | string[] | undefined
   const result = render(await RevisionHistoryPage({
     params: Promise.resolve({ id }), searchParams: Promise.resolve(query),
   }))
-  await waitFor(() => expect(screen.queryByText('Rendering preview…')).toBeNull())
+  await waitFor(() => {
+    expect(screen.queryByText('Loading preview…')).toBeNull()
+    expect(screen.queryByText('Rendering preview…')).toBeNull()
+  })
   return result
 }
 
@@ -109,15 +108,28 @@ describe('管理员修订历史页', () => {
       .toBe(`/admin/posts/${id}/history?page=2&revisionId=4`)
   })
 
-  it('只渲染选中快照的标题、摘要与Markdown，不把其他正文或当前指针正文放入页面', async () => {
+  it('并排渲染发布版与选中修订，排除当前草稿指针正文', async () => {
     const { container } = await renderHistory()
-    const preview = screen.getByRole('region', { name: 'Selected revision' })
-    expect(within(preview).getByRole('heading', { name: 'Selected title' })).toBeDefined()
-    expect(within(preview).getByText('Selected description')).toBeDefined()
-    expect(within(preview).getByRole('heading', { name: /Selected snapshot/ })).toBeDefined()
-    expect(within(preview).getByRole('table')).toBeDefined()
-    expect(container.textContent).not.toContain('PUBLIC_BODY_NOT_SELECTED')
+    const comparison = screen.getByRole('region', { name: 'Rendered version comparison' })
+    const published = within(comparison).getByRole('article', { name: 'Published version' })
+    const selected = within(comparison).getByRole('article', { name: 'Selected revision' })
+    expect(within(published).getByText('Published title')).toBeDefined()
+    expect(within(published).getByText('Public summary')).toBeDefined()
+    expect(within(published).getByText('PUBLIC_BODY_NOT_SELECTED')).toBeDefined()
+    expect(within(selected).getByText('Selected title')).toBeDefined()
+    expect(within(selected).getByText('Selected description')).toBeDefined()
+    expect(within(selected).getByRole('heading', { name: /Selected snapshot/ })).toBeDefined()
+    expect(within(selected).getByRole('table')).toBeDefined()
     expect(container.textContent).not.toContain('DRAFT_BODY_NOT_SELECTED')
+  })
+
+  it('没有发布版时明确说明，并只显示选中修订的阅读预览', async () => {
+    mocks.getAdminRevisionHistory.mockResolvedValue({ ...createHistory(), published: null })
+    await renderHistory()
+    const comparison = screen.getByRole('region', { name: 'Rendered version comparison' })
+    expect(within(comparison).getByRole('status').textContent).toBe('This post has not been published yet.')
+    expect(within(comparison).queryByRole('article', { name: 'Published version' })).toBeNull()
+    expect(within(comparison).getByRole('article', { name: 'Selected revision' })).toBeDefined()
   })
 
   it('分页保留当前选择，摘要链接保留当前页', async () => {

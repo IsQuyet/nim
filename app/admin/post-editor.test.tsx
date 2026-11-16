@@ -10,6 +10,7 @@ import { useWritingSession } from './use-writing-session'
 
 function render(ui: ReactNode) { return renderComponent(ui, { wrapper: WritingSessionsProvider }) }
 const routing = vi.hoisted(() => ({ replace: vi.fn() }))
+const comparisonAction = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('next/navigation', async importOriginal => ({ ...await importOriginal<typeof import('next/navigation')>(), useRouter: () => routing }))
 const local = vi.hoisted(() => ({ copies: new Map<string, RecoveryCopy>(), failure: false }))
 vi.mock('@/lib/recovery-store', () => ({
@@ -33,6 +34,18 @@ vi.mock('@/components/markdown-editor', () => ({
     <textarea id={id} aria-labelledby={labelId} value={value} onChange={event => onChange(event.target.value)} />
   ),
 }))
+vi.mock('@/components/markdown-comparison', () => ({
+  MarkdownComparison: ({ published, compared }: {
+    published: { title: string; description: string; body: string } | null
+    compared: { title: string; description: string; body: string }
+  }) => (
+    <section aria-label="Rendered version comparison">
+      {published && <article aria-label="Published version"><p>{published.title}</p><p>{published.description}</p><p>{published.body}</p></article>}
+      <article aria-label="Current editor text"><p>{compared.title}</p><p>{compared.description}</p><p>{compared.body}</p></article>
+    </section>
+  ),
+}))
+vi.mock('./comparison-actions', () => ({ readPublishedPostAction: comparisonAction.read }))
 vi.mock('./writing-actions', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
 
 class EditorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, { failed: boolean }> {
@@ -46,6 +59,10 @@ const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 const time = '2026-11-15T12:00:00.000Z'
 const content = { title: 'A draft', description: 'Description.', body: '# First body' }
 const initial: DraftPost = { id, ...content, revisionId: 1, createdAt: time, updatedAt: time }
+const published = {
+  id, revisionId: 1, publicationId: 1, title: 'Published title', description: 'Published summary',
+  body: '# Published body', createdAt: time, publishedAt: time,
+}
 let server: DraftPost | null
 let revision: number
 let connection: WritingTransport
@@ -74,6 +91,7 @@ function copy(bodyText: string, pending: WritingCommand | null = null): Recovery
 
 beforeEach(() => {
   routing.replace.mockReset().mockImplementation((url: string) => window.history.replaceState(null, '', url))
+  comparisonAction.read.mockReset().mockResolvedValue({ status: 'success', value: published })
   local.copies.clear()
   local.failure = false
   receipts.clear()
@@ -353,6 +371,40 @@ describe('明确保存与本机恢复编辑器', () => {
     const event = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(true)
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('对照当前未保存文本与当前发布版时只读取服务器，不保存草稿', async () => {
+    render(<PostEditor postId={id} initial={initial} transport={connection} />)
+    await ready()
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Local title' } })
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Local summary' } })
+    fireEvent.change(body(), { target: { value: 'Local body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with published' }))
+
+    const comparison = await screen.findByRole('region', { name: 'Rendered version comparison' })
+    const before = within(comparison).getByRole('article', { name: 'Published version' })
+    const after = within(comparison).getByRole('article', { name: 'Current editor text' })
+    expect(within(before).getByText('Published title')).toBeDefined()
+    expect(within(before).getByText('Published summary')).toBeDefined()
+    expect(within(before).getByText('# Published body')).toBeDefined()
+    expect(within(after).getByText('Local title')).toBeDefined()
+    expect(within(after).getByText('Local summary')).toBeDefined()
+    expect(within(after).getByText('Local body')).toBeDefined()
+    expect(comparisonAction.read).toHaveBeenCalledExactlyOnceWith(id)
+    expect(write).not.toHaveBeenCalled()
+    expect(server).toEqual(initial)
+  })
+
+  it('发布版读取失败时保留输入并向用户显示错误，不触发保存', async () => {
+    comparisonAction.read.mockResolvedValueOnce({ status: 'error', message: 'Could not load the published version.' })
+    render(<PostEditor postId={id} initial={initial} transport={connection} />)
+    await ready()
+    fireEvent.change(body(), { target: { value: 'Still local' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with published' }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not load the published version.')
+    expect(body().value).toBe('Still local')
     expect(write).not.toHaveBeenCalled()
   })
 

@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useId, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { MarkdownComparison } from '@/components/markdown-comparison'
 import { MarkdownEditor } from '@/components/markdown-editor'
-import { samePostContent, type DraftPost, type PostContent } from '@/lib/content'
+import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/lib/content'
+import { publishedPostReadSchema } from '@/lib/markdown-comparison'
 import type { WritingTransport } from '@/lib/writing'
+import { readPublishedPostAction } from './comparison-actions'
 import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing-actions'
 import { useWritingSession } from './use-writing-session'
 import { useWritingLeaveGuard } from './use-writing-leave-guard'
@@ -24,6 +27,10 @@ const BUTTON_CLASS_NAME =
 export function PostEditor({ postId, initial, transport: connection = transport }: PostEditorProps) {
   const prefix = useId()
   const router = useRouter()
+  const [comparison, setComparison] = useState<PublishedPost | null>(null)
+  const [comparisonOpen, setComparisonOpen] = useState(false)
+  const [comparisonBusy, setComparisonBusy] = useState(false)
+  const [comparisonFeedback, setComparisonFeedback] = useState<ReturnType<typeof publishedPostReadSchema.parse> | null>(null)
   const { session, snapshot } = useWritingSession({ postId, initial, transport: connection })
   const { content, remote, candidates, feedback, lastConfirmed, pending } = snapshot
   useWritingLeaveGuard(snapshot.shouldWarn)
@@ -41,6 +48,23 @@ export function PostEditor({ postId, initial, transport: connection = transport 
 
   function edit(field: keyof PostContent, value: string) {
     session.edit({ ...content, [field]: value })
+  }
+
+  async function refreshComparison() {
+    setComparisonBusy(true)
+    setComparisonFeedback(null)
+    try {
+      const result = publishedPostReadSchema.parse(await readPublishedPostAction(postId))
+      setComparisonFeedback(result)
+      if (result.status === 'success') {
+        setComparison(result.value)
+        setComparisonOpen(true)
+      }
+    } catch {
+      setComparisonFeedback({ status: 'error', message: 'Could not load the published version.' })
+    } finally {
+      setComparisonBusy(false)
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -140,14 +164,39 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         <label htmlFor={`${prefix}-description`} className="text-sm font-medium">Description</label>
         <textarea id={`${prefix}-description`} name="description" rows={2} value={content.description} onChange={event => edit('description', event.target.value)} className={FIELD_CLASS_NAME} />
       </div>
-      <div className="space-y-2">
-        <label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`} className="text-sm font-medium">Body</label>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`} className="text-sm font-medium">Body</label>
+          <button type="button" disabled={comparisonBusy} className={BUTTON_CLASS_NAME} onClick={() => { void refreshComparison() }}>
+            {comparisonBusy ? 'Loading published version…' : comparisonOpen ? 'Refresh comparison' : 'Compare with published'}
+          </button>
+        </div>
         <MarkdownEditor
           id={`${prefix}-body`}
           labelId={`${prefix}-body-label`}
           value={content.body}
           onChange={value => edit('body', value)}
         />
+        {comparisonFeedback?.status === 'error' && (
+          <div role="alert" className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p>{comparisonFeedback.message}</p>
+            {comparisonFeedback.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Sign in in a new tab</a>}
+          </div>
+        )}
+        {comparisonOpen && comparisonFeedback?.status === 'success' && (
+          <section className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <button type="button" className="text-sm underline underline-offset-4" onClick={() => setComparisonOpen(false)}>Close comparison</button>
+            <MarkdownComparison
+              published={comparison}
+              compared={{
+                label: 'Current editor text',
+                revisionId: null,
+                detail: remote ? `Draft baseline revision ${remote.revisionId}` : 'Not saved to the server',
+                ...content,
+              }}
+            />
+          </section>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" name="intent" value="save" disabled={blocked} aria-busy={snapshot.manualBusy} className={BUTTON_CLASS_NAME}>Save draft</button>
