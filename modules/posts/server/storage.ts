@@ -91,6 +91,11 @@ function publicationMediaIds(database: PostDatabase, body: string) {
   return references.ids
 }
 
+export function isMediaPublished(database: PostDatabase, mediaId: string) {
+  return database.select({ mediaId: postPublicationMedia.mediaId })
+    .from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, mediaId)).limit(1).get() !== undefined
+}
+
 export function writePublication(database: PostTransaction, draft: DraftPost): PublishedPost {
   const mediaIds = publicationMediaIds(database, draft.body)
   const current = getPublishedPost(database, draft.id)

@@ -5,6 +5,7 @@ import { getMediaDirectory } from '@/lib/server/data-paths'
 import { openDatabase } from '@/lib/server/database'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
+import { isMediaPublished } from '@/modules/posts/server/storage'
 
 type MediaRouteContext = {
   params: Promise<{ id: string }>
@@ -29,7 +30,7 @@ export async function GET(request: Request, { params }: MediaRouteContext) {
     const store = createMediaStore(database, createFileMediaStorage(getMediaDirectory()))
     asset = store.get(parsed.data)
     if (!asset || asset.state !== 'ready') return notFound()
-    publicAsset = store.isPublished(asset.id)
+    publicAsset = isMediaPublished(database, asset.id)
   } finally {
     database.$client.close()
   }
