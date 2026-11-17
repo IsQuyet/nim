@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MarkdownImageUpload } from './markdown-image-upload'
+import { MarkdownImageUpload } from './image-upload'
 
 const fetchMock = vi.fn<typeof fetch>()
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'

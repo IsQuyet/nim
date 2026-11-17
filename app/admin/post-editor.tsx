@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { MarkdownComparison } from '@/components/markdown-comparison'
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/modules/markdown/ui/editor'
-import { MarkdownImageUpload } from '@/components/markdown-image-upload'
+import { MarkdownImageUpload } from '@/modules/media/ui/image-upload'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/modules/posts/model'
 import { publishedPostReadSchema } from '@/modules/posts/comparison'
 import type { WritingTransport } from '@/modules/posts/writing'
