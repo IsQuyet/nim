@@ -2,6 +2,7 @@
 
 import { unstable_rethrow } from 'next/navigation'
 import { postIdSchema } from '@/modules/posts/model'
+import { signInRequired } from '@/modules/auth/failure'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
 import { publishedPostReadSchema } from '@/modules/posts/comparison'
 
@@ -15,7 +16,7 @@ export async function readPublishedPostAction(input: unknown) {
     })
     return publishedPostReadSchema.parse(result.authorized
       ? result.value
-      : { status: 'error', message: 'Sign in to compare with the published version.', signInRequired: true })
+      : signInRequired('Sign in to compare with the published version.'))
   } catch (error) {
     unstable_rethrow(error)
     console.error('读取文章发布版本失败。', error)

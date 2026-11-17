@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ActionFailure } from '@/modules/auth/failure'
 import { revisionIdSchema, type DraftPost, type PostRevision, type PublishedPost } from './model'
 
 export type PostRevisionSummary = Omit<PostRevision, 'body' | 'description'>
@@ -15,7 +16,7 @@ export type PostRevisionHistory = {
 
 export type RestoreFormState =
   | { status: 'idle' }
-  | { status: 'error'; message: string; signInRequired?: true }
+  | ActionFailure
 
 export const restoreRevisionSchema = z.object({
   revisionId: revisionIdSchema,

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
+import { signInRequired } from '@/modules/auth/failure'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
 import { postIdSchema, type DraftPost } from '@/modules/posts/model'
 import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '@/modules/posts/files'
@@ -54,7 +55,7 @@ export async function importMarkdownAction(
       return imported
     })
     if (!authorized.authorized) {
-      return { status: 'error', message: 'Sign in to import Markdown.', signInRequired: true }
+      return signInRequired('Sign in to import Markdown.')
     }
     result = authorized.value
   } catch (error) {

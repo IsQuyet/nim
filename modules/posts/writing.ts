@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { actionFailureSchema } from '@/modules/auth/failure'
 import { draftPostSchema, postContentSchema, postFieldsSchema, postIdSchema, revisionIdSchema } from './model'
 
 export const operationIdentitySchema = z.object({
@@ -27,23 +28,22 @@ export type WritingAcknowledgement = z.infer<typeof writingAcknowledgementSchema
 const writingSuccessSchema = z.object({ status: z.literal('success'), value: writingAcknowledgementSchema }).strict()
 const writingConflictSchema = z.object({ status: z.literal('conflict'), current: draftPostSchema.nullable() }).strict()
 const writingInvalidSchema = z.object({ status: z.literal('invalid'), message: z.string() }).strict()
-const writingErrorSchema = z.object({ status: z.literal('error'), message: z.string(), signInRequired: z.literal(true).optional() }).strict()
 const writingUnconfirmedSchema = z.object({ status: z.literal('unconfirmed') }).strict()
 
 export const writingResultSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingConflictSchema, writingInvalidSchema])
 export type WritingResult = z.infer<typeof writingResultSchema>
 
-export const writingFeedbackSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingConflictSchema, writingInvalidSchema, writingErrorSchema])
+export const writingFeedbackSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingConflictSchema, writingInvalidSchema, actionFailureSchema])
 export type WritingFeedback = z.infer<typeof writingFeedbackSchema>
 
 export const receiptResultSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingUnconfirmedSchema, writingInvalidSchema])
 export type ReceiptResult = z.infer<typeof receiptResultSchema>
-export const receiptFeedbackSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingUnconfirmedSchema, writingInvalidSchema, writingErrorSchema])
+export const receiptFeedbackSchema = z.discriminatedUnion('status', [writingSuccessSchema, writingUnconfirmedSchema, writingInvalidSchema, actionFailureSchema])
 export type ReceiptFeedback = z.infer<typeof receiptFeedbackSchema>
 
 export const draftReadResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('success'), value: draftPostSchema.nullable() }).strict(),
-  writingErrorSchema,
+  actionFailureSchema,
 ])
 
 export type WritingStore = {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { actionFailureSchema } from '@/modules/auth/failure'
 import { publishedPostSchema } from './model'
 
 export const publishedPostReadSchema = z.discriminatedUnion('status', [
@@ -6,11 +7,7 @@ export const publishedPostReadSchema = z.discriminatedUnion('status', [
     status: z.literal('success'),
     value: publishedPostSchema.nullable(),
   }).strict(),
-  z.object({
-    status: z.literal('error'),
-    message: z.string(),
-    signInRequired: z.literal(true).optional(),
-  }).strict(),
+  actionFailureSchema,
 ])
 
 export type PublishedPostRead = z.infer<typeof publishedPostReadSchema>

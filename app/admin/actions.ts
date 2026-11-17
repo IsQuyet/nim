@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
+import { signInRequired } from '@/modules/auth/failure'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
 import { restoreRevisionSchema, type RestoreFormState } from '@/modules/posts/history'
 
@@ -18,7 +19,7 @@ export async function restoreRevisionAction(
       const { revisionId, expectedRevisionId } = parsed.data
       return store.restoreRevision(id, revisionId, expectedRevisionId)
     })
-    if (!result.authorized) return { status: 'error', message: 'Sign in to restore this revision.', signInRequired: true }
+    if (!result.authorized) return signInRequired('Sign in to restore this revision.')
     if (result.value.status === 'error') return result.value
     if (result.value.status === 'missing') return { status: 'error', message: 'This draft or revision does not exist.' }
     if (result.value.status === 'conflict') return { status: 'error', message: 'This draft changed while you were viewing history. Reload the history page before restoring.' }
