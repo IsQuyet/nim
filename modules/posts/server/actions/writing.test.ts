@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { withAdminWritingStore } from '@/modules/posts/server/admin'
-import type { DraftPost } from '@/modules/posts/model'
-import type { WritingCommand, WritingStore } from '@/modules/posts/writing'
-import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing-actions'
+import { withAdminWritingStore } from '../admin'
+import type { DraftPost } from '../../model'
+import type { WritingCommand, WritingStore } from '../../writing'
+import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing'
 
-vi.mock('@/modules/posts/server/admin', () => ({ withAdminWritingStore: vi.fn() }))
+vi.mock('../admin', () => ({ withAdminWritingStore: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 const content = { title: 'Title', description: '', body: 'Body' }
 const draft: DraftPost = {

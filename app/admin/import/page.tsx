@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { requireAdminSession } from '@/modules/auth/server/auth'
-import { importMarkdownAction } from './actions'
+import { importMarkdownAction } from '@/modules/posts/server/actions/import'
 import { ImportForm } from './import-form'
 
 export const metadata: Metadata = { title: 'Import Markdown' }

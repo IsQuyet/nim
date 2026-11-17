@@ -3,10 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { signInRequired } from '@/modules/auth/failure'
-import { withAdminPostStore } from '@/modules/posts/server/admin'
-import { postIdSchema, type DraftPost } from '@/modules/posts/model'
-import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '@/modules/posts/files'
-import { decodeMarkdownBytes, importPostMarkdown } from '@/modules/posts/server/file-exchange'
+import { withAdminPostStore } from '../admin'
+import { postIdSchema, type DraftPost } from '../../model'
+import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '../../files'
+import { decodeMarkdownBytes, importPostMarkdown } from '../file-exchange'
 
 type ImportResult =
   | { status: 'success'; value: DraftPost }

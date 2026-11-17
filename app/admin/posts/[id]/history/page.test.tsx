@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   restoreRevisionAction: vi.fn(),
 }))
 vi.mock('@/modules/posts/server/admin', () => ({ getAdminRevisionHistory: mocks.getAdminRevisionHistory }))
-vi.mock('../../../actions', () => ({ restoreRevisionAction: mocks.restoreRevisionAction }))
+vi.mock('@/modules/posts/server/actions/history', () => ({ restoreRevisionAction: mocks.restoreRevisionAction }))
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 

@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { unstable_rethrow } from 'next/navigation'
 import { z } from 'zod'
 import { signInRequired } from '@/modules/auth/failure'
-import { withAdminWritingStore } from '@/modules/posts/server/admin'
-import { operationIdentitySchema, writingCommandSchema, type ReceiptFeedback, type WritingFeedback, type WritingTransport } from '@/modules/posts/writing'
+import { withAdminWritingStore } from '../admin'
+import { operationIdentitySchema, writingCommandSchema, type ReceiptFeedback, type WritingFeedback, type WritingTransport } from '../../writing'
 
 export async function writeDraftAction(input: unknown): Promise<WritingFeedback> {
   try {

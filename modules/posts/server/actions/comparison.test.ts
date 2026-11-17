@@ -2,12 +2,12 @@
 import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { redirect } from 'next/navigation'
-import { withAdminPostStore } from '@/modules/posts/server/admin'
-import type { PublishedPost } from '@/modules/posts/model'
-import type { PostStore } from '@/modules/posts/server/store'
-import { readPublishedPostAction } from './comparison-actions'
+import { withAdminPostStore } from '../admin'
+import type { PublishedPost } from '../../model'
+import type { PostStore } from '../store'
+import { readPublishedPostAction } from './comparison'
 
-vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: vi.fn() }))
+vi.mock('../admin', () => ({ withAdminPostStore: vi.fn() }))
 
 const published: PublishedPost = {
   id: randomUUID(), title: 'Published title', description: 'Published summary', body: '# Published body',

@@ -439,7 +439,7 @@ describe('管理员认证与数据库会话', () => {
       orm.$client.close()
     }
     database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
-    const { writeDraftAction } = await import('@/app/admin/writing-actions')
+    const { writeDraftAction } = await import('@/modules/posts/server/actions/writing')
 
     expect(await writeDraftAction({
       postId: id, operationId: randomUUID(), intent: 'save',

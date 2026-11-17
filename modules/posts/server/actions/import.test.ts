@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/modules/posts/files'
-import { importMarkdownAction } from './actions'
+import { MAX_MARKDOWN_UPLOAD_BYTES } from '../../files'
+import { importMarkdownAction } from './import'
 
 const mocks = vi.hoisted(() => ({
   withAdminPostStore: vi.fn(),
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
 }))
-vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
+vi.mock('../admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', async actual => ({
   ...await actual<typeof import('next/navigation')>(), redirect: mocks.redirect,

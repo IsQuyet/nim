@@ -9,7 +9,7 @@ vi.mock('@/modules/auth/server/auth', () => ({ requireAdminSession: mocks.requir
 vi.mock('node:crypto', async actual => ({
   ...await actual<typeof import('node:crypto')>(), randomUUID: mocks.randomUUID,
 }))
-vi.mock('./actions', () => ({ importMarkdownAction: mocks.importMarkdownAction }))
+vi.mock('@/modules/posts/server/actions/import', () => ({ importMarkdownAction: mocks.importMarkdownAction }))
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset()

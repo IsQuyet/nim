@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { signInRequired } from '@/modules/auth/failure'
-import { withAdminPostStore } from '@/modules/posts/server/admin'
-import { restoreRevisionSchema, type RestoreFormState } from '@/modules/posts/history'
+import { withAdminPostStore } from '../admin'
+import { restoreRevisionSchema, type RestoreFormState } from '../../history'
 
 export async function restoreRevisionAction(
   id: string,

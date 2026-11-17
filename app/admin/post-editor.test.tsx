@@ -45,8 +45,8 @@ vi.mock('@/components/markdown-comparison', () => ({
     </section>
   ),
 }))
-vi.mock('./comparison-actions', () => ({ readPublishedPostAction: comparisonAction.read }))
-vi.mock('./writing-actions', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
+vi.mock('@/modules/posts/server/actions/comparison', () => ({ readPublishedPostAction: comparisonAction.read }))
+vi.mock('@/modules/posts/server/actions/writing', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
 
 class EditorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, { failed: boolean }> {
   state = { failed: false }

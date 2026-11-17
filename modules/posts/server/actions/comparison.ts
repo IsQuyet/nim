@@ -1,10 +1,10 @@
 'use server'
 
 import { unstable_rethrow } from 'next/navigation'
-import { postIdSchema } from '@/modules/posts/model'
+import { postIdSchema } from '../../model'
 import { signInRequired } from '@/modules/auth/failure'
-import { withAdminPostStore } from '@/modules/posts/server/admin'
-import { publishedPostReadSchema } from '@/modules/posts/comparison'
+import { withAdminPostStore } from '../admin'
+import { publishedPostReadSchema } from '../../comparison'
 
 export async function readPublishedPostAction(input: unknown) {
   try {

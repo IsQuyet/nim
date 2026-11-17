@@ -5,7 +5,7 @@ import { MarkdownComparison } from '@/components/markdown-comparison'
 import { getAdminRevisionHistory } from '@/modules/posts/server/admin'
 import type { PostRevisionSummary } from '@/modules/posts/history'
 import { samePostContent } from '@/modules/posts/model'
-import { restoreRevisionAction } from '../../../actions'
+import { restoreRevisionAction } from '@/modules/posts/server/actions/history'
 import { RestoreForm } from './restore-form'
 
 export const metadata: Metadata = { title: 'Revision history' }

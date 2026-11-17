@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { restoreRevisionAction } from './actions'
+import { restoreRevisionAction } from './history'
 
 const mocks = vi.hoisted(() => ({ withAdminPostStore: vi.fn(), restoreRevision: vi.fn(), revalidatePath: vi.fn(), redirect: vi.fn() }))
-vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
+vi.mock('../admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(), redirect: mocks.redirect,
