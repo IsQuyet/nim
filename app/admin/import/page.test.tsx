@@ -5,7 +5,7 @@ import ImportPage from './page'
 const mocks = vi.hoisted(() => ({
   requireAdminSession: vi.fn(), randomUUID: vi.fn(), importMarkdownAction: vi.fn(),
 }))
-vi.mock('@/lib/auth', () => ({ requireAdminSession: mocks.requireAdminSession }))
+vi.mock('@/modules/auth/server/auth', () => ({ requireAdminSession: mocks.requireAdminSession }))
 vi.mock('node:crypto', async actual => ({
   ...await actual<typeof import('node:crypto')>(), randomUUID: mocks.randomUUID,
 }))

@@ -1,7 +1,7 @@
 import { connection } from 'next/server'
 import { postIdSchema } from '@/lib/content'
 import type { MediaAsset } from '@/lib/media'
-import { getAdminSession } from '@/lib/auth'
+import { getAdminSession } from '@/modules/auth/server/auth'
 import { getMediaDirectory } from '@/lib/server/data-paths'
 import { openDatabase } from '@/lib/server/database'
 import { createMediaStore } from '@/lib/media-store'

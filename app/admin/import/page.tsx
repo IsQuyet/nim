@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { requireAdminSession } from '@/lib/auth'
+import { requireAdminSession } from '@/modules/auth/server/auth'
 import { importMarkdownAction } from './actions'
 import { ImportForm } from './import-form'
 

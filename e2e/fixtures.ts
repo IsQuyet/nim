@@ -139,7 +139,7 @@ export const test = base.extend<{ login: () => Promise<void>; checkBrowser: void
       const initialize = join(release, 'initialize.ts')
       writeFileSync(initialize, `
 import { initializeDatabase } from ${JSON.stringify(join(root, 'lib/server/database.ts'))}
-import { initializeAuthSecret } from ${JSON.stringify(join(root, 'lib/auth-secret.ts'))}
+import { initializeAuthSecret } from ${JSON.stringify(join(root, 'modules/auth/server/secret.ts'))}
 async function initialize() { await initializeDatabase(); initializeAuthSecret() }
 initialize().catch(error => { console.error(error); process.exitCode = 1 })
 `)

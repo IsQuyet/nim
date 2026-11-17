@@ -1,5 +1,5 @@
 import { unstable_rethrow } from 'next/navigation'
-import { getAdminSession } from '@/lib/auth'
+import { getAdminSession } from '@/modules/auth/server/auth'
 import { getSiteUrl } from '@/lib/server/site-config'
 import { getMediaDirectory } from '@/lib/server/data-paths'
 import { mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from '@/lib/media'

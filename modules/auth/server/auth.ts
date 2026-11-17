@@ -5,10 +5,10 @@ import { and, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
-import { getSiteUrl } from './server/site-config'
-import { getAuthSecret } from './auth-secret'
-import { openDatabase } from './server/database'
-import { account } from './schema'
+import { getSiteUrl } from '@/lib/server/site-config'
+import { getAuthSecret } from './secret'
+import { openDatabase } from '@/lib/server/database'
+import { account } from '@/lib/schema'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 let auth: ReturnType<typeof betterAuth> | undefined

@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAuthSecret, initializeAuthSecret } from './auth-secret'
-import { getAuthSecretPath } from './server/data-paths'
+import { getAuthSecret, initializeAuthSecret } from './secret'
+import { getAuthSecretPath } from '@/lib/server/data-paths'
 
 let directory: string
 

@@ -1,6 +1,6 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
-import { getAdminSession } from './auth'
+import { getAdminSession } from '@/modules/auth/server/auth'
 import { revisionHistoryQuerySchema, type PostStore } from './content'
 import { openDatabase, type AppDatabase } from './server/database'
 import { createPostStore } from './posts'

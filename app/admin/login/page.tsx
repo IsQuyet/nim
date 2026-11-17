@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAdminSession, getAuthOptions } from '@/lib/auth'
+import { getAdminSession, getAuthOptions } from '@/modules/auth/server/auth'
 import { AuthButton } from '../auth-button'
 
 export const metadata: Metadata = { title: 'Sign in' }

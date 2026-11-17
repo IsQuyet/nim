@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import NewDraftPage from './page'
 
 const mocks = vi.hoisted(() => ({ requireAdminSession: vi.fn(), getAdminDraft: vi.fn(), editor: vi.fn() }))
-vi.mock('@/lib/auth', () => ({ requireAdminSession: mocks.requireAdminSession }))
+vi.mock('@/modules/auth/server/auth', () => ({ requireAdminSession: mocks.requireAdminSession }))
 vi.mock('@/lib/admin-posts', () => ({ getAdminDraft: mocks.getAdminDraft }))
 vi.mock('../../post-editor', () => ({ PostEditor: mocks.editor }))
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'

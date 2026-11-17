@@ -6,12 +6,12 @@ import { join } from 'node:path'
 import type { Database } from 'better-sqlite3'
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAuthSecret, initializeAuthSecret } from './auth-secret'
-import { getAuthSecretPath } from './server/data-paths'
-import { initializeDatabase, openDatabase } from './server/database'
-import { session as sessions } from './schema'
-import { createWritingStore } from './writing-store'
-import { createTestDraft } from '../test/post-commands'
+import { getAuthSecret, initializeAuthSecret } from './secret'
+import { getAuthSecretPath } from '@/lib/server/data-paths'
+import { initializeDatabase, openDatabase } from '@/lib/server/database'
+import { session as sessions } from '@/lib/schema'
+import { createWritingStore } from '@/lib/writing-store'
+import { createTestDraft } from '@/test/post-commands'
 
 const next = vi.hoisted(() => ({ requestHeaders: new Headers() }))
 vi.mock('server-only', () => ({}))
@@ -28,7 +28,7 @@ const environment = {
 
 let directory: string
 let app: typeof import('./auth')
-let route: typeof import('../app/api/auth/[...all]/route')
+let route: typeof import('@/app/api/auth/[...all]/route')
 let database: Database
 let githubId: string
 let githubRequests: Request[]
@@ -136,7 +136,7 @@ beforeEach(async () => {
     throw new Error(`Unexpected request: ${request.url}`)
   }))
   app = await import('./auth')
-  route = await import('../app/api/auth/[...all]/route')
+  route = await import('@/app/api/auth/[...all]/route')
   const auth = app.getAuth()!
   await auth.$context
   database = auth.options.database as Database
@@ -412,7 +412,7 @@ describe('管理员认证与数据库会话', () => {
 
   it('认证存储不可用时向上传播错误，不执行文章操作', async () => {
     await finishSignIn(await beginSignIn())
-    const { withAdminPostStore } = await import('./admin-posts')
+    const { withAdminPostStore } = await import('@/lib/admin-posts')
     const operation = vi.fn()
     database.exec('ALTER TABLE session RENAME TO unavailable_session')
     try {
@@ -439,7 +439,7 @@ describe('管理员认证与数据库会话', () => {
       orm.$client.close()
     }
     database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
-    const { writeDraftAction } = await import('../app/admin/writing-actions')
+    const { writeDraftAction } = await import('@/app/admin/writing-actions')
 
     expect(await writeDraftAction({
       postId: id, operationId: randomUUID(), intent: 'save',

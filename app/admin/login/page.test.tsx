@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginPage from './page'
 
 const mocks = vi.hoisted(() => ({ getAdminSession: vi.fn(), getAuthOptions: vi.fn() }))
-vi.mock('@/lib/auth', () => mocks)
+vi.mock('@/modules/auth/server/auth', () => mocks)
 vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(),
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { getAuthSecretPath } from './server/data-paths'
+import { getAuthSecretPath } from '@/lib/server/data-paths'
 
 export function getAuthSecret() {
   try {

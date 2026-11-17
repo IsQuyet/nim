@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
-import { getAdminSession } from '@/lib/auth'
+import { getAdminSession } from '@/modules/auth/server/auth'
 import { initializeDatabase, openDatabase } from '@/lib/server/database'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 import { createTestAdminSession } from '@/test/admin-session'
@@ -17,7 +17,7 @@ import { createWritingStore } from '@/lib/writing-store'
 import { GET } from './route'
 
 vi.mock('next/server', () => ({ connection: vi.fn(async () => {}) }))
-vi.mock('@/lib/auth', () => ({ getAdminSession: vi.fn() }))
+vi.mock('@/modules/auth/server/auth', () => ({ getAdminSession: vi.fn() }))
 
 const origin = 'http://localhost:3000'
 let bytes: Uint8Array
