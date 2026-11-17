@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useState } from 'react'
 import { MarkdownHooks } from 'react-markdown'
-import { markdownRenderOptions } from './markdown-renderer-options'
+import { markdownRenderOptions } from '@/modules/markdown/render-options'
 
 type MarkdownPreviewProps = {
   source: string

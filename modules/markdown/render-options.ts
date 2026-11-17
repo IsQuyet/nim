@@ -1,9 +1,9 @@
 import { defaultUrlTransform, type Options } from 'react-markdown'
-import { markdownRemarkPlugins, markdownRehypeOptions } from '@/lib/markdown-syntax'
+import { markdownRemarkPlugins, markdownRehypeOptions } from './syntax'
 import rehypePrettyCode, { type Options as PrettyCodeOptions } from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings, { type Options as HeadingLinkOptions } from 'rehype-autolink-headings'
-import { getMarkdownHighlighter, MARKDOWN_CODE_THEME } from '@/lib/markdown-highlighter'
+import { getMarkdownHighlighter, MARKDOWN_CODE_THEME } from './highlighter'
 
 const prettyCodeOptions = {
   defaultLang: { block: 'plaintext' },

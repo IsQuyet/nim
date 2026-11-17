@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { getMarkdownHighlighter, MARKDOWN_CODE_THEME } from './markdown-highlighter'
+import { getMarkdownHighlighter, MARKDOWN_CODE_THEME } from './highlighter'
 
 describe('Markdown 高亮资源', () => {
   it('复用同一实例，主题与语言只能由注册表提供', async () => {
