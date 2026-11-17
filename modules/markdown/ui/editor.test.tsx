@@ -2,7 +2,7 @@ import { createRef } from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { EditorView } from '@codemirror/view'
 import { describe, expect, it, vi } from 'vitest'
-import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle } from './editor'
 
 function editor() {
   const content = screen.getByRole<HTMLDivElement>('textbox', { name: 'Body' })

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MarkdownPreviewLoader } from './markdown-preview-loader'
+import { MarkdownPreviewLoader } from './preview-loader'
 
 const preview = vi.hoisted(() => ({ fail: false }))
 vi.mock('next/dynamic', () => ({

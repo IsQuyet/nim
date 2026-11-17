@@ -2,7 +2,7 @@
 import { TextMorph } from '@/components/ui/text-morph'
 import { ScrollProgress } from '@/components/ui/scroll-progress'
 import { useEffect, useState } from 'react'
-import { MarkdownProse } from '@/components/markdown-prose'
+import { MarkdownProse } from '@/modules/markdown/ui/prose'
 
 function CopyButton() {
   const [text, setText] = useState('Copy')

@@ -3,7 +3,7 @@
 import { Component, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 
-const Preview = dynamic(() => import('./markdown-preview').then(module => module.MarkdownPreview), {
+const Preview = dynamic(() => import('./preview').then(module => module.MarkdownPreview), {
   ssr: false,
   loading: () => <p role="status">Loading preview…</p>,
 })

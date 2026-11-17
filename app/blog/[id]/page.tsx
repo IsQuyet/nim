@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { MarkdownContent } from '@/components/markdown-content'
+import { MarkdownContent } from '@/modules/markdown/server/content'
 import { getBlogPost } from '@/modules/posts/server/public'
 
 type BlogPostPageProps = {

@@ -47,7 +47,7 @@ function createHistory(): PostRevisionHistory {
 }
 
 // 预览模块按需加载，首次加载耗时不属于各用例等待渲染结果的时限。
-beforeAll(async () => { await import('@/components/markdown-preview') })
+beforeAll(async () => { await import('@/modules/markdown/ui/preview') })
 
 beforeEach(() => {
   mocks.getAdminRevisionHistory.mockReset()

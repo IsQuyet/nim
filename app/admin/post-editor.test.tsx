@@ -24,7 +24,7 @@ vi.mock('@/modules/posts/recovery-store', () => ({
     close() {},
   }),
 }))
-vi.mock('@/components/markdown-editor', () => ({
+vi.mock('@/modules/markdown/ui/editor', () => ({
   MarkdownEditor: ({ id, labelId, value, onChange }: {
     id: string
     labelId: string

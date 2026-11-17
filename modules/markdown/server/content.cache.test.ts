@@ -5,13 +5,13 @@ const pipeline = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock('server-only', () => ({}))
 vi.mock('react-markdown', () => ({ MarkdownAsync: pipeline.run, defaultUrlTransform: (url: string) => url }))
 
-let renderMarkdown: typeof import('./markdown-content').renderMarkdown
+let renderMarkdown: typeof import('./content').renderMarkdown
 let budget: number
 
 beforeEach(async () => {
   vi.resetModules()
   pipeline.run.mockReset().mockImplementation(async ({ children }: { children: string }) => ({ rendered: children.length }))
-  const content = await import('./markdown-content')
+  const content = await import('./content')
   renderMarkdown = content.renderMarkdown
   budget = content.MAX_CACHED_CHARACTERS
 })

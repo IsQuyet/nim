@@ -1,7 +1,7 @@
 import 'server-only'
 import type { ReactElement } from 'react'
 import { MarkdownAsync } from 'react-markdown'
-import { markdownRenderOptions } from '@/modules/markdown/render-options'
+import { markdownRenderOptions } from '../render-options'
 
 type MarkdownContentProps = {
   source: string

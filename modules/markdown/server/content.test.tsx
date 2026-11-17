@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
-import { MarkdownContent } from './markdown-content'
+import { MarkdownContent } from './content'
 
 describe('Markdown 正文', () => {
   it('显示正文、GFM 内容及代码高亮', async () => {

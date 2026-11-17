@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { MarkdownComparison } from '@/components/markdown-comparison'
-import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle } from '@/modules/markdown/ui/editor'
 import { MarkdownImageUpload } from '@/components/markdown-image-upload'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/modules/posts/model'
 import { publishedPostReadSchema } from '@/modules/posts/comparison'

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { MarkdownContent } from './markdown-content'
-import { MarkdownPreview } from './markdown-preview'
+import { MarkdownContent } from '../server/content'
+import { MarkdownPreview } from './preview'
 
 vi.mock('server-only', () => ({}))
 

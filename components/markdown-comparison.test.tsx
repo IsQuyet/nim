@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PublishedPost } from '@/modules/posts/model'
 import { MarkdownComparison } from './markdown-comparison'
 
-vi.mock('@/components/markdown-preview-loader', () => ({
+vi.mock('@/modules/markdown/ui/preview-loader', () => ({
   MarkdownPreviewLoader: ({ source }: { source: string }) => <div>{source}</div>,
 }))
 
