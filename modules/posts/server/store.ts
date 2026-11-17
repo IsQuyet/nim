@@ -1,7 +1,8 @@
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import type { AppDatabase } from '@/lib/server/database'
-import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from '../model'
+import { revisionHistoryQuerySchema, REVISION_PAGE_SIZE, type PostRevisionHistory, type RevisionHistoryQuery } from '../history'
+import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, samePostContent } from '../model'
 import type {
   DraftPost,
   ImportPostInput,
@@ -9,10 +10,8 @@ import type {
   PostContent,
   PostPublication,
   PostRevision,
-  PostRevisionHistory,
   PublishedPost,
   PublishedPostSummary,
-  RevisionHistoryQuery,
   PostSummary,
 } from '../model'
 import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'

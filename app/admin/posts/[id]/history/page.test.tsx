@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PostRevision, PostRevisionHistory } from '@/modules/posts/model'
+import type { PostRevisionHistory } from '@/modules/posts/history'
+import type { PostRevision } from '@/modules/posts/model'
 import RevisionHistoryPage from './page'
 
 const mocks = vi.hoisted(() => ({

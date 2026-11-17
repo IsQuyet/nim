@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
-import { restoreRevisionSchema, type RestoreFormState } from '@/modules/posts/model'
+import { restoreRevisionSchema, type RestoreFormState } from '@/modules/posts/history'
 
 export async function restoreRevisionAction(
   id: string,

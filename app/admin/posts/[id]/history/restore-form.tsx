@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
-import type { RestoreFormState } from '@/modules/posts/model'
+import type { RestoreFormState } from '@/modules/posts/history'
 
 type RestoreFormProps = {
   action: (state: RestoreFormState) => Promise<RestoreFormState>
