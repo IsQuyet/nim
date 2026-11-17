@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import type { DraftPost, PostContent, PublishedPost } from '../modules/posts/model'
-import type { WritingCommand, WritingStore } from '../lib/writing'
+import type { WritingCommand, WritingStore } from '../modules/posts/writing'
 
 function write(writer: WritingStore, command: WritingCommand) {
   const result = writer.write(command)

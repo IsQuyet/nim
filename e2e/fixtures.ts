@@ -14,8 +14,8 @@ import type { PostStore } from '../modules/posts/model'
 import { openDatabase } from '../lib/server/database'
 import { createPostStore } from '../modules/posts/server/store'
 import { postDrafts, postPublications, postPublished, postRevisions, posts, postWriteReceipts, session } from '../lib/schema'
-import { createWritingStore } from '../lib/writing-store'
-import type { WritingStore } from '../lib/writing'
+import { createWritingStore } from '../modules/posts/server/writing-store'
+import type { WritingStore } from '../modules/posts/writing'
 
 type Runtime = {
   origin: string

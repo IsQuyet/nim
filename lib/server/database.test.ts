@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { initializeDatabase, openDatabase } from './database'
 import { account, session, user, verification } from '../schema'
 import { createPostStore } from '@/modules/posts/server/store'
-import { createWritingStore } from '../writing-store'
+import { createWritingStore } from '@/modules/posts/server/writing-store'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
 const migration = vi.hoisted(() => ({ folder: undefined as string | undefined }))

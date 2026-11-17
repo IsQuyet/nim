@@ -3,7 +3,7 @@ import { Component, StrictMode, Suspense, type ReactNode } from 'react'
 import { act, fireEvent, render as renderComponent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { samePostContent, type DraftPost } from '@/modules/posts/model'
-import { recoveryCopySchema, type RecoveryCopy, type WritingAcknowledgement, type WritingCommand, type WritingTransport } from '@/lib/writing'
+import { recoveryCopySchema, type RecoveryCopy, type WritingAcknowledgement, type WritingCommand, type WritingTransport } from '@/modules/posts/writing'
 import { PostEditor } from './post-editor'
 import { WritingSessionsProvider } from './writing-sessions'
 import { useWritingSession } from './use-writing-session'
@@ -13,7 +13,7 @@ const routing = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }))
 const comparisonAction = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('next/navigation', async importOriginal => ({ ...await importOriginal<typeof import('next/navigation')>(), useRouter: () => routing }))
 const local = vi.hoisted(() => ({ copies: new Map<string, RecoveryCopy>(), failure: false }))
-vi.mock('@/lib/recovery-store', () => ({
+vi.mock('@/modules/posts/recovery-store', () => ({
   createRecoveryStore: () => ({
     async list(postId?: string) { return [...local.copies.values()].filter(copy => postId === undefined || copy.postId === postId).map(copy => recoveryCopySchema.parse(copy)) },
     async put(copy: RecoveryCopy) {

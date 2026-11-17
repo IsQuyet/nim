@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { withAdminWritingStore } from '@/modules/posts/server/admin'
 import type { DraftPost } from '@/modules/posts/model'
-import type { WritingCommand, WritingStore } from '@/lib/writing'
+import type { WritingCommand, WritingStore } from '@/modules/posts/writing'
 import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing-actions'
 
 vi.mock('@/modules/posts/server/admin', () => ({ withAdminWritingStore: vi.fn() }))

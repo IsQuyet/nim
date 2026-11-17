@@ -12,7 +12,7 @@ import { initializeDatabase, openDatabase, type AppDatabase } from './server/dat
 import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './post-files'
 import { createPostStore, importPublishedPosts } from '@/modules/posts/server/store'
-import { createWritingStore } from './writing-store'
+import { createWritingStore } from '@/modules/posts/server/writing-store'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 
 const script = fileURLToPath(new URL('../scripts/post-file.ts', import.meta.url))

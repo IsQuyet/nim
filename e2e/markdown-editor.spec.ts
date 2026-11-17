@@ -1,5 +1,5 @@
 import { type Page } from '@playwright/test'
-import { recoveryCopySchema } from '../lib/writing'
+import { recoveryCopySchema } from '../modules/posts/writing'
 import { createTestDraft } from '../test/post-commands'
 import { test, expect, snapshot, withWritingStore } from './fixtures'
 

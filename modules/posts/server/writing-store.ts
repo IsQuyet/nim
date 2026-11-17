@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import type { AppDatabase } from './server/database'
-import { contentOf, getDraft, insertDraft, InvalidPublicationMediaError, updateDraft, writePublication, type PostDatabase } from '@/modules/posts/server/storage'
-import { postPublications, postRevisions, posts, postWriteReceipts } from './schema'
+import type { AppDatabase } from '@/lib/server/database'
+import { contentOf, getDraft, insertDraft, InvalidPublicationMediaError, updateDraft, writePublication, type PostDatabase } from './storage'
+import { postPublications, postRevisions, posts, postWriteReceipts } from '@/lib/schema'
 import {
   operationIdentitySchema,
   writingCommandSchema,
@@ -12,7 +12,7 @@ import {
   type WritingCommand,
   type WritingResult,
   type WritingStore,
-} from './writing'
+} from '../writing'
 
 function requestHash(command: WritingCommand) {
   return createHash('sha256').update(JSON.stringify({

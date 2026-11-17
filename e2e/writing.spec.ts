@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type BrowserContext, type Dialog, type Download, type Page, type Request } from '@playwright/test'
 import { postIdSchema } from '../modules/posts/model'
-import { recoveryCopySchema, writingCommandSchema } from '../lib/writing'
+import { recoveryCopySchema, writingCommandSchema } from '../modules/posts/writing'
 import { createTestDraft } from '../test/post-commands'
 import { test, expect, signIn, snapshot, withStore, withWritingStore } from './fixtures'
 

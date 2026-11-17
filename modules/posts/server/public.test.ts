@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
-import { createWritingStore } from '@/lib/writing-store'
+import { createWritingStore } from './writing-store'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 import { getBlogPost, getBlogPosts } from './public'
 

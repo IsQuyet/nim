@@ -17,7 +17,7 @@ import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/markdown
 import { MarkdownImageUpload } from '@/components/markdown-image-upload'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/modules/posts/model'
 import { publishedPostReadSchema } from '@/modules/posts/comparison'
-import type { WritingTransport } from '@/lib/writing'
+import type { WritingTransport } from '@/modules/posts/writing'
 import { readPublishedPostAction } from './comparison-actions'
 import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from './writing-actions'
 import { useWritingSession } from './use-writing-session'

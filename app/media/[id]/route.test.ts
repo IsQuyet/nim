@@ -13,7 +13,7 @@ import { createTestImage } from '@/test/media-fixtures'
 import { prepareMediaUpload } from '@/modules/media/server/upload'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
-import { createWritingStore } from '@/lib/writing-store'
+import { createWritingStore } from '@/modules/posts/server/writing-store'
 import { GET } from './route'
 
 vi.mock('next/server', () => ({ connection: vi.fn(async () => {}) }))
