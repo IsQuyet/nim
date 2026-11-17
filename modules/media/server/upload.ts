@@ -1,8 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
-import { postIdSchema } from '@/modules/posts/model'
-import { MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS, mediaAssetSchema, mediaImageFormats, type MediaAsset } from '../model'
+import { MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS, mediaAssetSchema, mediaIdSchema, mediaImageFormats, type MediaAsset } from '../model'
 
 export type PreparedMedia = Omit<MediaAsset, 'state' | 'createdAt'> & { bytes: Uint8Array }
 
@@ -22,8 +21,8 @@ export async function prepareMediaUpload(input: {
   declaredType: unknown
   bytes: Uint8Array
 }): Promise<MediaPreparation> {
-  const id = postIdSchema.safeParse(input.id)
-  if (!id.success) return { status: 'invalid', message: 'The media ID must be a UUID.' }
+  const id = mediaIdSchema.safeParse(input.id)
+  if (!id.success) return { status: 'invalid', message: id.error.issues[0].message }
   if (!(input.bytes instanceof Uint8Array) || input.bytes.byteLength === 0) {
     return { status: 'invalid', message: 'Choose a non-empty image file.' }
   }

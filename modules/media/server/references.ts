@@ -3,7 +3,7 @@ import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import { visit } from 'unist-util-visit'
 import { markdownRemarkPlugins, markdownRehypeOptions } from '@/modules/markdown/syntax'
-import { postIdSchema } from '@/modules/posts/model'
+import { mediaIdSchema } from '../model'
 
 const parser = unified().use(remarkParse).use(markdownRemarkPlugins).use(remarkRehype, markdownRehypeOptions)
 
@@ -28,7 +28,7 @@ function mediaIdFromUrl(url: string) {
   } catch {
     return { status: 'invalid' as const, message: 'A Markdown media URL must contain a valid media UUID.' }
   }
-  const id = postIdSchema.safeParse(candidate)
+  const id = mediaIdSchema.safeParse(candidate)
   return id.success
     ? { status: 'success' as const, id: id.data }
     : { status: 'invalid' as const, message: 'A Markdown media URL must contain a valid media UUID.' }

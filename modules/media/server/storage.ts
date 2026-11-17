@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, link, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { postIdSchema } from '@/modules/posts/model'
-import { mediaImageFormats, mediaTypeSchema, type MediaAsset } from '../model'
+import { mediaIdSchema, mediaImageFormats, mediaTypeSchema, type MediaAsset } from '../model'
 
 type StoredMedia = Pick<MediaAsset, 'id' | 'mediaType' | 'sha256'>
 
@@ -12,7 +11,7 @@ export type MediaStorage = {
 }
 
 function filename(root: string, asset: Pick<StoredMedia, 'id' | 'mediaType'>) {
-  const id = postIdSchema.parse(asset.id)
+  const id = mediaIdSchema.parse(asset.id)
   const mediaType = mediaTypeSchema.parse(asset.mediaType)
   const format = mediaImageFormats.find(format => format.mediaType === mediaType)
   if (!format) throw new Error('Unsupported media storage format.')

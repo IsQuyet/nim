@@ -1,6 +1,5 @@
 import { connection } from 'next/server'
-import { postIdSchema } from '@/modules/posts/model'
-import type { MediaAsset } from '@/modules/media/model'
+import { mediaIdSchema, type MediaAsset } from '@/modules/media/model'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { getMediaDirectory } from '@/lib/server/data-paths'
 import { openDatabase } from '@/lib/server/database'
@@ -20,7 +19,7 @@ function notFound() {
 export async function GET(request: Request, { params }: MediaRouteContext) {
   await connection()
   const { id: candidate } = await params
-  const parsed = postIdSchema.safeParse(candidate)
+  const parsed = mediaIdSchema.safeParse(candidate)
   if (!parsed.success) return notFound()
 
   const database = openDatabase()

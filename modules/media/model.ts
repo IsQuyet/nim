@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { postIdSchema } from '@/modules/posts/model'
+
+export const mediaIdSchema = z.uuid({ error: 'The media ID must be a UUID.' })
 
 export const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024
 export const MAX_MEDIA_IMAGE_PIXELS = 40_000_000
@@ -16,7 +17,7 @@ export const mediaStateSchema = z.enum(['pending', 'ready'])
 export type MediaType = z.infer<typeof mediaTypeSchema>
 
 const mediaAssetFieldsSchema = z.object({
-  id: postIdSchema,
+  id: mediaIdSchema,
   originalName: z.string().min(1).max(200),
   mediaType: mediaTypeSchema,
   byteSize: z.number().int().positive().max(MAX_MEDIA_UPLOAD_BYTES),
@@ -36,7 +37,7 @@ export const mediaAssetSchema = mediaAssetFieldsSchema.superRefine((asset, conte
 export type MediaAsset = z.infer<typeof mediaAssetSchema>
 
 export function mediaMarkdownUrl(id: string) {
-  return `/media/${postIdSchema.parse(id)}`
+  return `/media/${mediaIdSchema.parse(id)}`
 }
 
 export const mediaUploadResponseSchema = z.discriminatedUnion('status', [
