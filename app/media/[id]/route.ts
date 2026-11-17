@@ -1,8 +1,8 @@
 import { connection } from 'next/server'
-import { mediaIdSchema, type MediaAsset } from '@/modules/media/model'
+import { mediaIdSchema } from '@/modules/media/model'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { getMediaDirectory } from '@/lib/server/data-paths'
-import { openDatabase } from '@/lib/server/database'
+import { withDatabase } from '@/lib/server/database'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
 import { isMediaPublished } from '@/modules/posts/server/storage'
@@ -23,20 +23,17 @@ export async function GET(request: Request, { params }: MediaRouteContext) {
   const parsed = mediaIdSchema.safeParse(candidate)
   if (!parsed.success) return notFound()
 
-  const database = openDatabase()
-  let asset: MediaAsset | null
-  let publicAsset = false
-  try {
-    const store = createMediaStore(database, createFileMediaStorage(getMediaDirectory()))
-    asset = store.get(parsed.data)
-    if (!asset || asset.state !== 'ready') return notFound()
-    publicAsset = isMediaPublished(database, asset.id)
-  } finally {
-    database.$client.close()
-  }
+  const storage = createFileMediaStorage(getMediaDirectory())
+  const found = await withDatabase(database => {
+    const asset = createMediaStore(database, storage).get(parsed.data)
+    if (!asset || asset.state !== 'ready') return null
+    return { asset, publicAsset: isMediaPublished(database, asset.id) }
+  })
+  if (!found) return notFound()
+  const { asset, publicAsset } = found
 
   if (!publicAsset && !(await getAdminSession())) return notFound()
-  const bytes = await createFileMediaStorage(getMediaDirectory()).read(asset)
+  const bytes = await storage.read(asset)
   if (!bytes) return notFound()
 
   const etag = `"${asset.sha256}"`

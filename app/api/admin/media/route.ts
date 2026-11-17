@@ -6,7 +6,7 @@ import { mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from '@/modules/med
 import { prepareMediaUpload } from '@/modules/media/server/upload'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
-import { openDatabase } from '@/lib/server/database'
+import { withDatabase } from '@/lib/server/database'
 
 export const runtime = 'nodejs'
 const MAX_MEDIA_REQUEST_BYTES = MAX_MEDIA_UPLOAD_BYTES + 64 * 1024
@@ -86,28 +86,23 @@ export async function POST(request: Request) {
     })
     if (prepared.status === 'invalid') return jsonError(prepared.message, 400)
 
-    const database = openDatabase()
-    try {
-      const store = createMediaStore(database, createFileMediaStorage(getMediaDirectory()))
-      const result = await store.upload(prepared.value)
-      if (result.status === 'conflict') {
-        return jsonError('This upload ID already belongs to a different image.', 409)
-      }
-      if (result.value.state !== 'ready') return jsonError('The image upload is still being finalized. Retry the same upload.', 503)
-      return Response.json(mediaUploadResponseSchema.parse({
-        status: 'success',
-        media: {
-          id: result.value.id,
-          originalName: result.value.originalName,
-          mediaType: result.value.mediaType,
-          width: result.value.width,
-          height: result.value.height,
-          url: `/media/${result.value.id}`,
-        },
-      }))
-    } finally {
-      database.$client.close()
+    const result = await withDatabase(database =>
+      createMediaStore(database, createFileMediaStorage(getMediaDirectory())).upload(prepared.value))
+    if (result.status === 'conflict') {
+      return jsonError('This upload ID already belongs to a different image.', 409)
     }
+    if (result.value.state !== 'ready') return jsonError('The image upload is still being finalized. Retry the same upload.', 503)
+    return Response.json(mediaUploadResponseSchema.parse({
+      status: 'success',
+      media: {
+        id: result.value.id,
+        originalName: result.value.originalName,
+        mediaType: result.value.mediaType,
+        width: result.value.width,
+        height: result.value.height,
+        url: `/media/${result.value.id}`,
+      },
+    }))
   } catch (error) {
     unstable_rethrow(error)
     console.error('上传图片失败。', error)
