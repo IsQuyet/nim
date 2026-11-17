@@ -13,7 +13,7 @@ import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 import type { DraftPost, PostContent, PostMutationResult, PostStore } from '../model'
-import { postDrafts, postPublications, postPublished, postRevisions, posts } from '@/lib/schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 
 let directory: string
 let filename: string

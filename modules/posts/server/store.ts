@@ -12,7 +12,7 @@ import type {
   PostStore,
   PostSummary,
 } from '../model'
-import { postDrafts, postPublications, postPublished, postRevisions, posts } from '@/lib/schema'
+import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 import { getDraft, getPublishedPost, insertDraft, updateDraft, writePublication } from './storage'
 
 export function importPublishedPosts(database: AppDatabase, inputs: ImportPostInput[]) {

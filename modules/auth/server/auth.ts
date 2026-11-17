@@ -8,7 +8,7 @@ import { connection } from 'next/server'
 import { getSiteUrl } from '@/lib/server/site-config'
 import { getAuthSecret } from './secret'
 import { openDatabase } from '@/lib/server/database'
-import { account } from '@/lib/schema'
+import { account } from './schema'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 let auth: ReturnType<typeof betterAuth> | undefined

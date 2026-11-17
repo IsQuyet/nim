@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { AppDatabase } from '@/lib/server/database'
 import { contentOf, getDraft, insertDraft, InvalidPublicationMediaError, updateDraft, writePublication, type PostDatabase } from './storage'
-import { postPublications, postRevisions, posts, postWriteReceipts } from '@/lib/schema'
+import { postPublications, postRevisions, posts, postWriteReceipts } from './schema'
 import {
   operationIdentitySchema,
   writingCommandSchema,

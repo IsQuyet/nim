@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
 import { createPostStore } from './store'
 import { createWritingStore } from './writing-store'
-import { postWriteReceipts } from '@/lib/schema'
+import { postWriteReceipts } from './schema'
 import type { DraftPost } from '../model'
 import { operationIdentitySchema, writingCommandSchema, type WritingCommand, type WritingResult, type WritingStore } from '../writing'
 

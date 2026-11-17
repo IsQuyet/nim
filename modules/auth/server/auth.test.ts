@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAuthSecret, initializeAuthSecret } from './secret'
 import { getAuthSecretPath } from '@/lib/server/data-paths'
 import { initializeDatabase, openDatabase } from '@/lib/server/database'
-import { session as sessions } from '@/lib/schema'
+import { session as sessions } from './schema'
 import { createWritingStore } from '@/modules/posts/server/writing-store'
 import { createTestDraft } from '@/test/post-commands'
 
