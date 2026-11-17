@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadEnvConfig } from '@next/env'
 import { BLOG_POST_SOURCES } from '../app/data'
-import { openDatabase } from '../lib/database'
+import { openDatabase } from '../lib/server/database'
 import { importPublishedPosts } from '../lib/posts'
 
 loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production')

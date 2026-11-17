@@ -1,5 +1,5 @@
 import { eq, inArray } from 'drizzle-orm'
-import type { AppDatabase } from './database'
+import type { AppDatabase } from './server/database'
 import { samePostContent, type DraftPost, type PostContent, type PostRevision, type PublishedPost } from './content'
 import { extractMediaReferences } from './media-references'
 import { mediaAssets, postPublicationMedia, postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'

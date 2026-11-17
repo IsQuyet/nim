@@ -1,7 +1,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { connection } from 'next/server'
-import { openDatabase } from './database'
+import { openDatabase } from './server/database'
 import { createPostStore } from './posts'
 
 export const getBlogPost = cache(async (id: string) => {

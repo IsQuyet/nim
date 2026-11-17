@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { getDatabasePath } from './data-paths'
-import * as schema from './schema'
+import * as schema from '../schema'
 
 export async function initializeDatabase(filename = getDatabasePath()) {
   mkdirSync(dirname(filename), { recursive: true })

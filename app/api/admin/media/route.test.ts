@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
-import { initializeDatabase, openDatabase } from '@/lib/database'
+import { initializeDatabase, openDatabase } from '@/lib/server/database'
 import { mediaAssets } from '@/lib/schema'
 import { getAdminSession } from '@/lib/auth'
 import { mediaUploadResponseSchema } from '@/lib/media'
@@ -14,8 +14,8 @@ import { createTestImage } from '@/test/media-fixtures'
 import { POST } from './route'
 
 vi.mock('@/lib/auth', () => ({ getAdminSession: vi.fn() }))
-vi.mock('@/lib/data-paths', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/lib/data-paths')>()
+vi.mock('@/lib/server/data-paths', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/server/data-paths')>()
   return { ...actual, getMediaDirectory: () => join(directory, 'media') }
 })
 

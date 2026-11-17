@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 import { postIdSchema } from '../lib/content'
 import { mediaAssets, postPublicationMedia } from '../lib/schema'
 import { mediaUploadResponseSchema } from '../lib/media'
-import { openDatabase } from '../lib/database'
+import { openDatabase } from '../lib/server/database'
 import { test, expect, snapshot, withWritingStore } from './fixtures'
 import { createTestDraft } from '../test/post-commands'
 

@@ -11,7 +11,7 @@ import { test as base, expect, type Page } from '@playwright/test'
 import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PostStore } from '../lib/content'
-import { openDatabase } from '../lib/database'
+import { openDatabase } from '../lib/server/database'
 import { createPostStore } from '../lib/posts'
 import { postDrafts, postPublications, postPublished, postRevisions, posts, postWriteReceipts, session } from '../lib/schema'
 import { createWritingStore } from '../lib/writing-store'
@@ -138,7 +138,7 @@ export const test = base.extend<{ login: () => Promise<void>; checkBrowser: void
       })
       const initialize = join(release, 'initialize.ts')
       writeFileSync(initialize, `
-import { initializeDatabase } from ${JSON.stringify(join(root, 'lib/database.ts'))}
+import { initializeDatabase } from ${JSON.stringify(join(root, 'lib/server/database.ts'))}
 import { initializeAuthSecret } from ${JSON.stringify(join(root, 'lib/auth-secret.ts'))}
 async function initialize() { await initializeDatabase(); initializeAuthSecret() }
 initialize().catch(error => { console.error(error); process.exitCode = 1 })

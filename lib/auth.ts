@@ -5,9 +5,9 @@ import { and, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
-import { getSiteUrl } from './site-config'
+import { getSiteUrl } from './server/site-config'
 import { getAuthSecret } from './auth-secret'
-import { openDatabase } from './database'
+import { openDatabase } from './server/database'
 import { account } from './schema'
 
 const SESSION_MAX_AGE = 24 * 60 * 60

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
-import type { AppDatabase } from './database'
+import type { AppDatabase } from './server/database'
 import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from './content'
 import type {
   DraftPost,

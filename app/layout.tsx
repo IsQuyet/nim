@@ -4,7 +4,7 @@ import './globals.css'
 import { Header } from './header'
 import { Footer } from './footer'
 import { ThemeProvider } from 'next-themes'
-import { getSiteUrl } from '@/lib/site-config'
+import { getSiteUrl } from '@/lib/server/site-config'
 import { SITE } from './data'
 
 export const viewport: Viewport = {

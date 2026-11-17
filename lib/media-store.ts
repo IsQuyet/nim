@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import type { AppDatabase } from './database'
+import type { AppDatabase } from './server/database'
 import { mediaAssets, postPublicationMedia } from './schema'
 import { mediaAssetSchema, type MediaAsset } from './media'
 import type { PreparedMedia } from './media-upload'

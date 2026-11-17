@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { loadEnvConfig } from '@next/env'
 import { postIdSchema } from '../lib/content'
-import { openDatabase } from '../lib/database'
+import { openDatabase } from '../lib/server/database'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown, type PostFileStage } from '../lib/post-files'
 import { createPostStore } from '../lib/posts'
 

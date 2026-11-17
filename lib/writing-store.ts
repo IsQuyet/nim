@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import type { AppDatabase } from './database'
+import type { AppDatabase } from './server/database'
 import { contentOf, getDraft, insertDraft, InvalidPublicationMediaError, updateDraft, writePublication, type PostDatabase } from './post-storage'
 import { postPublications, postRevisions, posts, postWriteReceipts } from './schema'
 import {

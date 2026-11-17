@@ -9,10 +9,10 @@ import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { initializeDatabase, openDatabase } from './database'
-import { account, session, user, verification } from './schema'
-import { createPostStore } from './posts'
-import { createWritingStore } from './writing-store'
-import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
+import { account, session, user, verification } from '../schema'
+import { createPostStore } from '../posts'
+import { createWritingStore } from '../writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
 const migration = vi.hoisted(() => ({ folder: undefined as string | undefined }))
 vi.mock('drizzle-orm/better-sqlite3/migrator', async importOriginal => {

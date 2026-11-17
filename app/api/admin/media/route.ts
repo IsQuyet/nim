@@ -1,12 +1,12 @@
 import { unstable_rethrow } from 'next/navigation'
 import { getAdminSession } from '@/lib/auth'
-import { getSiteUrl } from '@/lib/site-config'
-import { getMediaDirectory } from '@/lib/data-paths'
+import { getSiteUrl } from '@/lib/server/site-config'
+import { getMediaDirectory } from '@/lib/server/data-paths'
 import { mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from '@/lib/media'
 import { prepareMediaUpload } from '@/lib/media-upload'
 import { createMediaStore } from '@/lib/media-store'
 import { createFileMediaStorage } from '@/lib/media-storage'
-import { openDatabase } from '@/lib/database'
+import { openDatabase } from '@/lib/server/database'
 
 export const runtime = 'nodejs'
 const MAX_MEDIA_REQUEST_BYTES = MAX_MEDIA_UPLOAD_BYTES + 64 * 1024
