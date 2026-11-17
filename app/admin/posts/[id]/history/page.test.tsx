@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PostRevision, PostRevisionHistory } from '@/lib/content'
 import RevisionHistoryPage from './page'
 
@@ -44,6 +44,9 @@ function createHistory(): PostRevisionHistory {
     page: 2, pageCount: 3, revisionCount: 45,
   }
 }
+
+// 预览模块按需加载，首次加载耗时不属于各用例等待渲染结果的时限。
+beforeAll(async () => { await import('@/components/markdown-preview') })
 
 beforeEach(() => {
   mocks.getAdminRevisionHistory.mockReset()
