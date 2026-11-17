@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util'
 import { loadEnvConfig } from '@next/env'
 import { postIdSchema } from '../modules/posts/model'
 import { withDatabase } from '../lib/server/database'
-import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown, type PostFileStage } from '../modules/posts/server/file-exchange'
+import type { PostFileStage } from '../modules/posts/files'
+import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from '../modules/posts/server/file-exchange'
 import { createPostStore } from '../modules/posts/server/store'
 
 const usage = [

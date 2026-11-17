@@ -2,8 +2,7 @@
 
 import { startTransition, useActionState, useId, useRef, useState, type FormEvent } from 'react'
 import { unstable_rethrow } from 'next/navigation'
-import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/modules/posts/files'
-import type { PostFileFormState } from '@/modules/posts/server/file-exchange'
+import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '@/modules/posts/files'
 
 type ImportFormProps = {
   newPostId: string
