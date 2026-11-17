@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
-import { withAdminPostStore } from '@/lib/admin-posts'
-import { postIdSchema, type DraftPost } from '@/lib/content'
+import { withAdminPostStore } from '@/modules/posts/server/admin'
+import { postIdSchema, type DraftPost } from '@/modules/posts/model'
 import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/lib/post-file-policy'
 import { decodeMarkdownBytes, importPostMarkdown, type PostFileFormState } from '@/lib/post-files'
 

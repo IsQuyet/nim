@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { requireAdminSession } from '@/modules/auth/server/auth'
-import { getAdminDraft } from '@/lib/admin-posts'
-import { postIdSchema } from '@/lib/content'
+import { getAdminDraft } from '@/modules/posts/server/admin'
+import { postIdSchema } from '@/modules/posts/model'
 import { PostEditor } from '../../post-editor'
 
 export const metadata: Metadata = { title: 'New draft' }

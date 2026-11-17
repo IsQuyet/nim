@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
-import { withAdminPostStore } from '@/lib/admin-posts'
-import { restoreRevisionSchema, type RestoreFormState } from '@/lib/content'
+import { withAdminPostStore } from '@/modules/posts/server/admin'
+import { restoreRevisionSchema, type RestoreFormState } from '@/modules/posts/model'
 
 export async function restoreRevisionAction(
   id: string,

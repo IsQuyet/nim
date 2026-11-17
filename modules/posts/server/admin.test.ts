@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { initializeDatabase, openDatabase } from './server/database'
-import * as databaseModule from './server/database'
-import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore, withAdminWritingStore } from './admin-posts'
-import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
+import { initializeDatabase, openDatabase } from '@/lib/server/database'
+import * as databaseModule from '@/lib/server/database'
+import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore, withAdminWritingStore } from './admin'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/modules/auth/server/auth', () => ({ getAdminSession: vi.fn() }))

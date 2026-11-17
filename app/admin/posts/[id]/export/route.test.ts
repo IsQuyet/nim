@@ -6,7 +6,7 @@ import { GET } from './route'
 const mocks = vi.hoisted(() => ({
   withAdminPostStore: vi.fn(), getDraft: vi.fn(), getPublishedPost: vi.fn(),
 }))
-vi.mock('@/lib/admin-posts', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
+vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 const draft = {

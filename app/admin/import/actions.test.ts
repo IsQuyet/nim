@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
 }))
-vi.mock('@/lib/admin-posts', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
+vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', async actual => ({
   ...await actual<typeof import('next/navigation')>(), redirect: mocks.redirect,

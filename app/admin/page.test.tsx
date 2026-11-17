@@ -1,10 +1,10 @@
 import { render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PostSummary } from '@/lib/content'
+import type { PostSummary } from '@/modules/posts/model'
 import AdminPage from './page'
 
 const getAdminPosts = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/admin-posts', () => ({ getAdminPosts }))
+vi.mock('@/modules/posts/server/admin', () => ({ getAdminPosts }))
 vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(),
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),

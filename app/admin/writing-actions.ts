@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { unstable_rethrow } from 'next/navigation'
 import { z } from 'zod'
-import { withAdminWritingStore } from '@/lib/admin-posts'
+import { withAdminWritingStore } from '@/modules/posts/server/admin'
 import { operationIdentitySchema, writingCommandSchema, type ReceiptFeedback, type WritingFeedback, type WritingTransport } from '@/lib/writing'
 
 export async function writeDraftAction(input: unknown): Promise<WritingFeedback> {

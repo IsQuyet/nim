@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { postContentSchema, restoreRevisionSchema, revisionHistoryQuerySchema, samePostContent } from './content'
+import { postContentSchema, restoreRevisionSchema, revisionHistoryQuerySchema, samePostContent } from './model'
 
 const content = {
   title: '  中文标题  ',

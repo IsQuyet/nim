@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { MarkdownContent } from '@/components/markdown-content'
-import { getBlogPost } from '@/lib/blog'
+import { getBlogPost } from '@/modules/posts/server/public'
 
 type BlogPostPageProps = {
   params: Promise<{ id: string }>

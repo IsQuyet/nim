@@ -1,9 +1,9 @@
 'use server'
 
 import { unstable_rethrow } from 'next/navigation'
-import { postIdSchema } from '@/lib/content'
-import { withAdminPostStore } from '@/lib/admin-posts'
-import { publishedPostReadSchema } from '@/lib/markdown-comparison'
+import { postIdSchema } from '@/modules/posts/model'
+import { withAdminPostStore } from '@/modules/posts/server/admin'
+import { publishedPostReadSchema } from '@/modules/posts/comparison'
 
 export async function readPublishedPostAction(input: unknown) {
   try {

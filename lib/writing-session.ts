@@ -1,4 +1,4 @@
-import { draftPostSchema, postFieldsSchema, samePostContent, type DraftPost, type PostContent } from './content'
+import { draftPostSchema, postFieldsSchema, samePostContent, type DraftPost, type PostContent } from '@/modules/posts/model'
 import {
   draftReadResultSchema,
   receiptFeedbackSchema,

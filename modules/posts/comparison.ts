@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { publishedPostSchema } from './content'
+import { publishedPostSchema } from './model'
 
 export const publishedPostReadSchema = z.discriminatedUnion('status', [
   z.object({

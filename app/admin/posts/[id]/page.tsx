@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getAdminDraft } from '@/lib/admin-posts'
+import { getAdminDraft } from '@/modules/posts/server/admin'
 import { PostEditor } from '../../post-editor'
 
 export const metadata: Metadata = { title: 'Edit draft' }

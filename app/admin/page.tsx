@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { getAdminPosts } from '@/lib/admin-posts'
-import type { PostSummary } from '@/lib/content'
+import { getAdminPosts } from '@/modules/posts/server/admin'
+import type { PostSummary } from '@/modules/posts/model'
 import { AuthButton } from './auth-button'
 
 const STATUS_LABELS = {

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { postContentSchema, postIdSchema, type DraftPost, type PostMutationResult, type PostStore } from './content'
+import { postContentSchema, postIdSchema, type DraftPost, type PostMutationResult, type PostStore } from '@/modules/posts/model'
 import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
 
 export const postFileStageSchema = z.enum(['draft', 'published'])

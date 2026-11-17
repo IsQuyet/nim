@@ -1,6 +1,6 @@
 'use client'
 
-import { samePostContent, type PostContent, type PublishedPost } from '@/lib/content'
+import { samePostContent, type PostContent, type PublishedPost } from '@/modules/posts/model'
 import { MarkdownPreviewLoader } from '@/components/markdown-preview-loader'
 import { MarkdownProse } from '@/components/markdown-prose'
 

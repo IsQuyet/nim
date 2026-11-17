@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initializeDatabase, openDatabase, type AppDatabase } from './server/database'
-import { createWritingStore } from './writing-store'
-import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
-import { getBlogPost, getBlogPosts } from './blog'
+import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { createWritingStore } from '@/lib/writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
+import { getBlogPost, getBlogPosts } from './public'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/server', () => ({ connection: async () => {} }))

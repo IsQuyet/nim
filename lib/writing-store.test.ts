@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from './server/database'
-import { createPostStore } from './posts'
+import { createPostStore } from '@/modules/posts/server/store'
 import { createWritingStore } from './writing-store'
 import { postWriteReceipts } from './schema'
-import type { DraftPost } from './content'
+import type { DraftPost } from '@/modules/posts/model'
 import { operationIdentitySchema, writingCommandSchema, type WritingCommand, type WritingResult, type WritingStore } from './writing'
 
 let directory: string

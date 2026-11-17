@@ -1,6 +1,6 @@
 import { expect, test, snapshot, withWritingStore } from './fixtures'
 import { createTestDraft, publishTestDraft } from '../test/post-commands'
-import { postIdSchema } from '../lib/content'
+import { postIdSchema } from '../modules/posts/model'
 
 const emptyServer = { posts: [], revisions: [], drafts: [], publications: [], published: [], receipts: [] }
 

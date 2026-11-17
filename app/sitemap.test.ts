@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import robots from './robots'
 import sitemap from './sitemap'
 
-vi.mock('@/lib/blog', () => ({
+vi.mock('@/modules/posts/server/public', () => ({
   getBlogPosts: async () => [
     { id: '3f4229bc-e848-47fc-88b0-358c90b111b5' },
     { id: '68767e8c-c86e-4b97-bb15-356c2553f49c' },

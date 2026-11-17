@@ -1,5 +1,5 @@
 import { unstable_rethrow } from 'next/navigation'
-import { withAdminPostStore } from '@/lib/admin-posts'
+import { withAdminPostStore } from '@/modules/posts/server/admin'
 import { exportPostMarkdown, postFileStageSchema } from '@/lib/post-files'
 
 function errorResponse(message: string, status: number) {

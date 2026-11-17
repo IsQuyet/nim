@@ -1,8 +1,8 @@
 import { eq, inArray } from 'drizzle-orm'
-import type { AppDatabase } from './server/database'
-import { samePostContent, type DraftPost, type PostContent, type PostRevision, type PublishedPost } from './content'
+import type { AppDatabase } from '@/lib/server/database'
+import { samePostContent, type DraftPost, type PostContent, type PostRevision, type PublishedPost } from '../model'
 import { extractMediaReferences } from '@/modules/media/server/references'
-import { mediaAssets, postPublicationMedia, postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
+import { mediaAssets, postPublicationMedia, postDrafts, postPublications, postPublished, postRevisions, posts } from '@/lib/schema'
 
 export type PostDatabase = Pick<AppDatabase, 'select' | 'insert' | 'update'>
 type PostTransaction = Parameters<Parameters<AppDatabase['transaction']>[0]>[0]

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { postIdSchema } from '@/lib/content'
+import { postIdSchema } from '@/modules/posts/model'
 
 export const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024
 export const MAX_MEDIA_IMAGE_PIXELS = 40_000_000

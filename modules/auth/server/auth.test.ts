@@ -412,7 +412,7 @@ describe('管理员认证与数据库会话', () => {
 
   it('认证存储不可用时向上传播错误，不执行文章操作', async () => {
     await finishSignIn(await beginSignIn())
-    const { withAdminPostStore } = await import('@/lib/admin-posts')
+    const { withAdminPostStore } = await import('@/modules/posts/server/admin')
     const operation = vi.fn()
     database.exec('ALTER TABLE session RENAME TO unavailable_session')
     try {

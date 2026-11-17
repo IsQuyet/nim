@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { restoreRevisionAction } from './actions'
 
 const mocks = vi.hoisted(() => ({ withAdminPostStore: vi.fn(), restoreRevision: vi.fn(), revalidatePath: vi.fn(), redirect: vi.fn() }))
-vi.mock('@/lib/admin-posts', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
+vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: mocks.withAdminPostStore }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', async importOriginal => ({
   ...await importOriginal<typeof import('next/navigation')>(), redirect: mocks.redirect,

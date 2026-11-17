@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
-import type { AppDatabase } from './server/database'
-import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from './content'
+import type { AppDatabase } from '@/lib/server/database'
+import { identifiedPostContentSchema, postContentFields, postContentSchema, postIdSchema, postStatusSchema, revisionHistoryQuerySchema, REVISION_PAGE_SIZE, samePostContent } from '../model'
 import type {
   DraftPost,
   ImportPostInput,
@@ -11,9 +11,9 @@ import type {
   RevisionHistoryQuery,
   PostStore,
   PostSummary,
-} from './content'
-import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
-import { getDraft, getPublishedPost, insertDraft, updateDraft, writePublication } from './post-storage'
+} from '../model'
+import { postDrafts, postPublications, postPublished, postRevisions, posts } from '@/lib/schema'
+import { getDraft, getPublishedPost, insertDraft, updateDraft, writePublication } from './storage'
 
 export function importPublishedPosts(database: AppDatabase, inputs: ImportPostInput[]) {
   return database.transaction(transaction => {

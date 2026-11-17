@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WritingSession } from './writing-session'
-import type { DraftPost, PostContent } from './content'
+import type { DraftPost, PostContent } from '@/modules/posts/model'
 import type { OperationIdentity, ReceiptFeedback, RecoveryCopy, RecoveryStore, WritingCommand, WritingFeedback, WritingTransport } from './writing'
 
 function deferred<Value>() {

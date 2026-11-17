@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { initializeDatabase, openDatabase } from './database'
 import { account, session, user, verification } from '../schema'
-import { createPostStore } from '../posts'
+import { createPostStore } from '@/modules/posts/server/store'
 import { createWritingStore } from '../writing-store'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 

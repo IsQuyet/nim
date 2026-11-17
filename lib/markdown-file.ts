@@ -1,6 +1,6 @@
 import { parseDocument, stringify } from 'yaml'
 import { z } from 'zod'
-import { postContentSchema, postIdSchema, type ImportDraftInput, type ImportPostInput } from './content'
+import { postContentSchema, postIdSchema, type ImportDraftInput, type ImportPostInput } from '@/modules/posts/model'
 
 export const POST_FILE_FORMAT = 'nim-post/v1'
 

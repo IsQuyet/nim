@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/morphing-dialog'
 import Link from 'next/link'
 import { AnimatedBackground } from '@/components/ui/animated-background'
-import type { PublishedPostSummary } from '@/lib/content'
+import type { PublishedPostSummary } from '@/modules/posts/model'
 import {
   PROFILE,
   PROJECTS,

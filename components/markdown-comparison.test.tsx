@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { PublishedPost } from '@/lib/content'
+import type { PublishedPost } from '@/modules/posts/model'
 import { MarkdownComparison } from './markdown-comparison'
 
 vi.mock('@/components/markdown-preview-loader', () => ({

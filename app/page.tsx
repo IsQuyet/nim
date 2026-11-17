@@ -1,4 +1,4 @@
-import { getBlogPosts } from '@/lib/blog'
+import { getBlogPosts } from '@/modules/posts/server/public'
 import { HomeContent } from './home-content'
 
 export default async function HomePage() {

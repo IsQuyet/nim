@@ -1,13 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PostRevision, PostRevisionHistory } from '@/lib/content'
+import type { PostRevision, PostRevisionHistory } from '@/modules/posts/model'
 import RevisionHistoryPage from './page'
 
 const mocks = vi.hoisted(() => ({
   getAdminRevisionHistory: vi.fn(),
   restoreRevisionAction: vi.fn(),
 }))
-vi.mock('@/lib/admin-posts', () => ({ getAdminRevisionHistory: mocks.getAdminRevisionHistory }))
+vi.mock('@/modules/posts/server/admin', () => ({ getAdminRevisionHistory: mocks.getAdminRevisionHistory }))
 vi.mock('../../../actions', () => ({ restoreRevisionAction: mocks.restoreRevisionAction }))
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'

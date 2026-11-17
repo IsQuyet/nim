@@ -1,5 +1,5 @@
 import { connection } from 'next/server'
-import { postIdSchema } from '@/lib/content'
+import { postIdSchema } from '@/modules/posts/model'
 import type { MediaAsset } from '@/modules/media/model'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { getMediaDirectory } from '@/lib/server/data-paths'

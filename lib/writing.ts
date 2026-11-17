@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { draftPostSchema, postContentSchema, postFieldsSchema, postIdSchema, revisionIdSchema } from './content'
+import { draftPostSchema, postContentSchema, postFieldsSchema, postIdSchema, revisionIdSchema } from '@/modules/posts/model'
 
 export const operationIdentitySchema = z.object({
   postId: postIdSchema,

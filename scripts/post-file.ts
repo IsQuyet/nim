@@ -3,10 +3,10 @@ import { mkdir, link, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { loadEnvConfig } from '@next/env'
-import { postIdSchema } from '../lib/content'
+import { postIdSchema } from '../modules/posts/model'
 import { openDatabase } from '../lib/server/database'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown, type PostFileStage } from '../lib/post-files'
-import { createPostStore } from '../lib/posts'
+import { createPostStore } from '../modules/posts/server/store'
 
 const usage = [
   '用法：',

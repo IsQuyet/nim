@@ -1,11 +1,11 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { revisionHistoryQuerySchema, type PostStore } from './content'
-import { openDatabase, type AppDatabase } from './server/database'
-import { createPostStore } from './posts'
-import { createWritingStore } from './writing-store'
-import type { WritingStore } from './writing'
+import { revisionHistoryQuerySchema, type PostStore } from '../model'
+import { openDatabase, type AppDatabase } from '@/lib/server/database'
+import { createPostStore } from './store'
+import { createWritingStore } from '@/lib/writing-store'
+import type { WritingStore } from '@/lib/writing'
 
 type AdminPostStoreResult<T> =
   | { authorized: false }
