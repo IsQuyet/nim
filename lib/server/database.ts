@@ -3,7 +3,6 @@ import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { getDatabasePath } from './data-paths'
-import * as schema from '../schema'
 
 export async function initializeDatabase(filename = getDatabasePath()) {
   mkdirSync(dirname(filename), { recursive: true })
@@ -22,7 +21,7 @@ export async function initializeDatabase(filename = getDatabasePath()) {
 export function openDatabase(filename = getDatabasePath()) {
   const client = new Database(filename, { fileMustExist: true })
   client.pragma('foreign_keys = ON')
-  return drizzle(client, { schema })
+  return drizzle(client)
 }
 
 export type AppDatabase = ReturnType<typeof openDatabase>
