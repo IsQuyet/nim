@@ -23,6 +23,20 @@ const serverOnly = {
   message: '这里的代码可能进入浏览器，不能引用 server/ 下的实现。需要调用服务器时使用 server/actions/。',
 }
 
+// 跨越目录边界的引用统一写成 @/ 路径，下面按路径判断方向的规则才不会被相对路径绕过。
+const crossBoundary = {
+  regex: `^(\\.\\./)+(${['app', 'components', 'hooks', 'lib', 'modules', ...moduleNames].join('|')})/`,
+  message: '跨模块或跨顶层目录的引用使用 @/ 路径。',
+}
+
+function outside(allowedModules) {
+  const forbidden = ['app', ...moduleNames.filter(name => !allowedModules.includes(name)).map(name => `modules/${name}`)]
+  return {
+    regex: `^@/(${forbidden.join('|')})(/|$)`,
+    message: '依赖方向是 lib、components → modules（按 moduleTiers 的层）→ app，这里引用了自己之上或同层的代码。',
+  }
+}
+
 function restrictImports(files, ignores, patterns) {
   return {
     files,
@@ -31,9 +45,18 @@ function restrictImports(files, ignores, patterns) {
   }
 }
 
+// 同一条规则在多个配置块里后者覆盖前者，所以每类文件只落在一个块里，块内列全它要遵守的限制。
 const boundaries = [
-  restrictImports(['lib/**', 'components/**', 'hooks/**'], ['lib/server/**'], [serverOnly]),
-  ...moduleNames.map(name => restrictImports([`modules/${name}/**`], [`modules/${name}/server/**`], [serverOnly])),
+  restrictImports(['app/**'], [], [crossBoundary]),
+  restrictImports(['lib/server/**'], [], [crossBoundary, outside([])]),
+  restrictImports(['lib/**', 'components/**', 'hooks/**'], ['lib/server/**'], [crossBoundary, outside([]), serverOnly]),
+  ...moduleTiers.flatMap((tier, index) => tier.flatMap(name => {
+    const direction = outside([name, ...moduleTiers.slice(0, index).flat()])
+    return [
+      restrictImports([`modules/${name}/server/**`], [], [crossBoundary, direction]),
+      restrictImports([`modules/${name}/**`], [`modules/${name}/server/**`], [crossBoundary, direction, serverOnly]),
+    ]
+  })),
 ]
 
 export default defineConfig([
