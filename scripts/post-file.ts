@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { loadEnvConfig } from '@next/env'
 import { postIdSchema } from '../modules/posts/model'
-import { openDatabase } from '../lib/server/database'
+import { withDatabase } from '../lib/server/database'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown, type PostFileStage } from '../modules/posts/server/file-exchange'
 import { createPostStore } from '../modules/posts/server/store'
 
@@ -86,34 +86,20 @@ async function importFile(filename: string) {
   const decoded = decodeMarkdownBytes(await readFile(filename))
   if (!decoded.success) throw new Error(decoded.message)
 
-  const database = openDatabase()
-  let id: string
-  try {
-    const result = importPostMarkdown(createPostStore(database), decoded.source, randomUUID())
-    if (result.status === 'invalid') throw new Error(result.message)
-    if (result.status === 'conflict') throw new Error('创建请求与已有草稿冲突，未覆盖已有内容。')
-    if (result.status === 'missing') throw new Error('目标草稿不存在，未完成导入。')
-    id = result.value.id
-  } finally {
-    database.$client.close()
-  }
-  console.log(`已导入草稿：${id}`)
+  const result = await withDatabase(database => importPostMarkdown(createPostStore(database), decoded.source, randomUUID()))
+  if (result.status === 'invalid') throw new Error(result.message)
+  if (result.status === 'conflict') throw new Error('创建请求与已有草稿冲突，未覆盖已有内容。')
+  if (result.status === 'missing') throw new Error('目标草稿不存在，未完成导入。')
+  console.log(`已导入草稿：${result.value.id}`)
 }
 
 async function exportFile(command: Extract<Command, { kind: 'export' }>) {
-  const database = openDatabase()
-  let source: string
-  try {
-    const result = exportPostMarkdown(createPostStore(database), command.id, command.stage)
-    if (result.status === 'missing') {
-      throw new Error(command.stage === 'published' ? '该文章没有公开版本，未导出文件。' : '目标草稿不存在，未导出文件。')
-    }
-    if (result.status === 'invalid') throw new Error(result.message)
-    source = result.source
-  } finally {
-    database.$client.close()
+  const result = await withDatabase(database => exportPostMarkdown(createPostStore(database), command.id, command.stage))
+  if (result.status === 'missing') {
+    throw new Error(command.stage === 'published' ? '该文章没有公开版本，未导出文件。' : '目标草稿不存在，未导出文件。')
   }
-  await writeExport(command.output, source, command.overwrite)
+  if (result.status === 'invalid') throw new Error(result.message)
+  await writeExport(command.output, result.source, command.overwrite)
   console.log(`已导出${command.stage === 'published' ? '公开版本' : '草稿'}：${command.id} -> ${command.output}`)
 }
 

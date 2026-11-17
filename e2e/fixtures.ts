@@ -11,7 +11,7 @@ import { test as base, expect, type Page } from '@playwright/test'
 import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PostStore } from '../modules/posts/model'
-import { openDatabase } from '../lib/server/database'
+import { openDatabase, withDatabase } from '../lib/server/database'
 import { createPostStore } from '../modules/posts/server/store'
 import { postDrafts, postPublications, postPublished, postRevisions, posts, postWriteReceipts } from '../modules/posts/server/schema'
 import { session } from '../modules/auth/server/schema'
@@ -25,22 +25,12 @@ type Runtime = {
   nextAddress: () => string
 }
 
-export async function withStore<T>(runtime: Runtime, operation: (store: PostStore) => T | Promise<T>): Promise<Awaited<T>> {
-  const database = openDatabase(runtime.filename)
-  try {
-    return await operation(createPostStore(database))
-  } finally {
-    database.$client.close()
-  }
+export function withStore<T>(runtime: Runtime, operation: (store: PostStore) => T) {
+  return withDatabase(database => operation(createPostStore(database)), runtime.filename)
 }
 
-export async function withWritingStore<T>(runtime: Runtime, operation: (store: WritingStore) => T | Promise<T>): Promise<Awaited<T>> {
-  const database = openDatabase(runtime.filename)
-  try {
-    return await operation(createWritingStore(database))
-  } finally {
-    database.$client.close()
-  }
+export function withWritingStore<T>(runtime: Runtime, operation: (store: WritingStore) => T) {
+  return withDatabase(database => operation(createWritingStore(database)), runtime.filename)
 }
 
 export function snapshot(runtime: Runtime, id: string) {
@@ -75,12 +65,9 @@ export async function signIn(page: Page, origin: string) {
 export async function expireSession(page: Page, runtime: Runtime) {
   const response = await page.request.get(`${runtime.origin}/api/auth/get-session`)
   const current = z.object({ session: z.object({ id: z.string() }) }).parse(await response.json())
-  const database = openDatabase(runtime.filename)
-  try {
+  await withDatabase(database => {
     database.update(session).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(session.id, current.session.id)).run()
-  } finally {
-    database.$client.close()
-  }
+  }, runtime.filename)
 }
 
 async function freePort() {
