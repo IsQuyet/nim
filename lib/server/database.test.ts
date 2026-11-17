@@ -1,4 +1,5 @@
 // @vitest-environment node
+import assert from 'node:assert/strict'
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -331,10 +332,13 @@ describe('数据库连接范围', () => {
     }, filename)
 
     await entered.promise
-    expect(connection?.$client.open).toBe(true)
+    assert.ok(connection)
+    const close = vi.spyOn(connection.$client, 'close')
+    expect(connection.$client.open).toBe(true)
     resume.resolve()
     expect(await pending).toEqual({ total: 0 })
-    expect(connection?.$client.open).toBe(false)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(connection.$client.open).toBe(false)
   })
 
   it('异步操作拒绝时也等待结束再关闭连接，并原样传播错误', async () => {

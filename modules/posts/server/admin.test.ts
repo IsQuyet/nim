@@ -85,6 +85,25 @@ describe('管理端文章访问', () => {
     expect(operation).not.toHaveBeenCalled()
   })
 
+  it('异步操作等待期间存储保持可用，结果在操作完成后交还', async () => {
+    await initializeDatabase()
+    const content = { title: 'Async draft', description: '', body: '# Async body' }
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const pending = withAdminWritingStore(async store => {
+      entered.resolve()
+      await resume.promise
+      return createTestDraft(store, content)
+    })
+
+    await entered.promise
+    resume.resolve()
+    const result = await pending
+    assert.ok(result.authorized)
+    expect(result.value).toMatchObject(content)
+    expect(await getAdminDraft(result.value.id)).toEqual(result.value)
+  })
+
   it('经过验证后可以创建、读取和保存同一草稿，管理列表保持最新内容', async () => {
     await initializeDatabase()
     const first = {

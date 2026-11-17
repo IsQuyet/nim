@@ -105,6 +105,29 @@ describe('发布与图片引用', () => {
     expect(writer.getDraft(draft.id)).toEqual(draft)
   })
 
+  it('文件尚未写完的图片不能随发布公开，写完后同一篇正文可以发布', async () => {
+    const input = await prepared()
+    const interrupted = createMediaStore(database, {
+      async put() { throw new Error('Disk unavailable') },
+      async read() { return null },
+    })
+    await expect(interrupted.upload(input)).rejects.toThrow('Disk unavailable')
+    const writer = createWritingStore(database)
+    const draft = createTestDraft(writer, { title: 'Article', description: '', body: `![photo](/media/${input.id})` })
+    const publish = () => writer.write({
+      postId: draft.id, operationId: randomUUID(), expectedRevisionId: draft.revisionId, intent: 'publish',
+      content: { title: draft.title, description: draft.description, body: draft.body },
+    })
+
+    expect(publish()).toMatchObject({ status: 'invalid', message: expect.stringContaining('Upload or repair') })
+    expect(isMediaPublished(database, input.id)).toBe(false)
+    expect(database.select().from(postPublications).all()).toHaveLength(0)
+
+    await store().upload(input)
+    expect(publish().status).toBe('success')
+    expect(isMediaPublished(database, input.id)).toBe(true)
+  })
+
   it('发布导入与网页发布登记相同的媒体关系', async () => {
     const input = await prepared()
     const media = store()
