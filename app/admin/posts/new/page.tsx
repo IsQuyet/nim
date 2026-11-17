@@ -5,7 +5,7 @@ import { notFound, redirect } from 'next/navigation'
 import { requireAdminSession } from '@/modules/auth/server/auth'
 import { getAdminDraft } from '@/modules/posts/server/admin'
 import { postIdSchema } from '@/modules/posts/model'
-import { PostEditor } from '../../post-editor'
+import { PostEditor } from '@/modules/posts/ui/post-editor'
 
 export const metadata: Metadata = { title: 'New draft' }
 

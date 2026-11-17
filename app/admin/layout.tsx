@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WritingSessionsProvider } from './writing-sessions'
+import { WritingSessionsProvider } from '@/modules/posts/ui/writing-sessions'
 
 export const metadata: Metadata = {
   title: 'Admin',

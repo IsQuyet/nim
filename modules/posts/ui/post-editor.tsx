@@ -12,14 +12,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { MarkdownComparison } from '@/modules/posts/ui/version-comparison'
+import { MarkdownComparison } from './version-comparison'
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/modules/markdown/ui/editor'
 import { MarkdownImageUpload } from '@/modules/media/ui/image-upload'
-import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/modules/posts/model'
-import { publishedPostReadSchema } from '@/modules/posts/comparison'
-import type { WritingTransport } from '@/modules/posts/writing'
-import { readPublishedPostAction } from '@/modules/posts/server/actions/comparison'
-import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from '@/modules/posts/server/actions/writing'
+import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '../model'
+import { publishedPostReadSchema } from '../comparison'
+import type { WritingTransport } from '../writing'
+import { readPublishedPostAction } from '../server/actions/comparison'
+import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from '../server/actions/writing'
 import { useWritingSession } from './use-writing-session'
 import { useWritingLeaveGuard } from './use-writing-leave-guard'
 

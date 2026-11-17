@@ -2,10 +2,10 @@
 
 import { useContext, useState, useSyncExternalStore } from 'react'
 import { unstable_rethrow } from 'next/navigation'
-import { createRecoveryStore } from '@/modules/posts/recovery-store'
-import { WritingSession } from '@/modules/posts/writing-session'
-import type { DraftPost } from '@/modules/posts/model'
-import type { WritingTransport } from '@/modules/posts/writing'
+import { createRecoveryStore } from '../recovery-store'
+import { WritingSession } from '../writing-session'
+import type { DraftPost } from '../model'
+import type { WritingTransport } from '../writing'
 import { WritingSessionsContext, type WritingBridgeSnapshot, type WritingSessionBridge } from './writing-sessions'
 
 type Options = { postId: string; initial: DraftPost | null; transport: WritingTransport }

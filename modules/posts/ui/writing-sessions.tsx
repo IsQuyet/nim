@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useState, type ReactNode } from 'react'
-import type { WritingSession, WritingSessionSnapshot } from '@/modules/posts/writing-session'
+import type { WritingSession, WritingSessionSnapshot } from '../writing-session'
 
 export type WritingBridgeSnapshot = {
   writing: WritingSessionSnapshot

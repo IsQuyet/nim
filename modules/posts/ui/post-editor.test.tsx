@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation'
 import { Component, StrictMode, Suspense, type ReactNode } from 'react'
 import { act, fireEvent, render as renderComponent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { samePostContent, type DraftPost } from '@/modules/posts/model'
-import { recoveryCopySchema, type RecoveryCopy, type WritingAcknowledgement, type WritingCommand, type WritingTransport } from '@/modules/posts/writing'
+import { samePostContent, type DraftPost } from '../model'
+import { recoveryCopySchema, type RecoveryCopy, type WritingAcknowledgement, type WritingCommand, type WritingTransport } from '../writing'
 import { PostEditor } from './post-editor'
 import { WritingSessionsProvider } from './writing-sessions'
 import { useWritingSession } from './use-writing-session'
@@ -13,7 +13,7 @@ const routing = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }))
 const comparisonAction = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('next/navigation', async importOriginal => ({ ...await importOriginal<typeof import('next/navigation')>(), useRouter: () => routing }))
 const local = vi.hoisted(() => ({ copies: new Map<string, RecoveryCopy>(), failure: false }))
-vi.mock('@/modules/posts/recovery-store', () => ({
+vi.mock('../recovery-store', () => ({
   createRecoveryStore: () => ({
     async list(postId?: string) { return [...local.copies.values()].filter(copy => postId === undefined || copy.postId === postId).map(copy => recoveryCopySchema.parse(copy)) },
     async put(copy: RecoveryCopy) {
@@ -34,7 +34,7 @@ vi.mock('@/modules/markdown/ui/editor', () => ({
     <textarea id={id} aria-labelledby={labelId} value={value} onChange={event => onChange(event.target.value)} />
   ),
 }))
-vi.mock('@/modules/posts/ui/version-comparison', () => ({
+vi.mock('./version-comparison', () => ({
   MarkdownComparison: ({ published, compared }: {
     published: { title: string; description: string; body: string } | null
     compared: { title: string; description: string; body: string }
@@ -45,8 +45,8 @@ vi.mock('@/modules/posts/ui/version-comparison', () => ({
     </section>
   ),
 }))
-vi.mock('@/modules/posts/server/actions/comparison', () => ({ readPublishedPostAction: comparisonAction.read }))
-vi.mock('@/modules/posts/server/actions/writing', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
+vi.mock('../server/actions/comparison', () => ({ readPublishedPostAction: comparisonAction.read }))
+vi.mock('../server/actions/writing', () => ({ readDraftAction: vi.fn(), writeDraftAction: vi.fn(), inspectDraftOperationAction: vi.fn() }))
 
 class EditorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, { failed: boolean }> {
   state = { failed: false }
