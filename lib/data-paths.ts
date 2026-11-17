@@ -10,3 +10,7 @@ export function getDatabasePath() {
 export function getAuthSecretPath() {
   return join(/* turbopackIgnore: true */ dirname(getDatabasePath()), 'auth-secret')
 }
+
+export function getMediaDirectory() {
+  return join(/* turbopackIgnore: true */ dirname(getDatabasePath()), 'media')
+}

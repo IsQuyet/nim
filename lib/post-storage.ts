@@ -1,9 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import type { AppDatabase } from './database'
 import { samePostContent, type DraftPost, type PostContent, type PostRevision, type PublishedPost } from './content'
-import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
+import { extractMediaReferences } from './media-references'
+import { mediaAssets, postPublicationMedia, postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 
 export type PostDatabase = Pick<AppDatabase, 'select' | 'insert' | 'update'>
+type PostTransaction = Parameters<Parameters<AppDatabase['transaction']>[0]>[0]
 
 export function contentOf(content: PostContent): PostContent {
   return { title: content.title, description: content.description, body: content.body }
@@ -72,16 +74,42 @@ export function updateDraft(
   return { ...draft, ...contentOf(content), revisionId: revision.id, updatedAt: revision.createdAt }
 }
 
-export function writePublication(database: PostDatabase, draft: DraftPost): PublishedPost {
-  const current = getPublishedPost(database, draft.id)
-  if (current?.revisionId === draft.revisionId) return current
-  const publication = database.insert(postPublications).values({
-    postId: draft.id, revisionId: draft.revisionId, publishedAt: new Date().toISOString(),
-  }).returning().get()
-  database.insert(postPublished).values({ postId: draft.id, publicationId: publication.id })
-    .onConflictDoUpdate({ target: postPublished.postId, set: { publicationId: publication.id } }).run()
-  return {
-    id: draft.id, revisionId: draft.revisionId, publicationId: publication.id,
-    createdAt: draft.createdAt, publishedAt: publication.publishedAt, ...contentOf(draft),
+export class InvalidPublicationMediaError extends Error {}
+
+function publicationMediaIds(database: PostDatabase, body: string) {
+  const references = extractMediaReferences(body)
+  if (references.status === 'invalid') throw new InvalidPublicationMediaError(references.message)
+  for (let offset = 0; offset < references.ids.length; offset += 500) {
+    const batch = references.ids.slice(offset, offset + 500)
+    const assets = database.select({ id: mediaAssets.id, state: mediaAssets.state })
+      .from(mediaAssets).where(inArray(mediaAssets.id, batch)).all()
+    if (assets.length !== batch.length || assets.some(asset => asset.state !== 'ready')) {
+      throw new InvalidPublicationMediaError('Upload or repair every referenced image before publishing.')
+    }
   }
+  return references.ids
+}
+
+export function writePublication(database: PostTransaction, draft: DraftPost): PublishedPost {
+  const mediaIds = publicationMediaIds(database, draft.body)
+  const current = getPublishedPost(database, draft.id)
+  let published: PublishedPost
+  if (current?.revisionId === draft.revisionId) {
+    published = current
+  } else {
+    const publication = database.insert(postPublications).values({
+      postId: draft.id, revisionId: draft.revisionId, publishedAt: new Date().toISOString(),
+    }).returning().get()
+    database.insert(postPublished).values({ postId: draft.id, publicationId: publication.id })
+      .onConflictDoUpdate({ target: postPublished.postId, set: { publicationId: publication.id } }).run()
+    published = {
+      id: draft.id, revisionId: draft.revisionId, publicationId: publication.id,
+      createdAt: draft.createdAt, publishedAt: publication.publishedAt, ...contentOf(draft),
+    }
+  }
+  for (const mediaId of mediaIds) {
+    database.insert(postPublicationMedia).values({ postId: draft.id, publicationId: published.publicationId, mediaId })
+      .onConflictDoNothing().run()
+  }
+  return published
 }

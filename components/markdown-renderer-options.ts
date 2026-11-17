@@ -1,5 +1,5 @@
 import { defaultUrlTransform, type Options } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { markdownRemarkPlugins, markdownRehypeOptions } from '@/lib/markdown-syntax'
 import rehypePrettyCode, { type Options as PrettyCodeOptions } from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings, { type Options as HeadingLinkOptions } from 'rehype-autolink-headings'
@@ -26,7 +26,8 @@ const headingLinkOptions = {
 } satisfies HeadingLinkOptions
 
 export const markdownRenderOptions = {
-  remarkPlugins: [remarkGfm],
+  remarkPlugins: markdownRemarkPlugins,
+  remarkRehypeOptions: markdownRehypeOptions,
   rehypePlugins: [
     [rehypePrettyCode, prettyCodeOptions],
     rehypeSlug,
@@ -34,4 +35,4 @@ export const markdownRenderOptions = {
   ],
   skipHtml: true,
   urlTransform: defaultUrlTransform,
-} satisfies Pick<Options, 'remarkPlugins' | 'rehypePlugins' | 'skipHtml' | 'urlTransform'>
+} satisfies Pick<Options, 'remarkPlugins' | 'remarkRehypeOptions' | 'rehypePlugins' | 'skipHtml' | 'urlTransform'>

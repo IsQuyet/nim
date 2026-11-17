@@ -1,7 +1,8 @@
+import { createRef } from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { EditorView } from '@codemirror/view'
 import { describe, expect, it, vi } from 'vitest'
-import { MarkdownEditor } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/markdown-editor'
 
 function editor() {
   const content = screen.getByRole<HTMLDivElement>('textbox', { name: 'Body' })
@@ -89,6 +90,58 @@ describe('Markdown 实时编辑器', () => {
     expect(view.contentDOM.textContent).toContain('□')
     expect(view.contentDOM.textContent).not.toContain('[x]')
     expect(view.contentDOM.textContent).not.toContain('[ ]')
+  })
+
+  it('将上传的图片 Markdown 插入当前光标并通知父写作会话', () => {
+    const onChange = vi.fn()
+    const editorRef = createRef<MarkdownEditorHandle>()
+    render(
+      <>
+        <label id="body-label">Body</label>
+        <MarkdownEditor ref={editorRef} id="body" labelId="body-label" value="Before after" onChange={onChange} />
+      </>,
+    )
+    const view = editor()
+    act(() => view.dispatch({ selection: { anchor: 7 } }))
+    const insertion = editorRef.current?.prepareImageInsertion()
+    act(() => expect(insertion?.insert('![photo](/media/264efa5a-5f48-4f4d-bbc3-56021a5f6342)')).toBe(true))
+
+    const expected = 'Before ![photo](/media/264efa5a-5f48-4f4d-bbc3-56021a5f6342) after'
+    expect(view.state.doc.toString()).toBe(expected)
+    expect(onChange).toHaveBeenLastCalledWith(expected)
+  })
+
+  it('上传开始时的插入点随输入移动，不追随之后移动的光标，也不替换新输入', () => {
+    const editorRef = createRef<MarkdownEditorHandle>()
+    render(<><label id="body-label">Body</label><MarkdownEditor ref={editorRef} id="body" labelId="body-label" value="Before after" onChange={() => {}} /></>)
+    const view = editor()
+    act(() => view.dispatch({ selection: { anchor: 7 } }))
+    const insertion = editorRef.current?.prepareImageInsertion()
+    act(() => view.dispatch({ changes: { from: 0, insert: 'New ' }, selection: { anchor: 0 } }))
+    act(() => expect(insertion?.insert('![photo](/media/example)')).toBe(true))
+    expect(view.state.doc.toString()).toBe('New Before ![photo](/media/example) after')
+    expect(insertion?.insert('duplicate')).toBe(false)
+  })
+
+  it('外部替换正文后旧插入点失效，不让迟到的上传修改恢复内容', () => {
+    const editorRef = createRef<MarkdownEditorHandle>()
+    const renderEditor = (value: string) => <><label id="body-label">Body</label><MarkdownEditor ref={editorRef} id="body" labelId="body-label" value={value} onChange={() => {}} /></>
+    const mounted = render(renderEditor('Old document'))
+    const insertion = editorRef.current?.prepareImageInsertion()
+    mounted.rerender(renderEditor('Restored document'))
+    expect(insertion?.insert('![photo](/media/example)')).toBe(false)
+    expect(editor().state.doc.toString()).toBe('Restored document')
+  })
+
+  it('释放插入点或卸载编辑器后不再修改文档', () => {
+    const editorRef = createRef<MarkdownEditorHandle>()
+    const mounted = render(<><label id="body-label">Body</label><MarkdownEditor ref={editorRef} id="body" labelId="body-label" value="Document" onChange={() => {}} /></>)
+    const released = editorRef.current?.prepareImageInsertion()
+    released?.release()
+    expect(released?.insert('late image')).toBe(false)
+    const pending = editorRef.current?.prepareImageInsertion()
+    mounted.unmount()
+    expect(pending?.insert('late image')).toBe(false)
   })
 
   it('不把 Markdown 图片伪装成已经渲染的图片', () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands'
 import { commonmarkLanguage, markdown } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
@@ -22,6 +22,15 @@ type MarkdownEditorProps = {
   labelId: string
   value: string
   onChange: (value: string) => void
+}
+
+export type MarkdownImageInsertion = {
+  insert: (markdown: string) => boolean
+  release: () => void
+}
+
+export type MarkdownEditorHandle = {
+  prepareImageInsertion: () => MarkdownImageInsertion | null
 }
 
 const externalDocumentChange = Annotation.define<boolean>()
@@ -319,11 +328,43 @@ const editorTheme = EditorView.theme({
   '.cm-md-horizontal-rule': { color: 'color-mix(in srgb, currentColor 45%, transparent)' },
 })
 
-export function MarkdownEditor({ id, labelId, value, onChange }: MarkdownEditorProps) {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
+  { id, labelId, value, onChange },
+  ref,
+) {
   const parentRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const initialValueRef = useRef(value)
   const onChangeRef = useRef(onChange)
+  const insertionPoints = useRef(new Set<{ position: number }>())
+
+  useImperativeHandle(ref, () => ({
+    prepareImageInsertion() {
+      const view = viewRef.current
+      if (!view) return null
+      const point = { position: view.state.selection.main.head }
+      const points = insertionPoints.current
+      points.add(point)
+      return {
+        release: () => { points.delete(point) },
+        insert(markdownImage) {
+          if (viewRef.current !== view || !points.delete(point)) return false
+          const position = point.position
+          const before = position > 0 ? view.state.doc.sliceString(position - 1, position) : ''
+          const after = position < view.state.doc.length ? view.state.doc.sliceString(position, position + 1) : ''
+          const prefix = before && !/\s/u.test(before) ? ' ' : ''
+          const suffix = after && !/\s/u.test(after) ? ' ' : ''
+          view.dispatch({
+            changes: { from: position, insert: `${prefix}${markdownImage}${suffix}` },
+            selection: { anchor: position + prefix.length + markdownImage.length },
+            userEvent: 'input',
+          })
+          view.focus()
+          return true
+        },
+      }
+    },
+  }), [])
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -348,6 +389,11 @@ export function MarkdownEditor({ id, labelId, value, onChange }: MarkdownEditorP
           spellcheck: 'true',
         }),
         EditorView.updateListener.of(update => {
+          if (update.transactions.some(transaction => transaction.annotation(externalDocumentChange))) {
+            insertionPoints.current.clear()
+          } else if (update.docChanged) {
+            for (const point of insertionPoints.current) point.position = update.changes.mapPos(point.position, 1)
+          }
           if (update.docChanged && update.transactions.some(transaction =>
             transaction.docChanged && !transaction.annotation(externalDocumentChange))) {
             onChangeRef.current(update.state.doc.toString())
@@ -358,9 +404,11 @@ export function MarkdownEditor({ id, labelId, value, onChange }: MarkdownEditorP
       ],
     })
     const view = new EditorView({ state, parent })
+    const points = insertionPoints.current
     viewRef.current = view
 
     return () => {
+      points.clear()
       view.destroy()
       viewRef.current = null
     }
@@ -381,4 +429,4 @@ export function MarkdownEditor({ id, labelId, value, onChange }: MarkdownEditorP
       <div ref={parentRef} />
     </div>
   )
-}
+})

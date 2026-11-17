@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
-import { check, customType, foreignKey, index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import { check, customType, foreignKey, index, integer, primaryKey, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 import { revisionSources, revisionSourceSchema } from './content'
+import { MAX_MEDIA_IMAGE_PIXELS, MAX_MEDIA_UPLOAD_BYTES, mediaStateSchema, mediaTypeSchema, type MediaAsset } from './media'
 
 const date = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',
@@ -61,6 +62,23 @@ export const postWriteReceipts = sqliteTable('post_write_receipts', {
   }),
 ])
 
+export const mediaAssets = sqliteTable('media_assets', {
+  id: text('id').primaryKey(),
+  originalName: text('original_name').notNull(),
+  mediaType: text('media_type').$type<MediaAsset['mediaType']>().notNull(),
+  byteSize: integer('byte_size').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  sha256: text('sha256').notNull(),
+  state: text('state').$type<MediaAsset['state']>().notNull(),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  check('media_assets_type_check', sql`${table.mediaType} in (${sql.raw(mediaTypeSchema.options.map(type => `'${type}'`).join(', '))})`),
+  check('media_assets_byte_size_check', sql`${table.byteSize} > 0 and ${table.byteSize} <= ${sql.raw(String(MAX_MEDIA_UPLOAD_BYTES))}`),
+  check('media_assets_dimensions_check', sql`${table.width} > 0 and ${table.height} > 0 and ${table.width} * ${table.height} <= ${sql.raw(String(MAX_MEDIA_IMAGE_PIXELS))}`),
+  check('media_assets_state_check', sql`${table.state} in (${sql.raw(mediaStateSchema.options.map(state => `'${state}'`).join(', '))})`),
+])
+
 export const postPublications = sqliteTable('post_publications', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
@@ -73,6 +91,19 @@ export const postPublications = sqliteTable('post_publications', {
     columns: [table.postId, table.revisionId],
     foreignColumns: [postRevisions.postId, postRevisions.id],
   }),
+])
+
+export const postPublicationMedia = sqliteTable('post_publication_media', {
+  postId: text('post_id').notNull(),
+  publicationId: integer('publication_id').notNull(),
+  mediaId: text('media_id').notNull().references(() => mediaAssets.id, { onDelete: 'restrict' }),
+}, table => [
+  primaryKey({ name: 'post_publication_media_pk', columns: [table.postId, table.publicationId, table.mediaId] }),
+  index('post_publication_media_media_id_idx').on(table.mediaId),
+  foreignKey({
+    columns: [table.postId, table.publicationId],
+    foreignColumns: [postPublications.postId, postPublications.id],
+  }).onDelete('cascade'),
 ])
 
 export const postPublished = sqliteTable('post_published', {

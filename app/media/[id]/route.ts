@@ -1,0 +1,54 @@
+import { connection } from 'next/server'
+import { postIdSchema } from '@/lib/content'
+import type { MediaAsset } from '@/lib/media'
+import { getAdminSession } from '@/lib/auth'
+import { getMediaDirectory } from '@/lib/data-paths'
+import { openDatabase } from '@/lib/database'
+import { createMediaStore } from '@/lib/media-store'
+import { createFileMediaStorage } from '@/lib/media-storage'
+
+type MediaRouteContext = {
+  params: Promise<{ id: string }>
+}
+
+export const runtime = 'nodejs'
+
+function notFound() {
+  return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
+}
+
+export async function GET(request: Request, { params }: MediaRouteContext) {
+  await connection()
+  const { id: candidate } = await params
+  const parsed = postIdSchema.safeParse(candidate)
+  if (!parsed.success) return notFound()
+
+  const database = openDatabase()
+  let asset: MediaAsset | null
+  let publicAsset = false
+  try {
+    const store = createMediaStore(database, createFileMediaStorage(getMediaDirectory()))
+    asset = store.get(parsed.data)
+    if (!asset || asset.state !== 'ready') return notFound()
+    publicAsset = store.isPublished(asset.id)
+  } finally {
+    database.$client.close()
+  }
+
+  if (!publicAsset && !(await getAdminSession())) return notFound()
+  const bytes = await createFileMediaStorage(getMediaDirectory()).read(asset)
+  if (!bytes) return notFound()
+
+  const etag = `"${asset.sha256}"`
+  const headers = new Headers({
+    'Cache-Control': publicAsset ? 'public, max-age=31536000, immutable' : 'private, no-store',
+    'Content-Length': String(bytes.byteLength),
+    'Content-Type': asset.mediaType,
+    'Content-Disposition': 'inline',
+    'ETag': etag,
+    'X-Content-Type-Options': 'nosniff',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+  })
+  if (request.headers.get('if-none-match') === etag) return new Response(null, { status: 304, headers })
+  return new Response(bytes, { headers })
+}

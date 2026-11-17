@@ -33,7 +33,7 @@ const journalSchema = z.object({
     idx: z.number(), version: z.string(), when: z.number(), tag: z.string(), breakpoints: z.boolean(),
   })),
 })
-const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'post_write_receipts', 'user', 'session', 'account', 'verification']
+const currentTables = ['posts', 'post_revisions', 'post_drafts', 'post_publications', 'post_published', 'post_write_receipts', 'media_assets', 'post_publication_media', 'user', 'session', 'account', 'verification']
 const authTables = ['user', 'session', 'account', 'verification']
 let directory: string
 let filename: string
@@ -129,6 +129,43 @@ describe('数据库结构与迁移', () => {
     } finally {
       client.close()
     }
+  })
+
+  it('升级已有媒体关系时保留数据并启用发布级联，引用中的媒体仍受删除保护', async () => {
+    const folder = join(directory, 'media-baseline')
+    cpSync(join(process.cwd(), 'drizzle'), folder, { recursive: true })
+    const journal = readJournal(folder)
+    const baseline = journal.entries.findIndex(entry => entry.tag === '0005_media_assets')
+    if (baseline < 0) throw new Error('缺少媒体初始迁移。')
+    journal.entries = journal.entries.slice(0, baseline + 1)
+    writeFileSync(join(folder, 'meta', '_journal.json'), JSON.stringify(journal))
+    const client = new Database(filename)
+    try {
+      client.pragma('foreign_keys = ON')
+      migrate(drizzle(client), { migrationsFolder: folder })
+    } finally { client.close() }
+    const database = openDatabase(filename)
+    const mediaId = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
+    let postId: string
+    try {
+      database.$client.prepare('INSERT INTO media_assets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(mediaId, 'photo.png', 'image/webp', 100, 2, 3, 'a'.repeat(64), 'ready', '2026-11-17T00:00:00.000Z')
+      const writer = createWritingStore(database)
+      const draft = createTestDraft(writer, { title: 'Existing media', description: '', body: `![photo](/media/${mediaId})` })
+      postId = draft.id
+      publishTestDraft(writer, draft)
+    } finally { database.$client.close() }
+    const before = readContents()
+    await initializeDatabase(filename)
+    expect(readContents()).toEqual(before)
+    const upgraded = openDatabase(filename)
+    try {
+      expect(() => upgraded.$client.prepare('DELETE FROM media_assets WHERE id = ?').run(mediaId)).toThrow('FOREIGN KEY')
+      upgraded.$client.prepare('DELETE FROM posts WHERE id = ?').run(postId)
+      expect(upgraded.$client.prepare('SELECT * FROM post_publication_media').all()).toEqual([])
+      expect(upgraded.$client.prepare('SELECT * FROM media_assets').all()).toHaveLength(1)
+      expect(upgraded.$client.pragma('foreign_key_check')).toEqual([])
+    } finally { upgraded.$client.close() }
   })
 
   it('重复初始化保留文章、修订、发布时间和认证数据，不重复登记迁移', async () => {

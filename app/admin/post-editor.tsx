@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertDialog,
@@ -13,7 +13,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { MarkdownComparison } from '@/components/markdown-comparison'
-import { MarkdownEditor } from '@/components/markdown-editor'
+import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/markdown-editor'
+import { MarkdownImageUpload } from '@/components/markdown-image-upload'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/lib/content'
 import { publishedPostReadSchema } from '@/lib/markdown-comparison'
 import type { WritingTransport } from '@/lib/writing'
@@ -37,6 +38,7 @@ const BUTTON_CLASS_NAME =
 export function PostEditor({ postId, initial, transport: connection = transport }: PostEditorProps) {
   const prefix = useId()
   const router = useRouter()
+  const markdownEditorRef = useRef<MarkdownEditorHandle>(null)
   const [comparison, setComparison] = useState<PublishedPost | null>(null)
   const [comparisonOpen, setComparisonOpen] = useState(false)
   const [comparisonBusy, setComparisonBusy] = useState(false)
@@ -184,10 +186,16 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           </button>
         </div>
         <MarkdownEditor
+          key={`editor:${snapshot.postId}`}
+          ref={markdownEditorRef}
           id={`${prefix}-body`}
           labelId={`${prefix}-body-label`}
           value={content.body}
           onChange={value => edit('body', value)}
+        />
+        <MarkdownImageUpload
+          key={`upload:${snapshot.postId}`}
+          prepareInsertion={() => markdownEditorRef.current?.prepareImageInsertion() ?? null}
         />
         {comparisonFeedback?.status === 'error' && (
           <div role="alert" className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">

@@ -36,6 +36,20 @@
       "when": 1794755853626,
       "tag": "0004_explicit_draft_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794858198982,
+      "tag": "0005_media_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794886305618,
+      "tag": "0006_media_publication_cascade",
+      "breakpoints": true
     }
   ]
 }
