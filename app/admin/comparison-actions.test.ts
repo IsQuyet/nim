@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { redirect } from 'next/navigation'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
-import type { PostStore, PublishedPost } from '@/modules/posts/model'
+import type { PublishedPost } from '@/modules/posts/model'
+import type { PostStore } from '@/modules/posts/server/store'
 import { readPublishedPostAction } from './comparison-actions'
 
 vi.mock('@/modules/posts/server/admin', () => ({ withAdminPostStore: vi.fn() }))

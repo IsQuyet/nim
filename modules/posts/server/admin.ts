@@ -1,9 +1,9 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { withAdmin } from '@/modules/auth/server/admin'
-import { revisionHistoryQuerySchema, type PostStore } from '../model'
+import { revisionHistoryQuerySchema } from '../model'
 import { withDatabase } from '@/lib/server/database'
-import { createPostStore } from './store'
+import { createPostStore, type PostStore } from './store'
 import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
 

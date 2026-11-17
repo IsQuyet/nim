@@ -8,11 +8,11 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
-import { createPostStore, importPublishedPosts } from './store'
+import { createPostStore, importPublishedPosts, type PostStore } from './store'
 import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
-import type { DraftPost, PostContent, PostMutationResult, PostStore } from '../model'
+import type { DraftPost, PostContent, PostMutationResult } from '../model'
 import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 
 let directory: string

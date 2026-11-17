@@ -7,13 +7,30 @@ import type {
   ImportPostInput,
   PostMutationResult,
   PostContent,
+  PostPublication,
+  PostRevision,
   PostRevisionHistory,
+  PublishedPost,
+  PublishedPostSummary,
   RevisionHistoryQuery,
-  PostStore,
   PostSummary,
 } from '../model'
 import { postDrafts, postPublications, postPublished, postRevisions, posts } from './schema'
 import { getDraft, getPublishedPost, insertDraft, updateDraft, writePublication } from './storage'
+
+export type PostStore = {
+  createImportedDraftOnce(id: string, content: PostContent): PostMutationResult<DraftPost>
+  restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>
+  importDraft(input: ImportPostInput): DraftPost
+  getDraft(id: string): DraftPost | null
+  getPublishedPost(id: string): PublishedPost | null
+  getRevision(id: string, revisionId: number): PostRevision | null
+  getRevisionHistory(id: string, query?: RevisionHistoryQuery): PostRevisionHistory | null
+  listRevisions(id: string): PostRevision[]
+  listPublications(id: string): PostPublication[]
+  listPosts(): PostSummary[]
+  listPublishedPosts(): PublishedPostSummary[]
+}
 
 export function importPublishedPosts(database: AppDatabase, inputs: ImportPostInput[]) {
   return database.transaction(transaction => {

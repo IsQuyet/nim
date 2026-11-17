@@ -117,17 +117,3 @@ export type ImportPostInput = z.infer<typeof identifiedPostContentSchema>
 export type ImportDraftInput = PostContent & {
   id?: string
 }
-
-export type PostStore = {
-  createImportedDraftOnce(id: string, content: PostContent): PostMutationResult<DraftPost>
-  restoreRevision(id: string, revisionId: number, expectedRevisionId: number): PostMutationResult<DraftPost>
-  importDraft(input: ImportPostInput): DraftPost
-  getDraft(id: string): DraftPost | null
-  getPublishedPost(id: string): PublishedPost | null
-  getRevision(id: string, revisionId: number): PostRevision | null
-  getRevisionHistory(id: string, query?: RevisionHistoryQuery): PostRevisionHistory | null
-  listRevisions(id: string): PostRevision[]
-  listPublications(id: string): PostPublication[]
-  listPosts(): PostSummary[]
-  listPublishedPosts(): PublishedPostSummary[]
-}
