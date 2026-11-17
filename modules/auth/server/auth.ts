@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
 import { getSiteUrl } from '@/lib/server/site-config'
 import { getAuthSecret } from './secret'
-import { openDatabase } from '@/lib/server/database'
+import { openDatabase, withDatabase } from '@/lib/server/database'
 import { account } from './schema'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
@@ -69,17 +69,14 @@ export const getAdminSession = cache(async () => {
   const adminId = process.env.ADMIN_GITHUB_ID?.trim()
   if (!adminId) return null
 
-  const database = openDatabase()
-  try {
+  return withDatabase(database => {
     const adminAccount = database.select({ id: account.id }).from(account).where(and(
       eq(account.userId, session.user.id),
       eq(account.providerId, 'github'),
       eq(account.accountId, adminId),
     )).get()
     return adminAccount ? session : null
-  } finally {
-    database.$client.close()
-  }
+  })
 })
 
 export async function requireAdminSession() {

@@ -2,7 +2,7 @@ import 'server-only'
 import { redirect } from 'next/navigation'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { revisionHistoryQuerySchema, type PostStore } from '../model'
-import { openDatabase, type AppDatabase } from '@/lib/server/database'
+import { withDatabase, type AppDatabase } from '@/lib/server/database'
 import { createPostStore } from './store'
 import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
@@ -15,13 +15,7 @@ async function withAdminDatabase<T>(
   operation: (database: AppDatabase) => T,
 ): Promise<AdminPostStoreResult<Awaited<T>>> {
   if (!(await getAdminSession())) return { authorized: false }
-
-  const database = openDatabase()
-  try {
-    return { authorized: true, value: await operation(database) }
-  } finally {
-    database.$client.close()
-  }
+  return { authorized: true, value: await withDatabase(operation) }
 }
 
 export function withAdminPostStore<T>(operation: (store: PostStore) => T) {

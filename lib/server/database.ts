@@ -25,3 +25,16 @@ export function openDatabase(filename = getDatabasePath()) {
 }
 
 export type AppDatabase = ReturnType<typeof openDatabase>
+
+/** 在一个连接内执行操作，等操作结束后关闭连接，结果与错误原样交还调用方。 */
+export async function withDatabase<T>(
+  operation: (database: AppDatabase) => T,
+  filename?: string,
+): Promise<Awaited<T>> {
+  const database = openDatabase(filename)
+  try {
+    return await operation(database)
+  } finally {
+    database.$client.close()
+  }
+}

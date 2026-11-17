@@ -5,8 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { initializeDatabase, openDatabase } from '@/lib/server/database'
-import * as databaseModule from '@/lib/server/database'
+import { initializeDatabase } from '@/lib/server/database'
 import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore, withAdminWritingStore } from './admin'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
@@ -167,57 +166,5 @@ describe('管理端文章访问', () => {
     }
     expect(await getAdminRevisionHistory(id)).toMatchObject({ page: 1, revisionCount: 1 })
     expect(await getAdminRevisionHistory('missing')).toBeNull()
-  })
-
-  it('异步操作等待期间保持连接打开，完成后返回已解析值并关闭连接', async () => {
-    await initializeDatabase()
-    const database = openDatabase()
-    vi.spyOn(databaseModule, 'openDatabase').mockReturnValue(database)
-    const close = vi.spyOn(database.$client, 'close')
-    const entered = Promise.withResolvers<void>()
-    const resume = Promise.withResolvers<void>()
-    const content = { title: 'Async draft', description: '', body: '# Async body' }
-    const pending = withAdminWritingStore(async store => {
-      entered.resolve()
-      await resume.promise
-      expect(database.$client.open).toBe(true)
-      return createTestDraft(store, content)
-    })
-
-    await entered.promise
-    expect(database.$client.open).toBe(true)
-    expect(close).not.toHaveBeenCalled()
-    resume.resolve()
-    const result = await pending
-
-    assert.ok(result.authorized)
-    expect(result.value.title).toBe(content.title)
-    expect(result.value.revisionId).toBeGreaterThan(0)
-    expect(close).toHaveBeenCalledTimes(1)
-    expect(database.$client.open).toBe(false)
-  })
-
-  it('异步操作拒绝时也等待结束再关闭连接，并原样传播错误', async () => {
-    await initializeDatabase()
-    const database = openDatabase()
-    vi.spyOn(databaseModule, 'openDatabase').mockReturnValue(database)
-    const close = vi.spyOn(database.$client, 'close')
-    const entered = Promise.withResolvers<void>()
-    const resume = Promise.withResolvers<void>()
-    const error = new Error('Async operation failed')
-    const pending = withAdminPostStore(async () => {
-      entered.resolve()
-      await resume.promise
-      throw error
-    })
-
-    await entered.promise
-    expect(database.$client.open).toBe(true)
-    expect(close).not.toHaveBeenCalled()
-    const rejected = expect(pending).rejects.toBe(error)
-    resume.resolve()
-    await rejected
-    expect(close).toHaveBeenCalledTimes(1)
-    expect(database.$client.open).toBe(false)
   })
 })

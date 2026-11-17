@@ -8,7 +8,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { initializeDatabase, openDatabase } from './database'
+import { initializeDatabase, openDatabase, withDatabase, type AppDatabase } from './database'
 import { account, session, user, verification } from '@/modules/auth/server/schema'
 import { createPostStore } from '@/modules/posts/server/store'
 import { createWritingStore } from '@/modules/posts/server/writing-store'
@@ -314,5 +314,65 @@ describe('数据库结构与迁移', () => {
     } finally {
       reopened.close()
     }
+  })
+})
+
+describe('数据库连接范围', () => {
+  it('异步操作等待期间保持连接打开，完成后返回已解析值并关闭连接', async () => {
+    await initializeDatabase(filename)
+    let connection: AppDatabase | undefined
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const pending = withDatabase(async database => {
+      connection = database
+      entered.resolve()
+      await resume.promise
+      return database.$client.prepare('SELECT count(*) AS total FROM posts').get()
+    }, filename)
+
+    await entered.promise
+    expect(connection?.$client.open).toBe(true)
+    resume.resolve()
+    expect(await pending).toEqual({ total: 0 })
+    expect(connection?.$client.open).toBe(false)
+  })
+
+  it('异步操作拒绝时也等待结束再关闭连接，并原样传播错误', async () => {
+    await initializeDatabase(filename)
+    let connection: AppDatabase | undefined
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const error = new Error('Async operation failed')
+    const pending = withDatabase(async database => {
+      connection = database
+      entered.resolve()
+      await resume.promise
+      throw error
+    }, filename)
+
+    await entered.promise
+    expect(connection?.$client.open).toBe(true)
+    const rejected = expect(pending).rejects.toBe(error)
+    resume.resolve()
+    await rejected
+    expect(connection?.$client.open).toBe(false)
+  })
+
+  it('同步操作抛出时关闭连接并原样传播错误', async () => {
+    await initializeDatabase(filename)
+    let connection: AppDatabase | undefined
+    const error = new Error('Operation failed')
+    await expect(withDatabase(database => {
+      connection = database
+      throw error
+    }, filename)).rejects.toBe(error)
+    expect(connection?.$client.open).toBe(false)
+  })
+
+  it('数据库无法打开时传播错误，不执行操作也不创建文件', async () => {
+    const operation = vi.fn()
+    await expect(withDatabase(operation, filename)).rejects.toThrow()
+    expect(operation).not.toHaveBeenCalled()
+    expect(existsSync(filename)).toBe(false)
   })
 })
