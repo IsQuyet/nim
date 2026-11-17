@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { describe, expect, it } from 'vitest'
-import { extractMediaReferences } from './media-references'
+import { extractMediaReferences } from './references'
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 

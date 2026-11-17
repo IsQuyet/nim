@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm'
-import type { AppDatabase } from './server/database'
-import { mediaAssets, postPublicationMedia } from './schema'
-import { mediaAssetSchema, type MediaAsset } from './media'
-import type { PreparedMedia } from './media-upload'
-import type { MediaStorage } from './media-storage'
+import type { AppDatabase } from '@/lib/server/database'
+import { mediaAssets, postPublicationMedia } from '@/lib/schema'
+import { mediaAssetSchema, type MediaAsset } from '../model'
+import type { PreparedMedia } from './upload'
+import type { MediaStorage } from './storage'
 
 export type MediaUploadResult =
   | { status: 'success'; value: MediaAsset }

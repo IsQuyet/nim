@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mediaAssetSchema, mediaMarkdownUrl, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from './media'
+import { mediaAssetSchema, mediaMarkdownUrl, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from './model'
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 const asset = {

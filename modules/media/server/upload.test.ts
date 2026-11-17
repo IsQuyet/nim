@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto'
 import { crc32 } from 'node:zlib'
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import { createTestAnimation, createTestImage } from '../test/media-fixtures'
-import { MAX_MEDIA_UPLOAD_BYTES } from './media'
-import { prepareMediaUpload } from './media-upload'
+import { createTestAnimation, createTestImage } from '@/test/media-fixtures'
+import { MAX_MEDIA_UPLOAD_BYTES } from '../model'
+import { prepareMediaUpload } from './upload'
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 

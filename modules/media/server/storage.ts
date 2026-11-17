@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, link, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { postIdSchema } from './content'
-import { mediaImageFormats, mediaTypeSchema, type MediaAsset } from './media'
+import { postIdSchema } from '@/lib/content'
+import { mediaImageFormats, mediaTypeSchema, type MediaAsset } from '../model'
 
 type StoredMedia = Pick<MediaAsset, 'id' | 'mediaType' | 'sha256'>
 

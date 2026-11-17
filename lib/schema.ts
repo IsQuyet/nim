@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { check, customType, foreignKey, index, integer, primaryKey, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 import { revisionSources, revisionSourceSchema } from './content'
-import { MAX_MEDIA_IMAGE_PIXELS, MAX_MEDIA_UPLOAD_BYTES, mediaStateSchema, mediaTypeSchema, type MediaAsset } from './media'
+import { MAX_MEDIA_IMAGE_PIXELS, MAX_MEDIA_UPLOAD_BYTES, mediaStateSchema, mediaTypeSchema, type MediaAsset } from '@/modules/media/model'
 
 const date = customType<{ data: Date; driverData: string }>({
   dataType: () => 'date',

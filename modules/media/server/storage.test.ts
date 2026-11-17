@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createFileMediaStorage } from './media-storage'
+import { createFileMediaStorage } from './storage'
 
 const mediaId = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 const bytes = new Uint8Array(Buffer.from('local media fixture'))

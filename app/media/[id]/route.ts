@@ -1,11 +1,11 @@
 import { connection } from 'next/server'
 import { postIdSchema } from '@/lib/content'
-import type { MediaAsset } from '@/lib/media'
+import type { MediaAsset } from '@/modules/media/model'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { getMediaDirectory } from '@/lib/server/data-paths'
 import { openDatabase } from '@/lib/server/database'
-import { createMediaStore } from '@/lib/media-store'
-import { createFileMediaStorage } from '@/lib/media-storage'
+import { createMediaStore } from '@/modules/media/server/store'
+import { createFileMediaStorage } from '@/modules/media/server/storage'
 
 type MediaRouteContext = {
   params: Promise<{ id: string }>

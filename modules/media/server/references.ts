@@ -3,7 +3,7 @@ import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import { visit } from 'unist-util-visit'
 import { markdownRemarkPlugins, markdownRehypeOptions } from '@/modules/markdown/syntax'
-import { postIdSchema } from './content'
+import { postIdSchema } from '@/lib/content'
 
 const parser = unified().use(remarkParse).use(markdownRemarkPlugins).use(remarkRehype, markdownRehypeOptions)
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import type { MarkdownImageInsertion } from '@/components/markdown-editor'
-import { mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '@/lib/media'
+import { mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '@/modules/media/model'
 
 type MarkdownImageUploadProps = {
   prepareInsertion: () => MarkdownImageInsertion | null

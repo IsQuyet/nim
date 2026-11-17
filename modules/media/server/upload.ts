@@ -1,8 +1,8 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
-import { postIdSchema } from './content'
-import { MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS, mediaAssetSchema, mediaImageFormats, type MediaAsset } from './media'
+import { postIdSchema } from '@/lib/content'
+import { MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS, mediaAssetSchema, mediaImageFormats, type MediaAsset } from '../model'
 
 export type PreparedMedia = Omit<MediaAsset, 'state' | 'createdAt'> & { bytes: Uint8Array }
 
