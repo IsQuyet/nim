@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PostFileFormState } from '@/modules/posts/files'
+import type { PostFileFormState } from '../files'
 import { ImportForm } from './import-form'
 
 const action = vi.fn<(state: PostFileFormState, input: FormData) => Promise<PostFileFormState>>()

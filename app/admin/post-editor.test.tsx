@@ -34,7 +34,7 @@ vi.mock('@/modules/markdown/ui/editor', () => ({
     <textarea id={id} aria-labelledby={labelId} value={value} onChange={event => onChange(event.target.value)} />
   ),
 }))
-vi.mock('@/components/markdown-comparison', () => ({
+vi.mock('@/modules/posts/ui/version-comparison', () => ({
   MarkdownComparison: ({ published, compared }: {
     published: { title: string; description: string; body: string } | null
     compared: { title: string; description: string; body: string }

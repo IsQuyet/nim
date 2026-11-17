@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RestoreFormState } from '@/modules/posts/history'
+import type { RestoreFormState } from '../history'
 import { RestoreForm } from './restore-form'
 
 const action = vi.fn<(state: RestoreFormState) => Promise<RestoreFormState>>()

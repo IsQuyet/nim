@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { MarkdownComparison } from '@/components/markdown-comparison'
+import { MarkdownComparison } from '@/modules/posts/ui/version-comparison'
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/modules/markdown/ui/editor'
 import { MarkdownImageUpload } from '@/modules/media/ui/image-upload'
 import { samePostContent, type DraftPost, type PostContent, type PublishedPost } from '@/modules/posts/model'

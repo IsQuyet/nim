@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { MarkdownComparison } from '@/components/markdown-comparison'
+import { MarkdownComparison } from '@/modules/posts/ui/version-comparison'
 import { getAdminRevisionHistory } from '@/modules/posts/server/admin'
 import type { PostRevisionSummary } from '@/modules/posts/history'
 import { samePostContent } from '@/modules/posts/model'
 import { restoreRevisionAction } from '@/modules/posts/server/actions/history'
-import { RestoreForm } from './restore-form'
+import { RestoreForm } from '@/modules/posts/ui/restore-form'
 
 export const metadata: Metadata = { title: 'Revision history' }
 

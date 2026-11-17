@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { requireAdminSession } from '@/modules/auth/server/auth'
 import { importMarkdownAction } from '@/modules/posts/server/actions/import'
-import { ImportForm } from './import-form'
+import { ImportForm } from '@/modules/posts/ui/import-form'
 
 export const metadata: Metadata = { title: 'Import Markdown' }
 
