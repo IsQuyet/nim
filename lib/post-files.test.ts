@@ -17,6 +17,7 @@ import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-c
 
 const script = fileURLToPath(new URL('../scripts/post-file.ts', import.meta.url))
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'))
+const tsconfig = fileURLToPath(new URL('../tsconfig.json', import.meta.url))
 const content = {
   title: '  中文标题  ',
   description: '\n摘要\r\n',
@@ -54,6 +55,8 @@ function runCli(args: string[], databasePath = filename): Promise<{ code: number
         NODE_ENV: 'production',
         DATABASE_PATH: databasePath,
         TSX_DISABLE_CACHE: '1',
+        // 子进程不在仓库目录运行，路径别名的来源需要显式给出。
+        TSX_TSCONFIG_PATH: tsconfig,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,

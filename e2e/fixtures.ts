@@ -144,7 +144,8 @@ async function initialize() { await initializeDatabase(); initializeAuthSecret()
 initialize().catch(error => { console.error(error); process.exitCode = 1 })
 `)
       execFileSync(process.execPath, [join(root, 'node_modules/tsx/dist/cli.mjs'), initialize], {
-        cwd: release, env: environment, timeout: 30_000, stdio: 'pipe',
+        // 初始化脚本在发布目录运行，路径别名的来源需要显式给出。
+        cwd: release, env: { ...environment, TSX_TSCONFIG_PATH: join(root, 'tsconfig.json') }, timeout: 30_000, stdio: 'pipe',
       })
       const fixture = pathToFileURL(join(root, 'e2e/github.mjs')).href
       server = spawn(process.execPath, ['--import', fixture, join(root, 'node_modules/next/dist/bin/next'), 'start', '-H', '127.0.0.1', '-p', new URL(origin).port], {
