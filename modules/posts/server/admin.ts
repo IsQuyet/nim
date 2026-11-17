@@ -1,29 +1,18 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
-import { getAdminSession } from '@/modules/auth/server/auth'
+import { withAdmin } from '@/modules/auth/server/admin'
 import { revisionHistoryQuerySchema, type PostStore } from '../model'
-import { withDatabase, type AppDatabase } from '@/lib/server/database'
+import { withDatabase } from '@/lib/server/database'
 import { createPostStore } from './store'
 import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
 
-type AdminPostStoreResult<T> =
-  | { authorized: false }
-  | { authorized: true; value: T }
-
-async function withAdminDatabase<T>(
-  operation: (database: AppDatabase) => T,
-): Promise<AdminPostStoreResult<Awaited<T>>> {
-  if (!(await getAdminSession())) return { authorized: false }
-  return { authorized: true, value: await withDatabase(operation) }
-}
-
 export function withAdminPostStore<T>(operation: (store: PostStore) => T) {
-  return withAdminDatabase(database => operation(createPostStore(database)))
+  return withAdmin(() => withDatabase(database => operation(createPostStore(database))))
 }
 
 export function withAdminWritingStore<T>(operation: (store: WritingStore) => T) {
-  return withAdminDatabase(database => operation(createWritingStore(database)))
+  return withAdmin(() => withDatabase(database => operation(createWritingStore(database))))
 }
 
 export async function getAdminPosts() {
