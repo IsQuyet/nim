@@ -34,7 +34,7 @@ export function renderMarkdown(source: string): Promise<ReactElement> {
 
   rendered.set(source, result)
   cachedCharacters += source.length
-  // 失败可能来自语言包加载等暂时原因，不保留，下次重新渲染。
+  // 渲染失败的结果不保留，下次重新渲染。
   result.catch(() => forget(source, result))
   for (const [oldest, oldestResult] of rendered) {
     if (cachedCharacters <= MAX_CACHED_CHARACTERS) break
