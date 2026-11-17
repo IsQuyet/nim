@@ -409,6 +409,27 @@ describe('明确保存与本机恢复编辑器', () => {
     expect(server).toEqual(initial)
   })
 
+  it('对照打开后的连续输入不逐次进入对照，停顿后显示最后的文本', async () => {
+    render(<PostEditor postId={id} initial={initial} transport={connection} />)
+    await ready()
+    fireEvent.change(body(), { target: { value: 'Opened body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Compare with published' }))
+    const comparison = await screen.findByRole('region', { name: 'Rendered version comparison' })
+    const after = within(comparison).getByRole('article', { name: 'Current editor text' })
+    expect(within(after).getByText('Opened body')).toBeDefined()
+    const seen: string[] = []
+    const observer = new MutationObserver(() => seen.push(after.textContent ?? ''))
+    observer.observe(after, { childList: true, subtree: true, characterData: true })
+
+    fireEvent.change(body(), { target: { value: 'Typing one' } })
+    fireEvent.change(body(), { target: { value: 'Typing two' } })
+    expect(within(after).getByText('Opened body')).toBeDefined()
+    expect(await within(after).findByText('Typing two')).toBeDefined()
+    observer.disconnect()
+    expect(seen.some(text => text.includes('Typing one'))).toBe(false)
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('发布版读取失败时保留输入并向用户显示错误，不触发保存', async () => {
     comparisonAction.read.mockResolvedValueOnce({ status: 'error', message: 'Could not load the published version.' })
     render(<PostEditor postId={id} initial={initial} transport={connection} />)

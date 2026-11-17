@@ -22,6 +22,7 @@ import { readPublishedPostAction } from '../server/actions/comparison'
 import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from '../server/actions/writing'
 import { useWritingSession } from './use-writing-session'
 import { useWritingLeaveGuard } from './use-writing-leave-guard'
+import { useSettled } from '@/hooks/useSettled'
 
 export type PostEditorProps = {
   postId: string
@@ -34,6 +35,28 @@ const FIELD_CLASS_NAME =
   'w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-zinc-900 outline-offset-4 focus-visible:outline-2 dark:border-zinc-800 dark:text-zinc-100'
 const BUTTON_CLASS_NAME =
   'rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 disabled:cursor-wait disabled:opacity-60 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700'
+
+// 对照要解析并高亮整篇正文。打开时显示当时的输入，之后连续输入期间不逐次重算，停顿后再更新。
+const COMPARISON_SETTLE_MS = 200
+
+function EditorComparison({ published, content, baseline }: {
+  published: PublishedPost | null
+  content: PostContent
+  baseline: DraftPost | null
+}) {
+  const settled = useSettled(content, COMPARISON_SETTLE_MS)
+  return (
+    <MarkdownComparison
+      published={published}
+      compared={{
+        label: 'Current editor text',
+        revisionId: null,
+        detail: baseline ? `Draft baseline revision ${baseline.revisionId}` : 'Not saved to the server',
+        ...settled,
+      }}
+    />
+  )
+}
 
 export function PostEditor({ postId, initial, transport: connection = transport }: PostEditorProps) {
   const prefix = useId()
@@ -206,15 +229,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         {comparisonOpen && comparisonFeedback?.status === 'success' && (
           <section className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
             <button type="button" className="text-sm underline underline-offset-4" onClick={() => setComparisonOpen(false)}>Close comparison</button>
-            <MarkdownComparison
-              published={comparison}
-              compared={{
-                label: 'Current editor text',
-                revisionId: null,
-                detail: remote ? `Draft baseline revision ${remote.revisionId}` : 'Not saved to the server',
-                ...content,
-              }}
-            />
+            <EditorComparison published={comparison} content={content} baseline={remote} />
           </section>
         )}
       </div>
