@@ -7,17 +7,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { PostStore } from '@/modules/posts/model'
-import { initializeDatabase, openDatabase, type AppDatabase } from './server/database'
-import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
-import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './post-files'
-import { createPostStore, importPublishedPosts } from '@/modules/posts/server/store'
-import { createWritingStore } from '@/modules/posts/server/writing-store'
-import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
+import type { PostStore } from '../model'
+import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { parseMarkdownFile, serializeMarkdownFile } from './file-format'
+import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './file-exchange'
+import { createPostStore, importPublishedPosts } from './store'
+import { createWritingStore } from './writing-store'
+import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
-const script = fileURLToPath(new URL('../scripts/post-file.ts', import.meta.url))
+const script = fileURLToPath(new URL('../../../scripts/post-file.ts', import.meta.url))
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'))
-const tsconfig = fileURLToPath(new URL('../tsconfig.json', import.meta.url))
+const tsconfig = fileURLToPath(new URL('../../../tsconfig.json', import.meta.url))
 const content = {
   title: '  中文标题  ',
   description: '\n摘要\r\n',

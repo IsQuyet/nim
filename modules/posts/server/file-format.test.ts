@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, expect, it } from 'vitest'
-import { parseMarkdownFile, serializeMarkdownFile } from './markdown-file'
+import { parseMarkdownFile, serializeMarkdownFile } from './file-format'
 
 const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 const content = { title: '  标题："原文"  ', description: '第一行\n第二行', body: '# 正文\r\n' }

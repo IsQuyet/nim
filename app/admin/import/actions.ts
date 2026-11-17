@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { withAdminPostStore } from '@/modules/posts/server/admin'
 import { postIdSchema, type DraftPost } from '@/modules/posts/model'
-import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/lib/post-file-policy'
-import { decodeMarkdownBytes, importPostMarkdown, type PostFileFormState } from '@/lib/post-files'
+import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/modules/posts/files'
+import { decodeMarkdownBytes, importPostMarkdown, type PostFileFormState } from '@/modules/posts/server/file-exchange'
 
 type ImportResult =
   | { status: 'success'; value: DraftPost }

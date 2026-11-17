@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/lib/post-file-policy'
+import { MAX_MARKDOWN_UPLOAD_BYTES } from '@/modules/posts/files'
 import { importMarkdownAction } from './actions'
 
 const mocks = vi.hoisted(() => ({

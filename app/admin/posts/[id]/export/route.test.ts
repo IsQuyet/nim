@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { serializeMarkdownFile } from '@/lib/markdown-file'
+import { serializeMarkdownFile } from '@/modules/posts/server/file-format'
 import { GET } from './route'
 
 const mocks = vi.hoisted(() => ({

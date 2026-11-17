@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import type { Page, Route } from '@playwright/test'
-import { parseMarkdownFile } from '../lib/markdown-file'
+import { parseMarkdownFile } from '../modules/posts/server/file-format'
 import { recoveryCopySchema } from '../modules/posts/writing'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '../test/post-commands'
 import { test, expect, expireSession, signIn, snapshot, withStore, withWritingStore } from './fixtures'
