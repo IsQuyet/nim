@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { authClient } from '@/modules/auth/client'
+import { authClient } from '../client'
 import { Magnetic } from '@/components/ui/magnetic'
 
 type AuthButtonProps = {

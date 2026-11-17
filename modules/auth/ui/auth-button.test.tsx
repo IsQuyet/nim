@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   refresh: vi.fn(),
 }))
-vi.mock('@/modules/auth/client', () => ({
+vi.mock('../client', () => ({
   authClient: {
     signIn: { social: mocks.signIn },
     getSession: mocks.getSession,

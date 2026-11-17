@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminPosts } from '@/modules/posts/server/admin'
 import type { PostSummary } from '@/modules/posts/model'
-import { AuthButton } from './auth-button'
+import { AuthButton } from '@/modules/auth/ui/auth-button'
 
 const STATUS_LABELS = {
   draft: 'Draft',
