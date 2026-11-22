@@ -302,7 +302,7 @@ const editorTheme = EditorView.theme({
     borderRadius: '0.25rem',
     backgroundColor: 'color-mix(in srgb, currentColor 8%, transparent)',
     padding: '0.1em 0.25em',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: 'var(--font-mono)',
     fontSize: '0.875em',
   },
   '.cm-md-link': { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '0.2em' },
@@ -320,7 +320,7 @@ const editorTheme = EditorView.theme({
   },
   '.cm-md-code-block': {
     backgroundColor: 'color-mix(in srgb, currentColor 5%, transparent)',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: 'var(--font-mono)',
     fontSize: '0.875rem',
   },
   '.cm-md-table-header': { fontWeight: '600' },
