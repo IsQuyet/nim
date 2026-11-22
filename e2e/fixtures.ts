@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
@@ -69,6 +69,11 @@ export async function expireSession(page: Page, runtime: Runtime) {
   }, runtime.filename)
 }
 
+// Windows 上创建目录符号链接需要额外权限，junction 不需要。
+function linkDirectory(target: string, path: string) {
+  symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
+}
+
 async function freePort() {
   const listener = createServer()
   listener.listen(0, '127.0.0.1')
@@ -106,14 +111,22 @@ export const test = base.extend<{ login: () => Promise<void>; checkBrowser: void
     try {
       const origin = `http://127.0.0.1:${await freePort()}`
       mkdirSync(release)
+      // 构建产物里指向外部包的目录链接单独重建，其余内容照常复制。
+      const links: string[] = []
       cpSync(build, join(release, '.next'), {
         recursive: true,
-        filter: source => !['cache', 'dev', 'diagnostics'].includes(relative(build, source).split(/[\\/]/)[0]),
+        filter: source => {
+          if (['cache', 'dev', 'diagnostics'].includes(relative(build, source).split(/[\\/]/)[0])) return false
+          if (!lstatSync(source).isSymbolicLink()) return true
+          links.push(source)
+          return false
+        },
       })
+      for (const link of links) linkDirectory(realpathSync(link), join(release, '.next', relative(build, link)))
       for (const asset of ['public', 'drizzle', 'next.config.mjs', 'package.json']) {
         cpSync(join(root, asset), join(release, asset), { recursive: true })
       }
-      symlinkSync(join(root, 'node_modules'), join(release, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+      linkDirectory(join(root, 'node_modules'), join(release, 'node_modules'))
       const environment: NodeJS.ProcessEnv = { NODE_ENV: 'production' }
       for (const key of ['SystemRoot', 'WINDIR', 'PATH', 'Path', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'HOME', 'COMSPEC']) {
         const value = process.env[key]
