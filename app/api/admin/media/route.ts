@@ -7,6 +7,7 @@ import { prepareMediaUpload } from '@/modules/media/server/upload'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
 import { withDatabase } from '@/lib/server/database'
+import { routes } from '@/lib/routes'
 
 export const runtime = 'nodejs'
 const MAX_MEDIA_REQUEST_BYTES = MAX_MEDIA_UPLOAD_BYTES + 64 * 1024
@@ -88,7 +89,7 @@ async function acceptUpload(request: Request) {
       mediaType: result.value.mediaType,
       width: result.value.width,
       height: result.value.height,
-      url: `/media/${result.value.id}`,
+      url: routes.media(result.value.id),
     },
   }))
 }

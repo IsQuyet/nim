@@ -6,6 +6,7 @@ import { requireAdminSession } from '@/modules/auth/server/auth'
 import { getAdminDraft } from '@/modules/posts/server/admin'
 import { postIdSchema } from '@/modules/posts/model'
 import { PostEditor } from '@/modules/posts/ui/post-editor'
+import { routes } from '@/lib/routes'
 
 export const metadata: Metadata = { title: 'New draft' }
 
@@ -15,7 +16,7 @@ export default async function NewDraftPage({ searchParams }: {
   await requireAdminSession()
   const identity = postIdSchema.optional().safeParse((await searchParams).draft)
   if (!identity.success) notFound()
-  if (!identity.data) redirect(`/admin/posts/new?draft=${randomUUID()}`)
+  if (!identity.data) redirect(routes.admin.newDraft(randomUUID()))
   const id = identity.data
   const initial = await getAdminDraft(id)
 
@@ -23,7 +24,7 @@ export default async function NewDraftPage({ searchParams }: {
     <main className="space-y-8">
       <section className="space-y-3">
         <Link
-          href="/admin"
+          href={routes.admin.home}
           className="text-sm text-muted-foreground underline underline-offset-4"
         >
           Back to posts

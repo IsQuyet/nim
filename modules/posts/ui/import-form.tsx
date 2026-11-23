@@ -5,6 +5,7 @@ import { unstable_rethrow } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/field'
 import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '../files'
+import { routes } from '@/lib/routes'
 
 type ImportFormProps = {
   newPostId: string
@@ -64,7 +65,7 @@ export function ImportForm({ newPostId, action }: ImportFormProps) {
           <p role="alert" className="text-sm text-destructive">{state.message}</p>
           {state.signInRequired && (
             <a
-              href="/admin/login"
+              href={routes.admin.login}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm underline underline-offset-4"
@@ -75,14 +76,14 @@ export function ImportForm({ newPostId, action }: ImportFormProps) {
           {state.reviewPostId && (
             <div className="flex flex-wrap gap-4 text-sm">
               <a
-                href={`/admin/posts/${state.reviewPostId}`}
+                href={routes.admin.post(state.reviewPostId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-4"
               >
                 Check saved draft in a new tab
               </a>
-              <a href="/admin/import" className="underline underline-offset-4">Start new import</a>
+              <a href={routes.admin.import} className="underline underline-offset-4">Start new import</a>
             </div>
           )}
         </div>

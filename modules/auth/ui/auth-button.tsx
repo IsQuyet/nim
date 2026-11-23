@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { authClient } from '../client'
 import { Magnetic } from '@/components/ui/magnetic'
 import { Button } from '@/components/ui/button'
+import { routes } from '@/lib/routes'
 
 type AuthButtonProps = {
   action: 'sign-in' | 'sign-out'
@@ -24,8 +25,8 @@ export function AuthButton({ action }: AuthButtonProps) {
       if (isSignIn) {
         const result = await authClient.signIn.social({
           provider: 'github',
-          callbackURL: '/admin',
-          errorCallbackURL: '/admin/login',
+          callbackURL: routes.admin.home,
+          errorCallbackURL: routes.admin.login,
         })
         if (result.error) setError(true)
       } else {
@@ -41,7 +42,7 @@ export function AuthButton({ action }: AuthButtonProps) {
             return
           }
         }
-        router.replace('/admin/login')
+        router.replace(routes.admin.login)
         router.refresh()
       }
     } catch {

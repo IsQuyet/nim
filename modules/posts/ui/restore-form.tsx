@@ -3,6 +3,7 @@
 import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { RestoreFormState } from '../history'
+import { routes } from '@/lib/routes'
 
 type RestoreFormProps = {
   action: (state: RestoreFormState) => Promise<RestoreFormState>
@@ -32,7 +33,7 @@ export function RestoreForm({ action, disabled }: RestoreFormProps) {
             <>
               {' '}
               <a
-                href="/admin/login"
+                href={routes.admin.login}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-4"

@@ -7,6 +7,7 @@ import type { PostRevisionSummary } from '@/modules/posts/history'
 import { samePostContent } from '@/modules/posts/model'
 import { restoreRevisionAction } from '@/modules/posts/server/actions/history'
 import { RestoreForm } from '@/modules/posts/ui/restore-form'
+import { routes } from '@/lib/routes'
 
 export const metadata: Metadata = { title: 'Revision history' }
 
@@ -31,8 +32,7 @@ const dateFormatter = new Intl.DateTimeFormat('en', {
 })
 
 function revisionHref(id: string, page: number, revisionId: number) {
-  const query = new URLSearchParams({ page: String(page), revisionId: String(revisionId) })
-  return `/admin/posts/${id}/history?${query}`
+  return routes.admin.postRevision(id, { page, revisionId })
 }
 
 function RevisionMarkers({
@@ -62,7 +62,7 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
     <main className="space-y-8">
       <section className="space-y-3">
         <Link
-          href={`/admin/posts/${id}`}
+          href={routes.admin.post(id)}
           className="text-sm text-muted-foreground underline underline-offset-4"
         >
           Back to editor

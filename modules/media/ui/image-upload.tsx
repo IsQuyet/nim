@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import type { MarkdownImageInsertion } from '@/modules/markdown/ui/editor'
 import { mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '../model'
+import { routes } from '@/lib/routes'
 
 type MarkdownImageUploadProps = {
   prepareInsertion: () => MarkdownImageInsertion | null
@@ -60,7 +61,7 @@ export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadPro
       const form = new FormData()
       form.set('id', uploadId)
       form.set('file', file)
-      const response = await fetch('/api/admin/media', { method: 'POST', body: form, signal: controller.signal })
+      const response = await fetch(routes.admin.mediaUpload, { method: 'POST', body: form, signal: controller.signal })
       const raw: unknown = await response.json()
       if (controller.signal.aborted) return
       const result = mediaUploadResponseSchema.safeParse(raw)

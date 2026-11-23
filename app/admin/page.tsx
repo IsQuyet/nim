@@ -3,6 +3,7 @@ import { getAdminPosts } from '@/modules/posts/server/admin'
 import type { PostSummary } from '@/modules/posts/model'
 import { AuthButton } from '@/modules/auth/ui/auth-button'
 import { Button } from '@/components/ui/button'
+import { routes } from '@/lib/routes'
 
 const STATUS_LABELS = {
   draft: 'Draft',
@@ -29,10 +30,10 @@ export default async function AdminPage() {
         </section>
         <div className="flex flex-wrap items-center gap-3">
           <Button asChild>
-            <Link href="/admin/posts/new">New draft</Link>
+            <Link href={routes.admin.newPost}>New draft</Link>
           </Button>
           <Button asChild>
-            <Link href="/admin/import">Import Markdown</Link>
+            <Link href={routes.admin.import}>Import Markdown</Link>
           </Button>
           <AuthButton action="sign-out" />
         </div>
@@ -43,7 +44,7 @@ export default async function AdminPage() {
             <li key={post.id} className="space-y-2 py-5 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 className="font-medium">
-                  <Link href={`/admin/posts/${post.id}`} className="transition-colors hover:text-muted-foreground">
+                  <Link href={routes.admin.post(post.id)} className="transition-colors hover:text-muted-foreground">
                     {post.title}
                   </Link>
                 </h2>
@@ -61,7 +62,7 @@ export default async function AdminPage() {
                 </time>
                 {post.status !== 'draft' && (
                   <Link
-                    href={`/blog/${post.id}`}
+                    href={routes.post(post.id)}
                     className="underline underline-offset-4 transition-colors hover:text-foreground"
                   >
                     View published

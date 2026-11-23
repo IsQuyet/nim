@@ -3,6 +3,7 @@ import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import { visit } from 'unist-util-visit'
 import { markdownRemarkPlugins, markdownRehypeOptions } from '@/modules/markdown/syntax'
+import { MEDIA_PATH_PREFIX } from '@/lib/routes'
 import { mediaIdSchema } from '../model'
 
 const parser = unified().use(remarkParse).use(markdownRemarkPlugins).use(remarkRehype, markdownRehypeOptions)
@@ -19,12 +20,12 @@ function mediaIdFromUrl(url: string) {
   } catch {
     return { status: 'success' as const, id: null }
   }
-  if (resolved.origin !== 'https://nim.invalid' || !resolved.pathname.startsWith('/media/')) {
+  if (resolved.origin !== 'https://nim.invalid' || !resolved.pathname.startsWith(MEDIA_PATH_PREFIX)) {
     return { status: 'success' as const, id: null }
   }
   let candidate: string
   try {
-    candidate = decodeURIComponent(resolved.pathname.slice('/media/'.length))
+    candidate = decodeURIComponent(resolved.pathname.slice(MEDIA_PATH_PREFIX.length))
   } catch {
     return { status: 'invalid' as const, message: 'A Markdown media URL must contain a valid media UUID.' }
   }

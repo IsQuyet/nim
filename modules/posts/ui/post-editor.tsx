@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
 import {
   AlertDialog,
@@ -25,6 +26,7 @@ import { useWritingLeaveGuard } from './use-writing-leave-guard'
 import { useSettled } from '@/hooks/useSettled'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/field'
+import { routes } from '@/lib/routes'
 
 export type PostEditorProps = {
   postId: string
@@ -67,7 +69,8 @@ export function PostEditor({ postId, initial, transport: connection = transport 
   const [comparisonFeedback, setComparisonFeedback] = useState<ReturnType<typeof publishedPostReadSchema.parse> | null>(null)
   const { session, snapshot } = useWritingSession({ postId, initial, transport: connection })
   const { content, remote, candidates, feedback, lastConfirmed, pending } = snapshot
-  const navigate = useCallback((href: string) => router.push(href, { scroll: false }), [router])
+  // 被拦下的链接可以指向任何地址，这里按原地址继续导航。
+  const navigate = useCallback((href: string) => router.push(href as Route, { scroll: false }), [router])
   const { pendingNavigation, cancelNavigation, confirmNavigation, leaveDescription } = useWritingLeaveGuard(snapshot.shouldWarn, navigate)
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
   }, [session])
 
   useEffect(() => {
-    const pathname = snapshot.isNew ? `/admin/posts/new?draft=${snapshot.postId}` : `/admin/posts/${snapshot.postId}`
+    const pathname = snapshot.isNew ? routes.admin.newDraft(snapshot.postId) : routes.admin.post(snapshot.postId)
     if (`${location.pathname}${location.search}` !== pathname) router.replace(pathname, { scroll: false })
   }, [router, snapshot.isNew, snapshot.postId])
 
@@ -171,7 +174,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           <div className="flex flex-wrap gap-2">
             {snapshot.conflict?.current && <Button type="button" onClick={() => { void session.useServer() }}>Use server draft</Button>}
             <Button type="button" onClick={() => { void session.forkLocal() }}>Keep local text as a new draft</Button>
-            <a href={`/admin/posts/${snapshot.postId}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm underline underline-offset-4">Review server draft in a new tab</a>
+            <a href={routes.admin.post(snapshot.postId)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm underline underline-offset-4">Review server draft in a new tab</a>
           </div>
         </section>
       )}
@@ -222,7 +225,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         {comparisonFeedback?.status === 'error' && (
           <div role="alert" className="space-y-2 text-sm text-destructive">
             <p>{comparisonFeedback.message}</p>
-            {comparisonFeedback.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Sign in in a new tab</a>}
+            {comparisonFeedback.signInRequired && <a href={routes.admin.login} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Sign in in a new tab</a>}
           </div>
         )}
         {comparisonOpen && comparisonFeedback?.status === 'success' && (
@@ -246,10 +249,10 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           : lastConfirmed.intent === 'publish' ? 'Post published.' : 'Draft saved.'}</p>}
       </div>
       {(errorMessage || snapshot.localError) && <p role="alert" className="text-sm text-destructive">{errorMessage}{errorMessage && snapshot.localError ? ' ' : ''}{snapshot.localError}</p>}
-      {snapshot.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Sign in in a new tab</a>}
+      {snapshot.signInRequired && <a href={routes.admin.login} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Sign in in a new tab</a>}
       {remote && <nav aria-label="Draft tools" className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <a href={`/admin/posts/${snapshot.postId}/history`} className="underline underline-offset-4">Revision history</a>
-        <a href={`/admin/posts/${snapshot.postId}/export`} download className="underline underline-offset-4">Download saved draft</a>
+        <a href={routes.admin.postHistory(snapshot.postId)} className="underline underline-offset-4">Revision history</a>
+        <a href={routes.admin.postExport(snapshot.postId)} download className="underline underline-offset-4">Download saved draft</a>
       </nav>}
       </form>
       <AlertDialog

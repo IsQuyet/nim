@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { routes } from '@/lib/routes'
 
 export const mediaIdSchema = z.uuid({ error: 'The media ID must be a UUID.' })
 
@@ -37,7 +38,7 @@ export const mediaAssetSchema = mediaAssetFieldsSchema.superRefine((asset, conte
 export type MediaAsset = z.infer<typeof mediaAssetSchema>
 
 export function mediaMarkdownUrl(id: string) {
-  return `/media/${mediaIdSchema.parse(id)}`
+  return routes.media(mediaIdSchema.parse(id))
 }
 
 export const mediaUploadResponseSchema = z.discriminatedUnion('status', [

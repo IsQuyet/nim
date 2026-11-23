@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { signInRequired } from '@/modules/auth/failure'
 import { withAdminWritingStore } from '../admin'
 import { operationIdentitySchema, writingCommandSchema, type ReceiptFeedback, type WritingFeedback, type WritingTransport } from '../../writing'
+import { routes } from '@/lib/routes'
 
 export async function writeDraftAction(input: unknown): Promise<WritingFeedback> {
   try {
@@ -18,12 +19,12 @@ export async function writeDraftAction(input: unknown): Promise<WritingFeedback>
     if (!result.authorized) return signInRequired('Sign in to save or publish this draft.')
     if (result.value.status === 'success') {
       const command = writingCommandSchema.parse(input)
-      revalidatePath('/admin')
-      revalidatePath(`/admin/posts/${command.postId}`)
-      revalidatePath(`/admin/posts/${command.postId}/history`)
+      revalidatePath(routes.admin.home)
+      revalidatePath(routes.admin.post(command.postId))
+      revalidatePath(routes.admin.postHistory(command.postId))
       if (command.intent === 'publish') {
         revalidatePath('/')
-        revalidatePath(`/blog/${command.postId}`)
+        revalidatePath(routes.post(command.postId))
         revalidatePath('/sitemap.xml')
       }
     }

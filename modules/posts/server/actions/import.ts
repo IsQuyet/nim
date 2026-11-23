@@ -7,6 +7,7 @@ import { withAdminPostStore } from '../admin'
 import { postIdSchema, type DraftPost } from '../../model'
 import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '../../files'
 import { decodeMarkdownBytes, importPostMarkdown } from '../file-exchange'
+import { routes } from '@/lib/routes'
 
 type ImportResult =
   | { status: 'success'; value: DraftPost }
@@ -66,9 +67,9 @@ export async function importMarkdownAction(
   if (result.status === 'error') return result
 
   const id = result.value.id
-  revalidatePath('/admin')
-  revalidatePath(`/admin/posts/${id}`)
-  revalidatePath(`/admin/posts/${id}/history`)
-  revalidatePath('/admin/import')
-  redirect(`/admin/posts/${id}`)
+  revalidatePath(routes.admin.home)
+  revalidatePath(routes.admin.post(id))
+  revalidatePath(routes.admin.postHistory(id))
+  revalidatePath(routes.admin.import)
+  redirect(routes.admin.post(id))
 }

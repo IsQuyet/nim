@@ -20,6 +20,7 @@ import {
   EMAIL,
   SOCIAL_LINKS,
 } from './data'
+import { routes } from '@/lib/routes'
 
 const VARIANTS_CONTAINER = {
   hidden: { opacity: 0 },
@@ -235,7 +236,7 @@ export function HomeContent({ posts }: HomeContentProps) {
               <Link
                 key={post.id}
                 className="-mx-3 rounded-xl px-3 py-3"
-                href={`/blog/${post.id}`}
+                href={routes.post(post.id)}
                 data-id={post.id}
               >
                 <div className="flex flex-col space-y-1">

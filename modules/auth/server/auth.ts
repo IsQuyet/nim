@@ -9,6 +9,7 @@ import { getSiteUrl } from '@/lib/server/site-config'
 import { getAuthSecret } from './secret'
 import { openDatabase, withDatabase } from '@/lib/server/database'
 import { account } from './schema'
+import { routes } from '@/lib/routes'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 let auth: ReturnType<typeof betterAuth> | undefined
@@ -43,7 +44,7 @@ export function getAuthOptions(): BetterAuthOptions | null {
       accountLinking: { enabled: false },
       encryptOAuthTokens: true,
     },
-    onAPIError: { errorURL: '/admin/login' },
+    onAPIError: { errorURL: routes.admin.login },
     disabledPaths: ['/get-access-token', '/refresh-token', '/sign-out'],
   }
 }
@@ -81,7 +82,7 @@ export const getAdminSession = cache(async () => {
 
 export async function requireAdminSession() {
   const session = await getAdminSession()
-  if (!session) redirect('/admin/login')
+  if (!session) redirect(routes.admin.login)
 
   return session
 }

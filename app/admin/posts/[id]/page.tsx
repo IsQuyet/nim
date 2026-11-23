@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAdminDraft } from '@/modules/posts/server/admin'
 import { PostEditor } from '@/modules/posts/ui/post-editor'
+import { routes } from '@/lib/routes'
 
 export const metadata: Metadata = { title: 'Edit draft' }
 
@@ -19,7 +20,7 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
     <main className="space-y-8">
       <section className="space-y-3">
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          <Link href="/admin" className="underline underline-offset-4">
+          <Link href={routes.admin.home} className="underline underline-offset-4">
             Back to posts
           </Link>
         </div>

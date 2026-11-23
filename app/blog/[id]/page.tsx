@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { MarkdownContent } from '@/modules/markdown/server/content'
 import { getBlogPost } from '@/modules/posts/server/public'
+import { routes } from '@/lib/routes'
 
 type BlogPostPageProps = {
   params: Promise<{ id: string }>
@@ -17,7 +18,7 @@ export async function generateMetadata({
   return {
     title: post.title,
     description: post.description,
-    alternates: { canonical: `/blog/${post.id}` },
+    alternates: { canonical: routes.post(post.id) },
   }
 }
 

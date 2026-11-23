@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { requireAdminSession } from '@/modules/auth/server/auth'
 import { importMarkdownAction } from '@/modules/posts/server/actions/import'
 import { ImportForm } from '@/modules/posts/ui/import-form'
+import { routes } from '@/lib/routes'
 
 export const metadata: Metadata = { title: 'Import Markdown' }
 
@@ -15,7 +16,7 @@ export default async function ImportPage() {
   return (
     <main className="space-y-8">
       <section className="space-y-3">
-        <Link href="/admin" className="text-sm text-muted-foreground underline underline-offset-4">
+        <Link href={routes.admin.home} className="text-sm text-muted-foreground underline underline-offset-4">
           Back to posts
         </Link>
         <h1 className="text-lg font-medium">Import Markdown</h1>

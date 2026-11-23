@@ -5,6 +5,7 @@ import { redirect, unstable_rethrow } from 'next/navigation'
 import { signInRequired } from '@/modules/auth/failure'
 import { withAdminPostStore } from '../admin'
 import { restoreRevisionSchema, type RestoreFormState } from '../../history'
+import { routes } from '@/lib/routes'
 
 export async function restoreRevisionAction(
   id: string,
@@ -29,8 +30,8 @@ export async function restoreRevisionAction(
     return { status: 'error', message: 'Could not restore the revision. Please try again.' }
   }
 
-  revalidatePath('/admin')
-  revalidatePath(`/admin/posts/${id}`)
-  revalidatePath(`/admin/posts/${id}/history`)
-  redirect(`/admin/posts/${id}`)
+  revalidatePath(routes.admin.home)
+  revalidatePath(routes.admin.post(id))
+  revalidatePath(routes.admin.postHistory(id))
+  redirect(routes.admin.post(id))
 }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAdminSession, getAuthOptions } from '@/modules/auth/server/auth'
 import { AuthButton } from '@/modules/auth/ui/auth-button'
+import { routes } from '@/lib/routes'
 
 export const metadata: Metadata = { title: 'Sign in' }
 
@@ -17,7 +18,7 @@ function getSignInErrorMessage(error: string) {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  if (await getAdminSession()) redirect('/admin')
+  if (await getAdminSession()) redirect(routes.admin.home)
 
   const configured = getAuthOptions() !== null
   const { error } = await searchParams
