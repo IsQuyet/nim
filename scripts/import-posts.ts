@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadEnvConfig } from '@next/env'
-import { BLOG_POST_SOURCES } from '../modules/site/data'
+import { BLOG_POST_SOURCES } from '../modules/posts/import-sources'
 import { withDatabase } from '../lib/server/database'
 import { importPublishedPosts } from '../modules/posts/server/store'
 
