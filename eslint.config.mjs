@@ -59,10 +59,26 @@ const boundaries = [
   })),
 ]
 
+// 界面颜色只用 app/globals.css 里按用途命名的角色（bg-background、text-muted-foreground 等），明暗取值在那里统一给出。
+const paletteColor = '(?:^|[\\s:!])(?:bg|text|border|ring|outline|divide|fill|stroke|from|via|to|decoration|shadow|accent|caret|placeholder)-'
+  + '(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d{2,3}|white|black)(?![\\w-])'
+const paletteMessage = '这里直接写了色板颜色。改用 app/globals.css 定义的语义颜色，需要新的用途时先在那里增加角色。'
+const semanticColors = {
+  files: ['app/**', 'components/**', 'hooks/**', 'modules/**'],
+  ignores: tests,
+  rules: {
+    'no-restricted-syntax': ['error',
+      { selector: `Literal[value=/${paletteColor}/]`, message: paletteMessage },
+      { selector: `TemplateElement[value.raw=/${paletteColor}/]`, message: paletteMessage },
+    ],
+  },
+}
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
   prettier,
   ...boundaries,
+  semanticColors,
   globalIgnores(['.next/**', 'out/**', 'build/**', 'next-env.d.ts', 'playwright-report/**', 'test-results/**']),
 ])
