@@ -1,25 +1,23 @@
-'use client'
-import { TextEffect } from '@/components/ui/text-effect'
 import Link from 'next/link'
+import { AdminEntry } from '@/modules/auth/ui/admin-entry'
 import { routes } from '@/lib/routes'
 import { PROFILE } from '../data'
+import { NavigationDrawer, PinnedNavigation } from './site-navigation'
+import { ThemeMenu } from './theme-menu'
 
 export function Header() {
   return (
-    <header className="mb-8 flex items-center justify-between">
-      <div>
-        <Link href={routes.home} className="font-medium text-foreground">
+    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-xl">
+      <div className="canvas flex h-14 items-center gap-2">
+        <NavigationDrawer title={PROFILE.name} />
+        <Link href={routes.home} className="mr-4 font-medium">
           {PROFILE.name}
         </Link>
-        <TextEffect
-          as="p"
-          preset="fade"
-          per="char"
-          className="text-muted-foreground"
-          delay={0.5}
-        >
-          {PROFILE.role}
-        </TextEffect>
+        <PinnedNavigation />
+        <div className="ml-auto flex items-center gap-1">
+          <ThemeMenu />
+          <AdminEntry />
+        </div>
       </div>
     </header>
   )

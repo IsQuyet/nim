@@ -7,6 +7,7 @@ import { getAdminDraft } from '@/modules/posts/server/admin'
 import { postIdSchema } from '@/modules/posts/model'
 import { PostEditor } from '@/modules/posts/ui/post-editor'
 import { routes } from '@/lib/routes'
+import { Focus } from '@/components/layout/focus'
 
 export const metadata: Metadata = { title: 'New draft' }
 
@@ -21,20 +22,22 @@ export default async function NewDraftPage({ searchParams }: {
   const initial = await getAdminDraft(id)
 
   return (
-    <main className="space-y-8">
-      <section className="space-y-3">
-        <Link
-          href={routes.admin.home}
-          className="text-sm text-muted-foreground underline underline-offset-4"
-        >
-          Back to posts
-        </Link>
-        <h1 className="text-lg font-medium">New draft</h1>
-        <p className="text-muted-foreground">
-          Write in Markdown and save a draft.
-        </p>
-      </section>
-      <PostEditor key={id} postId={id} initial={initial} />
-    </main>
+    <Focus>
+      <main className="space-y-8">
+        <section className="space-y-3">
+          <Link
+            href={routes.admin.home}
+            className="text-sm text-muted-foreground underline underline-offset-4"
+          >
+            Back to posts
+          </Link>
+          <h1 className="text-lg font-medium">New draft</h1>
+          <p className="text-muted-foreground">
+            Write in Markdown and save a draft.
+          </p>
+        </section>
+        <PostEditor key={id} postId={id} initial={initial} />
+      </main>
+    </Focus>
   )
 }
