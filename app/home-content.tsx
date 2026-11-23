@@ -186,7 +186,7 @@ export function HomeContent({ posts }: HomeContentProps) {
         <div className="flex flex-col space-y-2">
           {WORK_EXPERIENCE.map((job) => (
             <a
-              className="relative overflow-hidden rounded-2xl bg-foreground/15 p-[1px]"
+              className="relative overflow-hidden rounded-2xl bg-border p-[1px]"
               href={job.link}
               target="_blank"
               rel="noopener noreferrer"
