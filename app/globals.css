@@ -64,6 +64,56 @@
   --overlay: oklch(0 0 0 / 60%);
 }
 
+/*
+  断点采用窗口尺寸等级：窄于 sm 是手机，sm 起是平板竖屏，md 起可以并排两栏，
+  lg 起画布达到最大宽度，xl 是超宽屏。
+*/
+@theme {
+  --breakpoint-sm: 37.5rem;
+  --breakpoint-md: 52.5rem;
+  --breakpoint-lg: 75rem;
+  --breakpoint-xl: 100rem;
+  --breakpoint-2xl: initial;
+}
+
+/*
+  画布是全站内容共用的对齐基准。canvas 给出页边距和最大宽度，页头、主体、页脚的
+  内容都放在它里面，背景和分隔线画在它外面。canvas-grid 在画布内排出 4、8、12 列，
+  模块用 col-span-* 占列。
+*/
+:root {
+  --canvas-margin: 1rem;
+  --canvas-gutter: 1rem;
+  --canvas-columns: 4;
+}
+
+@media (width >= theme(--breakpoint-sm)) {
+  :root {
+    --canvas-margin: 1.5rem;
+    --canvas-gutter: 1.5rem;
+    --canvas-columns: 8;
+  }
+}
+
+@media (width >= theme(--breakpoint-md)) {
+  :root {
+    --canvas-columns: 12;
+  }
+}
+
+@utility canvas {
+  margin-inline: auto;
+  width: 100%;
+  max-width: calc(75rem + 2 * var(--canvas-margin));
+  padding-inline: var(--canvas-margin);
+}
+
+@utility canvas-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--canvas-columns), minmax(0, 1fr));
+  column-gap: var(--canvas-gutter);
+}
+
 @theme inline {
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
