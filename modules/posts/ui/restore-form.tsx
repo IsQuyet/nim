@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
+import { Button } from '@/components/ui/button'
 import type { RestoreFormState } from '../history'
 
 type RestoreFormProps = {
@@ -16,21 +17,16 @@ export function RestoreForm({ action, disabled }: RestoreFormProps) {
       <p className="text-sm text-muted-foreground">
         Restore this snapshot into the draft without changing the published version.
       </p>
-      <button
-        type="submit"
-        disabled={disabled || pending}
-        aria-busy={pending}
-        className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <Button type="submit" disabled={disabled || pending} aria-busy={pending}>
         {pending ? 'Restoring…' : 'Restore draft'}
-      </button>
+      </Button>
       {disabled && (
         <p className="text-sm text-muted-foreground">
           This revision matches the current draft.
         </p>
       )}
       {state.status === 'error' && (
-        <p role="alert" className="text-sm text-muted-foreground">
+        <p role="alert" className="text-sm text-destructive">
           {state.message}
           {state.signInRequired && (
             <>

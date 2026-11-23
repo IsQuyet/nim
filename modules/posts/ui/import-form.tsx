@@ -2,6 +2,8 @@
 
 import { startTransition, useActionState, useId, useRef, useState, type FormEvent } from 'react'
 import { unstable_rethrow } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Input, Label } from '@/components/ui/field'
 import { MAX_MARKDOWN_UPLOAD_BYTES, type PostFileFormState } from '../files'
 
 type ImportFormProps = {
@@ -38,8 +40,8 @@ export function ImportForm({ newPostId, action }: ImportFormProps) {
     <form aria-label="Import Markdown" method="post" encType="multipart/form-data" onSubmit={handleSubmit} className="space-y-4">
       <fieldset disabled={pending} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor={`${prefix}-file`} className="text-sm font-medium">Markdown file</label>
-          <input
+          <Label htmlFor={`${prefix}-file`}>Markdown file</Label>
+          <Input
             ref={fileInput}
             id={`${prefix}-file`}
             name="file"
@@ -47,24 +49,19 @@ export function ImportForm({ newPostId, action }: ImportFormProps) {
             accept=".md,text/markdown"
             required
             aria-describedby={`${prefix}-file-hint`}
-            className="block w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-offset-4 focus-visible:outline-2"
+            className="block text-sm"
           />
           <p id={`${prefix}-file-hint`} className="text-sm text-muted-foreground">
             UTF-8 Markdown, up to {MAX_MARKDOWN_UPLOAD_BYTES / 1024 / 1024} MiB.
           </p>
         </div>
-        <button
-          type="submit"
-          disabled={pending}
-          aria-busy={pending}
-          className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-wait disabled:opacity-60"
-        >
+        <Button type="submit" disabled={pending} aria-busy={pending}>
           {pending ? 'Importing…' : 'Import draft'}
-        </button>
+        </Button>
       </fieldset>
       {state.status === 'error' && (
         <div className="space-y-3">
-          <p role="alert" className="text-sm text-muted-foreground">{state.message}</p>
+          <p role="alert" className="text-sm text-destructive">{state.message}</p>
           {state.signInRequired && (
             <a
               href="/admin/login"

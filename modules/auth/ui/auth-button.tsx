@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authClient } from '../client'
 import { Magnetic } from '@/components/ui/magnetic'
+import { Button } from '@/components/ui/button'
 
 type AuthButtonProps = {
   action: 'sign-in' | 'sign-out'
@@ -53,20 +54,14 @@ export function AuthButton({ action }: AuthButtonProps) {
   return (
     <div className="flex flex-col items-start gap-3">
       <Magnetic springOptions={{ bounce: 0 }} intensity={0.3}>
-        <button
-          type="button"
-          onClick={handleClick}
-          disabled={pending}
-          aria-busy={pending}
-          className="inline-flex items-center rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors duration-200 hover:bg-primary hover:text-primary-foreground disabled:cursor-wait disabled:opacity-60"
-        >
+        <Button type="button" onClick={handleClick} disabled={pending} aria-busy={pending}>
           {pending
             ? (isSignIn ? 'Signing in…' : 'Signing out…')
             : (isSignIn ? 'Continue with GitHub' : 'Sign out')}
-        </button>
+        </Button>
       </Magnetic>
       {error && (
-        <p role="alert" className="text-sm text-muted-foreground">
+        <p role="alert" className="text-sm text-destructive">
           {isSignIn
             ? 'GitHub sign-in could not be completed. Please try signing in again.'
             : 'Could not complete sign-out. Please try again.'}

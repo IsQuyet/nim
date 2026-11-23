@@ -23,6 +23,8 @@ import { inspectDraftOperationAction, readDraftAction, writeDraftAction } from '
 import { useWritingSession } from './use-writing-session'
 import { useWritingLeaveGuard } from './use-writing-leave-guard'
 import { useSettled } from '@/hooks/useSettled'
+import { Button } from '@/components/ui/button'
+import { Input, Label, Textarea } from '@/components/ui/field'
 
 export type PostEditorProps = {
   postId: string
@@ -31,10 +33,7 @@ export type PostEditorProps = {
 }
 
 const transport: WritingTransport = { read: readDraftAction, write: writeDraftAction, inspect: inspectDraftOperationAction }
-const FIELD_CLASS_NAME =
-  'w-full rounded-lg border border-border bg-transparent px-3 py-2 text-foreground outline-offset-4 focus-visible:outline-2'
-const BUTTON_CLASS_NAME =
-  'rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-wait disabled:opacity-60'
+const LINK_BUTTON = { variant: 'link', size: 'text' } as const
 
 // 对照要解析并高亮整篇正文。打开时显示当时的输入，之后连续输入期间不逐次重算，停顿后再更新。
 const COMPARISON_SETTLE_MS = 200
@@ -146,15 +145,15 @@ export function PostEditor({ postId, initial, transport: connection = transport 
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{copy.content.body}</pre>
                 </details>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className={BUTTON_CLASS_NAME} onClick={() => { void session.recover(copy) }}>Recover this copy</button>
-                  <button type="button" className="px-3 py-1.5 text-sm underline underline-offset-4" onClick={() => {
+                  <Button type="button" onClick={() => { void session.recover(copy) }}>Recover this copy</Button>
+                  <Button type="button" {...LINK_BUTTON} onClick={() => {
                     if (window.confirm('Delete this local recovery copy? This does not delete the server draft.')) void session.discardRecovery(copy.sessionId)
-                  }}>Delete local copy</button>
+                  }}>Delete local copy</Button>
                 </div>
               </li>
             ))}
           </ul>
-          <button type="button" className={BUTTON_CLASS_NAME} onClick={() => { void session.skipRecovery() }}>Continue without restoring</button>
+          <Button type="button" onClick={() => { void session.skipRecovery() }}>Continue without restoring</Button>
         </section>
       )}
 
@@ -170,8 +169,8 @@ export function PostEditor({ postId, initial, transport: connection = transport 
             </details>
           )}
           <div className="flex flex-wrap gap-2">
-            {snapshot.conflict?.current && <button type="button" className={BUTTON_CLASS_NAME} onClick={() => { void session.useServer() }}>Use server draft</button>}
-            <button type="button" className={BUTTON_CLASS_NAME} onClick={() => { void session.forkLocal() }}>Keep local text as a new draft</button>
+            {snapshot.conflict?.current && <Button type="button" onClick={() => { void session.useServer() }}>Use server draft</Button>}
+            <Button type="button" onClick={() => { void session.forkLocal() }}>Keep local text as a new draft</Button>
             <a href={`/admin/posts/${snapshot.postId}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm underline underline-offset-4">Review server draft in a new tab</a>
           </div>
         </section>
@@ -187,26 +186,26 @@ export function PostEditor({ postId, initial, transport: connection = transport 
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{pending.content.body}</pre>
           </details>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={BUTTON_CLASS_NAME} onClick={() => { void session.checkServer() }}>Check previous operation</button>
-            <button type="button" disabled={decisionBlocked} className={BUTTON_CLASS_NAME} onClick={() => { void session.retryPending() }}>Retry previous {pending.intent === 'publish' ? 'publish' : 'save'}</button>
+            <Button type="button" onClick={() => { void session.checkServer() }}>Check previous operation</Button>
+            <Button type="button" disabled={decisionBlocked} onClick={() => { void session.retryPending() }}>Retry previous {pending.intent === 'publish' ? 'publish' : 'save'}</Button>
           </div>
         </section>
       )}
 
       <div className="space-y-2">
-        <label htmlFor={`${prefix}-title`} className="text-sm font-medium">Title</label>
-        <input id={`${prefix}-title`} name="title" value={content.title} onChange={event => edit('title', event.target.value)} className={FIELD_CLASS_NAME} />
+        <Label htmlFor={`${prefix}-title`}>Title</Label>
+        <Input id={`${prefix}-title`} name="title" value={content.title} onChange={event => edit('title', event.target.value)} />
       </div>
       <div className="space-y-2">
-        <label htmlFor={`${prefix}-description`} className="text-sm font-medium">Description</label>
-        <textarea id={`${prefix}-description`} name="description" rows={2} value={content.description} onChange={event => edit('description', event.target.value)} className={FIELD_CLASS_NAME} />
+        <Label htmlFor={`${prefix}-description`}>Description</Label>
+        <Textarea id={`${prefix}-description`} name="description" rows={2} value={content.description} onChange={event => edit('description', event.target.value)} />
       </div>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`} className="text-sm font-medium">Body</label>
-          <button type="button" disabled={comparisonBusy} className={BUTTON_CLASS_NAME} onClick={() => { void refreshComparison() }}>
+          <Label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`}>Body</Label>
+          <Button type="button" disabled={comparisonBusy} onClick={() => { void refreshComparison() }}>
             {comparisonBusy ? 'Loading published version…' : comparisonOpen ? 'Refresh comparison' : 'Compare with published'}
-          </button>
+          </Button>
         </div>
         <MarkdownEditor
           key={`editor:${snapshot.postId}`}
@@ -221,23 +220,23 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           prepareInsertion={() => markdownEditorRef.current?.prepareImageInsertion() ?? null}
         />
         {comparisonFeedback?.status === 'error' && (
-          <div role="alert" className="space-y-2 text-sm text-muted-foreground">
+          <div role="alert" className="space-y-2 text-sm text-destructive">
             <p>{comparisonFeedback.message}</p>
             {comparisonFeedback.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Sign in in a new tab</a>}
           </div>
         )}
         {comparisonOpen && comparisonFeedback?.status === 'success' && (
           <section className="space-y-3 border-t border-border pt-4">
-            <button type="button" className="text-sm underline underline-offset-4" onClick={() => setComparisonOpen(false)}>Close comparison</button>
+            <Button type="button" {...LINK_BUTTON} onClick={() => setComparisonOpen(false)}>Close comparison</Button>
             <EditorComparison published={comparison} content={content} baseline={remote} />
           </section>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" name="intent" value="save" disabled={blocked} aria-busy={snapshot.manualBusy} className={BUTTON_CLASS_NAME}>Save draft</button>
-        <button type="submit" name="intent" value="publish" disabled={blocked} aria-busy={snapshot.manualBusy} className={BUTTON_CLASS_NAME}>Publish</button>
-        {snapshot.serverStatus === 'error' && !pending && <button type="button" className="px-3 py-1.5 text-sm underline underline-offset-4" onClick={() => { void session.checkServer() }}>Check server draft</button>}
-        {snapshot.localStatus === 'failed' && <button type="button" className="px-3 py-1.5 text-sm underline underline-offset-4" onClick={() => { void session.retryLocal() }}>Retry local recovery</button>}
+        <Button type="submit" name="intent" value="save" disabled={blocked} aria-busy={snapshot.manualBusy}>Save draft</Button>
+        <Button type="submit" name="intent" value="publish" disabled={blocked} aria-busy={snapshot.manualBusy}>Publish</Button>
+        {snapshot.serverStatus === 'error' && !pending && <Button type="button" {...LINK_BUTTON} onClick={() => { void session.checkServer() }}>Check server draft</Button>}
+        {snapshot.localStatus === 'failed' && <Button type="button" {...LINK_BUTTON} onClick={() => { void session.retryLocal() }}>Retry local recovery</Button>}
       </div>
       <div aria-label="Saving status" aria-live="polite" className="space-y-1 text-sm text-muted-foreground">
         <p>{snapshot.localStatus === 'saved' ? 'Recovery copy saved on this browser.' : snapshot.localStatus === 'saving' ? 'Saving recovery copy on this browser…' : snapshot.localStatus === 'failed' ? 'Local recovery is unavailable. Keep this page open or explicitly save to the server.' : 'No local changes yet.'}</p>
@@ -246,7 +245,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           ? lastConfirmed.intent === 'publish' ? 'Previous publish confirmed.' : 'Previous save confirmed.'
           : lastConfirmed.intent === 'publish' ? 'Post published.' : 'Draft saved.'}</p>}
       </div>
-      {(errorMessage || snapshot.localError) && <p role="alert" className="text-sm text-muted-foreground">{errorMessage}{errorMessage && snapshot.localError ? ' ' : ''}{snapshot.localError}</p>}
+      {(errorMessage || snapshot.localError) && <p role="alert" className="text-sm text-destructive">{errorMessage}{errorMessage && snapshot.localError ? ' ' : ''}{snapshot.localError}</p>}
       {snapshot.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Sign in in a new tab</a>}
       {remote && <nav aria-label="Draft tools" className="flex flex-wrap gap-4 text-sm text-muted-foreground">
         <a href={`/admin/posts/${snapshot.postId}/history`} className="underline underline-offset-4">Revision history</a>
@@ -257,21 +256,18 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         open={pendingNavigation !== null}
         onOpenChange={open => { if (!open) cancelNavigation() }}
       >
-        <AlertDialogContent className="!border-zinc-200 !bg-white !text-zinc-950 dark:!border-zinc-800 dark:!bg-zinc-950 dark:!text-zinc-100">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Leave this page?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogDescription>
               {leaveDescription} Leaving will not retry an unconfirmed save or publish.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="!border-zinc-200 !bg-zinc-100 !text-zinc-950 focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-offset-2 focus-visible:!outline-zinc-950 dark:!border-zinc-700 dark:!bg-zinc-800 dark:!text-zinc-100 dark:focus-visible:!outline-zinc-100">
+            <AlertDialogCancel>
               Stay on page
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmNavigation}
-              className="!bg-zinc-950 !text-zinc-50 focus-visible:!outline focus-visible:!outline-2 focus-visible:!outline-offset-2 focus-visible:!outline-zinc-950 dark:!bg-zinc-100 dark:!text-zinc-950 dark:focus-visible:!outline-zinc-100"
-            >
+            <AlertDialogAction onClick={confirmNavigation}>
               Leave page
             </AlertDialogAction>
           </AlertDialogFooter>

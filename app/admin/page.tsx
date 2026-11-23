@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getAdminPosts } from '@/modules/posts/server/admin'
 import type { PostSummary } from '@/modules/posts/model'
 import { AuthButton } from '@/modules/auth/ui/auth-button'
+import { Button } from '@/components/ui/button'
 
 const STATUS_LABELS = {
   draft: 'Draft',
@@ -27,18 +28,12 @@ export default async function AdminPage() {
           </p>
         </section>
         <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/admin/posts/new"
-            className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-          >
-            New draft
-          </Link>
-          <Link
-            href="/admin/import"
-            className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-          >
-            Import Markdown
-          </Link>
+          <Button asChild>
+            <Link href="/admin/posts/new">New draft</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/import">Import Markdown</Link>
+          </Button>
           <AuthButton action="sign-out" />
         </div>
       </div>
