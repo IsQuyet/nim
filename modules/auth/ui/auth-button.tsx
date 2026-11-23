@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authClient } from '../client'
+import { signOut } from './sign-out'
 import { Magnetic } from '@/components/ui/magnetic'
 import { Button } from '@/components/ui/button'
 import { routes } from '@/lib/routes'
@@ -30,17 +31,9 @@ export function AuthButton({ action }: AuthButtonProps) {
         })
         if (result.error) setError(true)
       } else {
-        const session = await authClient.getSession()
-        if (session.error) {
+        if (!(await signOut())) {
           setError(true)
           return
-        }
-        if (session.data) {
-          const result = await authClient.revokeSession({ token: session.data.session.token })
-          if (result.error) {
-            setError(true)
-            return
-          }
         }
         router.replace(routes.admin.login)
         router.refresh()
