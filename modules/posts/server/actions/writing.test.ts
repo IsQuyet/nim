@@ -68,7 +68,7 @@ describe('明确草稿 Server Actions', () => {
     const paths = vi.mocked(revalidatePath).mock.calls.map(([path]) => path)
     expect(paths).toEqual([
       '/admin', `/admin/posts/${draft.id}`, `/admin/posts/${draft.id}/history`,
-      ...(intent === 'publish' ? ['/', `/blog/${draft.id}`, '/sitemap.xml'] : []),
+      ...(intent === 'publish' ? ['/', '/blog', `/blog/${draft.id}`, '/sitemap.xml'] : []),
     ])
     expect(store.inspect).not.toHaveBeenCalled()
   })

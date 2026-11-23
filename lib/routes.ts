@@ -10,6 +10,7 @@ export const MEDIA_PATH_PREFIX = '/media/'
 
 export const routes = {
   home: route('/'),
+  blog: route('/blog'),
   post: (id: string) => route(`/blog/${id}`),
   media: (id: string) => route(`${MEDIA_PATH_PREFIX}${id}`),
   admin: {

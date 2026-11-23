@@ -23,7 +23,8 @@ export async function writeDraftAction(input: unknown): Promise<WritingFeedback>
       revalidatePath(routes.admin.post(command.postId))
       revalidatePath(routes.admin.postHistory(command.postId))
       if (command.intent === 'publish') {
-        revalidatePath('/')
+        revalidatePath(routes.home)
+        revalidatePath(routes.blog)
         revalidatePath(routes.post(command.postId))
         revalidatePath('/sitemap.xml')
       }

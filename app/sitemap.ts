@@ -7,7 +7,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getBlogPosts()
   const siteUrl = getSiteUrl()
 
-  return [routes.home, ...posts.map(post => routes.post(post.id))].map(path => ({
+  return [routes.home, routes.blog, ...posts.map(post => routes.post(post.id))].map(path => ({
     url: new URL(path, siteUrl).href,
   }))
 }
