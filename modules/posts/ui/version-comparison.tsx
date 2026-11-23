@@ -24,24 +24,24 @@ function VersionPanel({
   body,
 }: ComparedVersion) {
   return (
-    <article aria-label={label} className="min-w-0 space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <header className="space-y-1 border-b border-zinc-200 pb-3 dark:border-zinc-800">
+    <article aria-label={label} className="min-w-0 space-y-4 rounded-lg border border-border p-4">
+      <header className="space-y-1 border-b border-border pb-3">
         <h3 className="font-medium">{label}</h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-muted-foreground">
           {revisionId === null ? 'Not saved to a revision' : `Revision ${revisionId}`}
           {detail ? ` · ${detail}` : ''}
         </p>
       </header>
       <section aria-label={`${label} title`} className="space-y-1">
-        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Title</h4>
+        <h4 className="text-xs font-medium text-muted-foreground">Title</h4>
         <p>{title || 'Untitled'}</p>
       </section>
       <section aria-label={`${label} summary`} className="space-y-1">
-        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Summary</h4>
-        {description ? <p>{description}</p> : <p className="text-zinc-500 dark:text-zinc-400">No summary.</p>}
+        <h4 className="text-xs font-medium text-muted-foreground">Summary</h4>
+        {description ? <p>{description}</p> : <p className="text-muted-foreground">No summary.</p>}
       </section>
       <section aria-label={`${label} body`} className="space-y-1">
-        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Body</h4>
+        <h4 className="text-xs font-medium text-muted-foreground">Body</h4>
         <MarkdownProse className="max-w-none">
           {body ? <MarkdownPreviewLoader source={body} /> : <p>Nothing in the body.</p>}
         </MarkdownProse>
@@ -58,11 +58,11 @@ export function MarkdownComparison({ published, compared }: MarkdownComparisonPr
       <header className="space-y-1">
         <h2 className="text-lg font-medium">Published comparison</h2>
         {published ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             Published revision {published.revisionId} · Publication {published.publicationId}
           </p>
         ) : (
-          <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p role="status" className="text-sm text-muted-foreground">
             This post has not been published yet.
           </p>
         )}

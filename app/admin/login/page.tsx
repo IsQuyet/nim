@@ -26,19 +26,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="space-y-8">
       <section className="space-y-3">
         <h1 className="text-lg font-medium">Sign in</h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           Sign in with the GitHub account configured to manage this site.
         </p>
       </section>
       {configured ? (
         <AuthButton action="sign-in" />
       ) : (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           Administrator sign-in is not configured.
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p role="alert" className="text-sm text-muted-foreground">
           {getSignInErrorMessage(error)}
         </p>
       )}

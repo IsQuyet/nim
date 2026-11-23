@@ -32,9 +32,9 @@ export type PostEditorProps = {
 
 const transport: WritingTransport = { read: readDraftAction, write: writeDraftAction, inspect: inspectDraftOperationAction }
 const FIELD_CLASS_NAME =
-  'w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-zinc-900 outline-offset-4 focus-visible:outline-2 dark:border-zinc-800 dark:text-zinc-100'
+  'w-full rounded-lg border border-border bg-transparent px-3 py-2 text-foreground outline-offset-4 focus-visible:outline-2'
 const BUTTON_CLASS_NAME =
-  'rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 disabled:cursor-wait disabled:opacity-60 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700'
+  'rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:cursor-wait disabled:opacity-60'
 
 // 对照要解析并高亮整篇正文。打开时显示当时的输入，之后连续输入期间不逐次重算，停顿后再更新。
 const COMPARISON_SETTLE_MS = 200
@@ -133,14 +133,14 @@ export function PostEditor({ postId, initial, transport: connection = transport 
     <>
       <form aria-label="Draft" method="post" onSubmit={handleSubmit} className="space-y-6">
       {snapshot.recoveryRequired && (
-        <section aria-label="Local recovery copies" className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <section aria-label="Local recovery copies" className="space-y-4 rounded-lg border border-border p-4">
           <h2 className="font-medium">Local recovery copies</h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">These copies belong to separate writing sessions on this browser. Recovered text remains unsubmitted until you choose Save draft or Publish.</p>
+          <p className="text-sm text-muted-foreground">These copies belong to separate writing sessions on this browser. Recovered text remains unsubmitted until you choose Save draft or Publish.</p>
           <ul className="space-y-4">
             {candidates.map(copy => (
-              <li key={copy.sessionId} className="space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+              <li key={copy.sessionId} className="space-y-2 border-t border-border pt-3">
                 <p>{copy.content.title || 'Untitled draft'}</p>
-                <p className="text-xs break-all text-zinc-500">{copy.postId} · <time dateTime={copy.updatedAt}>{copy.updatedAt}</time></p>
+                <p className="text-xs break-all text-muted-foreground">{copy.postId} · <time dateTime={copy.updatedAt}>{copy.updatedAt}</time></p>
                 <details>
                   <summary className="cursor-pointer text-sm">Review local text</summary>
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{copy.content.body}</pre>
@@ -159,7 +159,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
       )}
 
       {(snapshot.serverStatus === 'conflict' || snapshot.serverStatus === 'missing') && (
-        <section aria-label="Draft conflict" className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <section aria-label="Draft conflict" className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="font-medium">The server draft changed</h2>
           <p className="text-sm">Your text has not been replaced. Review the server copy or keep your local text as a separate unsaved draft.</p>
           {snapshot.conflict?.current && (
@@ -178,7 +178,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
       )}
 
       {pending && !snapshot.manualBusy && (
-        <section aria-label="Unconfirmed operation" className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <section aria-label="Unconfirmed operation" className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="font-medium">Previous {pending.intent === 'publish' ? 'publish' : 'save'} not confirmed</h2>
           <p className="text-sm">Checking reads the result without submitting again. Retrying submits the same snapshot shown below, not your newer edits.</p>
           <details>
@@ -221,13 +221,13 @@ export function PostEditor({ postId, initial, transport: connection = transport 
           prepareInsertion={() => markdownEditorRef.current?.prepareImageInsertion() ?? null}
         />
         {comparisonFeedback?.status === 'error' && (
-          <div role="alert" className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <div role="alert" className="space-y-2 text-sm text-muted-foreground">
             <p>{comparisonFeedback.message}</p>
             {comparisonFeedback.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Sign in in a new tab</a>}
           </div>
         )}
         {comparisonOpen && comparisonFeedback?.status === 'success' && (
-          <section className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <section className="space-y-3 border-t border-border pt-4">
             <button type="button" className="text-sm underline underline-offset-4" onClick={() => setComparisonOpen(false)}>Close comparison</button>
             <EditorComparison published={comparison} content={content} baseline={remote} />
           </section>
@@ -239,16 +239,16 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         {snapshot.serverStatus === 'error' && !pending && <button type="button" className="px-3 py-1.5 text-sm underline underline-offset-4" onClick={() => { void session.checkServer() }}>Check server draft</button>}
         {snapshot.localStatus === 'failed' && <button type="button" className="px-3 py-1.5 text-sm underline underline-offset-4" onClick={() => { void session.retryLocal() }}>Retry local recovery</button>}
       </div>
-      <div aria-label="Saving status" aria-live="polite" className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <div aria-label="Saving status" aria-live="polite" className="space-y-1 text-sm text-muted-foreground">
         <p>{snapshot.localStatus === 'saved' ? 'Recovery copy saved on this browser.' : snapshot.localStatus === 'saving' ? 'Saving recovery copy on this browser…' : snapshot.localStatus === 'failed' ? 'Local recovery is unavailable. Keep this page open or explicitly save to the server.' : 'No local changes yet.'}</p>
         <p>{serverLabel}</p>
         {confirmedCurrent && <p role="status">{lastConfirmed.via === 'receipt'
           ? lastConfirmed.intent === 'publish' ? 'Previous publish confirmed.' : 'Previous save confirmed.'
           : lastConfirmed.intent === 'publish' ? 'Post published.' : 'Draft saved.'}</p>}
       </div>
-      {(errorMessage || snapshot.localError) && <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">{errorMessage}{errorMessage && snapshot.localError ? ' ' : ''}{snapshot.localError}</p>}
+      {(errorMessage || snapshot.localError) && <p role="alert" className="text-sm text-muted-foreground">{errorMessage}{errorMessage && snapshot.localError ? ' ' : ''}{snapshot.localError}</p>}
       {snapshot.signInRequired && <a href="/admin/login" target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Sign in in a new tab</a>}
-      {remote && <nav aria-label="Draft tools" className="flex flex-wrap gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+      {remote && <nav aria-label="Draft tools" className="flex flex-wrap gap-4 text-sm text-muted-foreground">
         <a href={`/admin/posts/${snapshot.postId}/history`} className="underline underline-offset-4">Revision history</a>
         <a href={`/admin/posts/${snapshot.postId}/export`} download className="underline underline-offset-4">Download saved draft</a>
       </nav>}
@@ -260,7 +260,7 @@ export function PostEditor({ postId, initial, transport: connection = transport 
         <AlertDialogContent className="!border-zinc-200 !bg-white !text-zinc-950 dark:!border-zinc-800 dark:!bg-zinc-950 dark:!text-zinc-100">
           <AlertDialogHeader>
             <AlertDialogTitle>Leave this page?</AlertDialogTitle>
-            <AlertDialogDescription className="text-zinc-600 dark:text-zinc-400">
+            <AlertDialogDescription className="text-muted-foreground">
               {leaveDescription} Leaving will not retry an unconfirmed save or publish.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -9,7 +9,7 @@ type MarkdownImageUploadProps = {
   prepareInsertion: () => MarkdownImageInsertion | null
 }
 
-const buttonClassName = 'rounded-full bg-zinc-100 text-black hover:bg-zinc-950 hover:text-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700'
+const buttonClassName = 'rounded-full bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground'
 
 function markdownAlt(filename: string) {
   const base = filename.split(/[\\/]/).at(-1)?.replace(/\.[^.]*$/, '').trim() ?? ''
@@ -110,7 +110,7 @@ export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadPro
       </Button>
       {file && (
         <>
-          <span className="max-w-48 truncate text-xs text-zinc-500 dark:text-zinc-400">{file.name}</span>
+          <span className="max-w-48 truncate text-xs text-muted-foreground">{file.name}</span>
           <Button type="button" size="sm" variant="secondary" className={buttonClassName} disabled={busy} onClick={() => {
             if (uploadedMarkdown) insertUploaded()
             else void upload()
@@ -119,8 +119,8 @@ export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadPro
           </Button>
         </>
       )}
-      {error && <p role="alert" className="w-full text-sm text-zinc-600 dark:text-zinc-400">{error}</p>}
-      <p className="w-full text-xs text-zinc-500 dark:text-zinc-400">
+      {error && <p role="alert" className="w-full text-sm text-muted-foreground">{error}</p>}
+      <p className="w-full text-xs text-muted-foreground">
         JPEG, PNG, GIF, or WebP · up to {MAX_MEDIA_UPLOAD_BYTES / 1024 / 1024} MiB and {MAX_MEDIA_IMAGE_PIXELS / 1_000_000} megapixels. Uploading does not save or publish this post.
       </p>
     </div>

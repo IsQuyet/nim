@@ -10,7 +10,10 @@ import { SITE } from './data'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#ffffff',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
 }
 
 export const metadata: Metadata = {
@@ -45,7 +48,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
-      <body className="bg-white tracking-tight antialiased dark:bg-zinc-950">
+      <body className="bg-background text-foreground tracking-tight antialiased">
         <ThemeProvider
           enableSystem={true}
           attribute="class"

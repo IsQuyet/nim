@@ -63,26 +63,26 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
       <section className="space-y-3">
         <Link
           href={`/admin/posts/${id}`}
-          className="text-sm text-zinc-500 underline underline-offset-4 dark:text-zinc-400"
+          className="text-sm text-muted-foreground underline underline-offset-4"
         >
           Back to editor
         </Link>
         <h1 className="text-lg font-medium">Revision history</h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           {revisionCount} {revisionCount === 1 ? 'revision' : 'revisions'}. Restoring changes only the draft.
         </p>
       </section>
-      <ol aria-label="Revisions" className="divide-y divide-zinc-100 dark:divide-zinc-800">
+      <ol aria-label="Revisions" className="divide-y divide-border">
         {revisions.map(revision => (
           <li key={revision.id} className="space-y-2 py-4 first:pt-0 last:pb-0">
             <Link
               href={revisionHref(id, page, revision.id)}
               aria-current={selectedRevision.id === revision.id ? 'true' : undefined}
-              className="font-medium underline underline-offset-4 transition-colors hover:text-zinc-600 dark:hover:text-zinc-400"
+              className="font-medium underline underline-offset-4 transition-colors hover:text-muted-foreground"
             >
               {revision.title}
             </Link>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span>Revision {revision.id}</span>
               <time dateTime={revision.createdAt}>
                 {dateFormatter.format(new Date(revision.createdAt))} UTC
@@ -111,16 +111,16 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
             Previous page
           </Link>
         )}
-        <span className="text-zinc-500 dark:text-zinc-400">Page {page} of {pageCount}</span>
+        <span className="text-muted-foreground">Page {page} of {pageCount}</span>
         {page < pageCount && (
           <Link href={revisionHref(id, page + 1, selectedRevision.id)} className="underline underline-offset-4">
             Next page
           </Link>
         )}
       </nav>
-      <section aria-label="Revision details" className="space-y-4 border-t border-zinc-100 pt-6 dark:border-zinc-800">
+      <section aria-label="Revision details" className="space-y-4 border-t border-border pt-6">
         <h2 className="text-lg font-medium">{selectedRevision.title}</h2>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>Revision {selectedRevision.id}</span>
           <time dateTime={selectedRevision.createdAt}>
             {dateFormatter.format(new Date(selectedRevision.createdAt))} UTC
@@ -141,7 +141,7 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
           )}
         </div>
         {selectedRevision.description && (
-          <p className="text-zinc-600 dark:text-zinc-400">{selectedRevision.description}</p>
+          <p className="text-muted-foreground">{selectedRevision.description}</p>
         )}
         <RestoreForm
           key={`${selectedRevision.id}:${draft.revisionId}`}

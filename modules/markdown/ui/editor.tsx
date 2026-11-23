@@ -425,7 +425,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   }, [value])
 
   return (
-    <div className="min-h-80 rounded-lg border border-zinc-200 bg-transparent text-zinc-900 focus-within:outline focus-within:outline-2 focus-within:outline-offset-4 dark:border-zinc-800 dark:text-zinc-100">
+    <div className="min-h-80 rounded-lg border border-border bg-transparent text-foreground focus-within:outline focus-within:outline-2 focus-within:outline-offset-4">
       <div ref={parentRef} />
     </div>
   )

@@ -33,7 +33,7 @@ function ThemeSwitch() {
 
   return (
     <AnimatedBackground
-      className="pointer-events-none rounded-lg bg-zinc-100 dark:bg-zinc-800"
+      className="pointer-events-none rounded-lg bg-secondary"
       value={theme ?? null}
       transition={{
         type: 'spring',
@@ -51,7 +51,7 @@ function ThemeSwitch() {
         return (
           <button
             key={theme.id}
-            className="inline-flex h-7 w-7 items-center justify-center text-zinc-500 transition-colors duration-100 focus-visible:outline-2 data-[checked=true]:text-zinc-950 dark:text-zinc-400 dark:data-[checked=true]:text-zinc-50"
+            className="inline-flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors duration-100 focus-visible:outline-2 data-[checked=true]:text-foreground"
             type="button"
             aria-label={`Switch to ${theme.label} theme`}
             data-id={theme.id}
@@ -66,15 +66,15 @@ function ThemeSwitch() {
 
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-zinc-100 px-0 py-4 dark:border-zinc-800">
+    <footer className="mt-24 border-t border-border px-0 py-4">
       <div className="flex items-center justify-between">
         <a href="https://github.com/ibelick/nim" target="_blank">
-          <TextLoop className="text-xs text-zinc-500">
+          <TextLoop className="text-xs text-muted-foreground">
             <span>© 2024 Nim.</span>
             <span>Built with Motion-Primitives.</span>
           </TextLoop>
         </a>
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-muted-foreground">
           <ThemeSwitch />
         </div>
       </div>

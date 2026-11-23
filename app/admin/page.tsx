@@ -22,20 +22,20 @@ export default async function AdminPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <section className="space-y-3">
           <h1 className="text-lg font-medium">Admin</h1>
-          <p className="text-zinc-600 dark:text-zinc-400">
+          <p className="text-muted-foreground">
             Drafts and published posts.
           </p>
         </section>
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/admin/posts/new"
-            className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+            className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
           >
             New draft
           </Link>
           <Link
             href="/admin/import"
-            className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-black transition-colors hover:bg-zinc-950 hover:text-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+            className="rounded-full bg-secondary px-3 py-1.5 text-sm text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
           >
             Import Markdown
           </Link>
@@ -43,23 +43,23 @@ export default async function AdminPage() {
         </div>
       </div>
       {posts.length > 0 ? (
-        <ul aria-label="Posts" className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul aria-label="Posts" className="divide-y divide-border">
           {posts.map(post => (
             <li key={post.id} className="space-y-2 py-5 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h2 className="font-medium dark:text-zinc-100">
-                  <Link href={`/admin/posts/${post.id}`} className="transition-colors hover:text-zinc-600 dark:hover:text-zinc-400">
+                <h2 className="font-medium">
+                  <Link href={`/admin/posts/${post.id}`} className="transition-colors hover:text-muted-foreground">
                     {post.title}
                   </Link>
                 </h2>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-muted-foreground">
                   {STATUS_LABELS[post.status]}
                 </span>
               </div>
               {post.description && (
-                <p className="text-zinc-600 dark:text-zinc-400">{post.description}</p>
+                <p className="text-muted-foreground">{post.description}</p>
               )}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span className="break-all">/blog/{post.id}</span>
                 <time dateTime={post.updatedAt}>
                   Updated {dateFormatter.format(new Date(post.updatedAt))}
@@ -67,7 +67,7 @@ export default async function AdminPage() {
                 {post.status !== 'draft' && (
                   <Link
                     href={`/blog/${post.id}`}
-                    className="underline underline-offset-4 transition-colors hover:text-zinc-950 dark:hover:text-zinc-100"
+                    className="underline underline-offset-4 transition-colors hover:text-foreground"
                   >
                     View published
                   </Link>
@@ -77,7 +77,7 @@ export default async function AdminPage() {
           ))}
         </ul>
       ) : (
-        <p className="text-zinc-500 dark:text-zinc-400">No posts yet.</p>
+        <p className="text-muted-foreground">No posts yet.</p>
       )}
     </main>
   )

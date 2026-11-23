@@ -18,13 +18,13 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
   return (
     <main className="space-y-8">
       <section className="space-y-3">
-        <div className="flex flex-wrap gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
           <Link href="/admin" className="underline underline-offset-4">
             Back to posts
           </Link>
         </div>
         <h1 className="text-lg font-medium">Edit draft</h1>
-        <p className="text-xs break-all text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs break-all text-muted-foreground">
           /blog/{draft.id}
         </p>
       </section>

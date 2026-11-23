@@ -15,20 +15,20 @@ export default async function ImportPage() {
   return (
     <main className="space-y-8">
       <section className="space-y-3">
-        <Link href="/admin" className="text-sm text-zinc-500 underline underline-offset-4 dark:text-zinc-400">
+        <Link href="/admin" className="text-sm text-muted-foreground underline underline-offset-4">
           Back to posts
         </Link>
         <h1 className="text-lg font-medium">Import Markdown</h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           YAML front matter must include title. Description is optional and defaults to an empty string. The id field is optional.
         </p>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           Only the id field selects an existing article, never the filename. Importing completely replaces its draft without publishing.
         </p>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           Without an id, this import attempt creates a new draft. Retrying the same file reuses it. The UTF-8 Markdown body is preserved exactly.
         </p>
-        <pre className="overflow-x-auto rounded-lg bg-zinc-100 p-4 text-sm dark:bg-zinc-900"><code>{example}</code></pre>
+        <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm"><code>{example}</code></pre>
       </section>
       <ImportForm newPostId={randomUUID()} action={importMarkdownAction} />
     </main>

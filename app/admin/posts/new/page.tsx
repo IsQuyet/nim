@@ -24,12 +24,12 @@ export default async function NewDraftPage({ searchParams }: {
       <section className="space-y-3">
         <Link
           href="/admin"
-          className="text-sm text-zinc-500 underline underline-offset-4 dark:text-zinc-400"
+          className="text-sm text-muted-foreground underline underline-offset-4"
         >
           Back to posts
         </Link>
         <h1 className="text-lg font-medium">New draft</h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted-foreground">
           Write in Markdown and save a draft.
         </p>
       </section>
