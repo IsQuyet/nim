@@ -2,7 +2,7 @@
 import { TextEffect } from '@/components/ui/text-effect'
 import Link from 'next/link'
 import { routes } from '@/lib/routes'
-import { PROFILE } from './data'
+import { PROFILE } from '../data'
 
 export function Header() {
   return (

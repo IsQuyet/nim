@@ -19,7 +19,7 @@ import {
   WORK_EXPERIENCE,
   EMAIL,
   SOCIAL_LINKS,
-} from './data'
+} from '../data'
 import { routes } from '@/lib/routes'
 
 const VARIANTS_CONTAINER = {

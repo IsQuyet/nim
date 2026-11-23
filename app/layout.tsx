@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
-import { Header } from './header'
-import { Footer } from './footer'
+import { Header } from '@/modules/site/ui/header'
+import { Footer } from '@/modules/site/ui/footer'
 import { ThemeProvider } from 'next-themes'
 import { getSiteUrl } from '@/lib/server/site-config'
-import { SITE } from './data'
+import { SITE } from '@/modules/site/data'
 
 export const viewport: Viewport = {
   width: 'device-width',

@@ -8,9 +8,9 @@ describe('仓库文章导入素材', () => {
   it('素材 ID 和文件不重复，正文文件存在', () => {
     expect(new Set(BLOG_POST_SOURCES.map(post => post.id)).size).toBe(BLOG_POST_SOURCES.length)
     expect(new Set(BLOG_POST_SOURCES.map(post => post.file)).size).toBe(BLOG_POST_SOURCES.length)
-    const appDirectory = dirname(fileURLToPath(import.meta.url))
+    const directory = dirname(fileURLToPath(import.meta.url))
     for (const post of BLOG_POST_SOURCES) {
-      const file = resolve(appDirectory, '..', 'content', 'blog', post.file)
+      const file = resolve(directory, '..', '..', 'content', 'blog', post.file)
       expect(existsSync(file), post.file).toBe(true)
     }
   })
