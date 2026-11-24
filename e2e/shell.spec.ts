@@ -102,7 +102,7 @@ test('文章页在宽屏显示停靠目录并随跳转高亮，在窄屏折叠�
 
 test('一屏短页面等待页脚文字切换动画时，不溢出视口产生短暂纵向滚动条', async ({ page }) => {
   await page.setViewportSize(desktop)
-  await page.goto('/blog')
+  await page.goto('/admin/login')
   const initialOverflow = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)
   expect(initialOverflow).toBe(false)
 
@@ -130,7 +130,7 @@ test('短页面与长页面切换时保持同一视口内容宽度，不因滚�
   })
 
   await page.setViewportSize(desktop)
-  await page.goto('/blog')
+  await page.goto('/admin/login')
   const shortMetrics = await page.evaluate(() => {
     const box = document.querySelector('header .canvas')!.getBoundingClientRect()
     return {
