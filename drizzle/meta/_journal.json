@@ -50,6 +50,13 @@
       "when": 1794886305618,
       "tag": "0006_media_publication_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795536315472,
+      "tag": "0007_gallery_and_homepage_curation",
+      "breakpoints": true
     }
   ]
 }

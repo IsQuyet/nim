@@ -5,7 +5,7 @@ import { getMediaDirectory } from '@/lib/server/data-paths'
 import { withDatabase } from '@/lib/server/database'
 import { createMediaStore } from '@/modules/media/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
-import { isMediaPublished } from '@/modules/posts/server/storage'
+import { isSiteMediaPublished } from '@/modules/site/server/media-admin'
 
 type MediaRouteContext = {
   params: Promise<{ id: string }>
@@ -27,7 +27,7 @@ export async function GET(request: Request, { params }: MediaRouteContext) {
   const found = await withDatabase(database => {
     const asset = createMediaStore(database, storage).get(parsed.data)
     if (!asset || asset.state !== 'ready') return null
-    return { asset, publicAsset: isMediaPublished(database, asset.id) }
+    return { asset, publicAsset: isSiteMediaPublished(database, asset.id) }
   })
   if (!found) return notFound()
   const { asset, publicAsset } = found

@@ -1,13 +1,13 @@
-import { getBlogPosts } from '@/modules/posts/server/public'
 import { Canvas } from '@/components/layout/canvas'
+import { getHomepageData } from '@/modules/site/server/home'
 import { HomeContent } from '@/modules/site/ui/home-content'
 
 export default async function HomePage() {
-  const posts = await getBlogPosts()
+  const data = await getHomepageData()
 
   return (
     <Canvas>
-      <HomeContent posts={posts} />
+      <HomeContent data={data} />
     </Canvas>
   )
 }

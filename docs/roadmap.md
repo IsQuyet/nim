@@ -5,7 +5,7 @@
 ## 一、核心架构与产品约定
 
 1. **模块划分与依赖方向**（由 `eslint.config.mjs` 的 `moduleTiers` 强制检查）
-   - 顶层按能力划分为 `modules/auth`、`modules/markdown`、`modules/media`、`modules/posts`、`modules/site`。
+   - 顶层按能力划分为 `modules/auth`、`modules/markdown`、`modules/media`、`modules/posts`、`modules/gallery`、`modules/site`。
    - `lib/` 与 `components/` 不认识具体业务；模块内 `server/` 仅在服务端运行，浏览器端只能通过 `server/actions/` 调用；同层模块互不引用。
    - 新增内容栏目时按 `modules/<能力>/` 建模块并登记到 `eslint.config.mjs`，跨内容功能（如站内搜索）放在内容模块之上的一层。
 
@@ -46,7 +46,7 @@
 ### P1：媒体能力与 Gallery 栏目
 - [x] **后台媒体管理与引用查询**：查看已上传图片资源及被文章发布/草稿引用的状态，支持安全清理未被引用的资源。
 - [x] **编辑器图片就地呈现**：支持在编辑器内就地渲染 `/media/...` 与 `http(s)` 图片预览，光标进入时揭示源码。
-- [ ] **Gallery（相册 / 画廊）模块**：在媒体管理稳定后按 `modules/gallery/` 落地并接入导航清单。
+- [x] **Gallery（相册 / 画廊）模块与首页独立策展**：已按 `modules/gallery/` 落地 `/gallery`、键盘灯箱、`/gallery/[id]` 独立详情页与 `/admin/gallery`，并由 `modules/site`（`/admin/home`）提供首页区块顺序、显隐与条目级精选控制。
 
 ### P2：站内搜索
 - [ ] **跨内容站内搜索**：作为内容模块之上的一层接入；具体检索范围、交互形态、排序与中英文分词/引擎方案待专项讨论确定。

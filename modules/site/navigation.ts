@@ -11,6 +11,7 @@ export type Destination = {
 // 全站栏目的唯一清单。每个栏目同一时刻只出现在页头或侧边导航其中一处。
 export const DESTINATIONS: Destination[] = [
   { label: 'Blog', href: routes.blog, pinned: true },
+  { label: 'Gallery', href: routes.gallery, pinned: true },
 ]
 
 export function isCurrent(destination: Destination, pathname: string) {

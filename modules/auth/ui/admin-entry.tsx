@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FilePlusIcon, FilesIcon, ImageIcon, LogOutIcon, UserRoundIcon } from 'lucide-react'
+import { FilePlusIcon, FilesIcon, ImagesIcon, ImageIcon, LayoutGridIcon, LogOutIcon, UserRoundIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -64,6 +64,18 @@ export function AdminEntry() {
           <Link href={routes.admin.newPost}>
             <FilePlusIcon />
             New draft
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={routes.admin.gallery}>
+            <ImagesIcon />
+            Gallery
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={routes.admin.homepage}>
+            <LayoutGridIcon />
+            Homepage
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

@@ -21,9 +21,13 @@ export const routes = {
   home: route('/'),
   blog: route('/blog'),
   post: (id: string) => route(`/blog/${id}`),
+  gallery: route('/gallery'),
+  galleryItem: (id: string) => route(`/gallery/${id}`),
   media: (id: string) => route(`${MEDIA_PATH_PREFIX}${id}`),
   admin: {
     home: route('/admin'),
+    gallery: route('/admin/gallery'),
+    homepage: route('/admin/home'),
     media: route('/admin/media'),
     login: route('/admin/login'),
     import: route('/admin/import'),

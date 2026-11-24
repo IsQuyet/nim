@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { TextMorph } from '@/components/ui/text-morph'
 import { routes } from '@/lib/routes'
 import { formatMarkdownImage } from '@/modules/media/model'
-import type { AdminMediaItem, DeleteMediaFeedback } from '../media'
+import type { DeleteMediaFeedback, SiteMediaItem } from '../media'
 import { deleteMediaAssetAction } from '../server/actions/media'
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -58,11 +58,14 @@ function CopyMarkdownButton({ id, originalName }: { id: string; originalName: st
   )
 }
 
-export function MediaLibrary({ items }: { items: AdminMediaItem[] }) {
+export function MediaLibrary({ items }: { items: SiteMediaItem[] }) {
   const router = useRouter()
-  const [pendingDelete, setPendingDelete] = useState<AdminMediaItem | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<SiteMediaItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<{ id: string; result: Exclude<DeleteMediaFeedback, { status: 'success' }> } | null>(null)
+  const [feedback, setFeedback] = useState<{
+    id: string
+    result: Exclude<DeleteMediaFeedback, { status: 'success' }>
+  } | null>(null)
 
   async function confirmDelete() {
     if (!pendingDelete || deletingId) return
@@ -95,7 +98,8 @@ export function MediaLibrary({ items }: { items: AdminMediaItem[] }) {
     <>
       <ul aria-label="Media assets" className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
         {items.map(item => {
-          const { asset, references } = item
+          const { asset, postReferences, galleryReferences } = item
+          const hasReferences = postReferences.length > 0 || galleryReferences.length > 0
           const isDeleting = deletingId === asset.id
           const itemFeedback = feedback?.id === asset.id ? feedback.result : null
 
@@ -130,10 +134,10 @@ export function MediaLibrary({ items }: { items: AdminMediaItem[] }) {
 
               <div className="space-y-1.5 border-t pt-3 text-sm">
                 <p className="text-xs font-medium text-muted-foreground">References</p>
-                {references.length > 0 ? (
+                {hasReferences ? (
                   <ul aria-label={`References for ${asset.originalName}`} className="space-y-1.5">
-                    {references.map(ref => (
-                      <li key={ref.postId} className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+                    {postReferences.map(ref => (
+                      <li key={`post:${ref.postId}`} className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
                         <Link
                           href={routes.admin.post(ref.postId)}
                           className="min-w-0 truncate underline underline-offset-4 transition-colors hover:text-muted-foreground"
@@ -155,6 +159,28 @@ export function MediaLibrary({ items }: { items: AdminMediaItem[] }) {
                         </span>
                       </li>
                     ))}
+                    {galleryReferences.map(ref => (
+                      <li key={`gallery:${ref.galleryId}`} className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+                        <Link
+                          href={routes.admin.gallery}
+                          className="min-w-0 truncate underline underline-offset-4 transition-colors hover:text-muted-foreground"
+                        >
+                          Gallery: {ref.title}
+                        </Link>
+                        <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                          {ref.status === 'published' ? (
+                            <Link
+                              href={routes.galleryItem(ref.galleryId)}
+                              className="text-foreground underline underline-offset-4 transition-colors hover:text-muted-foreground"
+                            >
+                              Published
+                            </Link>
+                          ) : (
+                            <span>Draft</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 ) : (
                   <p className="text-xs text-muted-foreground">Not referenced</p>
@@ -167,7 +193,7 @@ export function MediaLibrary({ items }: { items: AdminMediaItem[] }) {
                 ) : (
                   <span className="text-xs text-muted-foreground">Unavailable until ready</span>
                 )}
-                {references.length === 0 && (
+                {!hasReferences && (
                   <Button
                     type="button"
                     variant="quiet"

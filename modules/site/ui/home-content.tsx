@@ -12,11 +12,10 @@ import {
 } from '@/components/ui/morphing-dialog'
 import Link from 'next/link'
 import { AnimatedBackground } from '@/components/ui/animated-background'
-import type { PublishedPostSummary } from '@/modules/posts/model'
+import { GalleryGrid } from '@/modules/gallery/ui/gallery-grid'
+import type { HomepageData } from '../home-model'
 import {
   PROFILE,
-  PROJECTS,
-  WORK_EXPERIENCE,
   EMAIL,
   SOCIAL_LINKS,
 } from '../data'
@@ -126,11 +125,8 @@ function MagneticSocialLink({
 }
 
 type HomeContentProps = {
-  posts: PublishedPostSummary[]
+  data: HomepageData
 }
-
-// 首页只展示最近的几篇，完整列表在文章索引页。
-const RECENT_POSTS = 4
 
 function Section({ className, children }: { className: string; children: React.ReactNode }) {
   return (
@@ -149,7 +145,9 @@ function SectionHeading({ children, action }: { children: React.ReactNode; actio
   )
 }
 
-export function HomeContent({ posts }: HomeContentProps) {
+export function HomeContent({ data }: HomeContentProps) {
+  const { writing, sections } = data
+
   return (
     <motion.main
       className="canvas-grid gap-y-14 md:gap-y-20"
@@ -175,103 +173,130 @@ export function HomeContent({ posts }: HomeContentProps) {
         </div>
       </Section>
 
-      <Section className="col-span-full md:col-span-5">
-        <SectionHeading
-          action={
-            <Link href={routes.blog} className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
-              All posts
-            </Link>
-          }
-        >
-          Recent writing
-        </SectionHeading>
-        {posts.length > 0 ? (
-          <div className="flex flex-col">
-            <AnimatedBackground
-              enableHover
-              className="h-full w-full rounded-lg bg-accent"
-              transition={{
-                type: 'spring',
-                bounce: 0,
-                duration: 0.2,
-              }}
-            >
-              {posts.slice(0, RECENT_POSTS).map((post) => (
-                <Link
-                  key={post.id}
-                  className="-mx-3 rounded-xl px-3 py-3"
-                  href={routes.post(post.id)}
-                  data-id={post.id}
-                >
-                  <div className="flex flex-col space-y-1">
-                    <h3 className="font-medium">{post.title}</h3>
-                    <p className="line-clamp-2 text-sm text-muted-foreground">{post.description}</p>
-                  </div>
-                </Link>
-              ))}
-            </AnimatedBackground>
-          </div>
-        ) : (
-          <p className="text-muted-foreground">No posts yet.</p>
-        )}
-      </Section>
-
-      <Section className="col-span-full">
-        <SectionHeading>Selected projects</SectionHeading>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-          {PROJECTS.map((project) => (
-            <div key={project.name} className="space-y-2">
-              {project.video && (
-                <div className="relative rounded-2xl bg-muted/40 p-1 ring-1 ring-border/50 ring-inset">
-                  <ProjectVideo src={project.video} />
-                </div>
-              )}
-              <div className="px-1">
-                <a
-                  className="group relative inline-block font-medium text-foreground"
-                  href={project.link}
-                  target="_blank"
-                >
-                  {project.name}
-                  <span className="absolute bottom-0.5 left-0 block h-[1px] w-full max-w-0 bg-foreground transition-all duration-200 group-hover:max-w-full"></span>
-                </a>
-                <p className="text-muted-foreground">{project.description}</p>
-              </div>
+      {writing.section.visible && (
+        <Section className="col-span-full md:col-span-5">
+          <SectionHeading
+            action={
+              <Link href={routes.blog} className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+                All posts
+              </Link>
+            }
+          >
+            {writing.section.title}
+          </SectionHeading>
+          {writing.posts.length > 0 ? (
+            <div className="flex flex-col">
+              <AnimatedBackground
+                enableHover
+                className="h-full w-full rounded-lg bg-accent"
+                transition={{
+                  type: 'spring',
+                  bounce: 0,
+                  duration: 0.2,
+                }}
+              >
+                {writing.posts.map((post) => (
+                  <Link
+                    key={post.id}
+                    className="-mx-3 rounded-xl px-3 py-3"
+                    href={routes.post(post.id)}
+                    data-id={post.id}
+                  >
+                    <div className="flex flex-col space-y-1">
+                      <h3 className="font-medium">{post.title}</h3>
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{post.description}</p>
+                    </div>
+                  </Link>
+                ))}
+              </AnimatedBackground>
             </div>
-          ))}
-        </div>
-      </Section>
+          ) : (
+            <p className="text-muted-foreground">No posts yet.</p>
+          )}
+        </Section>
+      )}
 
-      <Section className="col-span-full">
-        <SectionHeading>Work experience</SectionHeading>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {WORK_EXPERIENCE.map((job) => (
-            <a
-              className="relative overflow-hidden rounded-2xl bg-border p-[1px]"
-              href={job.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              key={job.id}
-            >
-              <Spotlight
-                className="from-foreground via-foreground/90 to-foreground/80 blur-2xl"
-                size={64}
-              />
-              <div className="relative h-full w-full rounded-[15px] bg-background p-4">
-                <div className="relative flex w-full flex-row justify-between gap-4">
-                  <div>
-                    <h3 className="font-medium">{job.title}</h3>
-                    <p className="text-muted-foreground">{job.company}</p>
+      {sections.map((entry) => {
+        if (entry.kind === 'gallery') {
+          return (
+            <Section key="gallery" className="col-span-full">
+              <SectionHeading
+                action={
+                  <Link href={routes.gallery} className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+                    All photos
+                  </Link>
+                }
+              >
+                {entry.section.title}
+              </SectionHeading>
+              <GalleryGrid items={entry.items} variant="showcase" />
+            </Section>
+          )
+        }
+
+        if (entry.kind === 'projects') {
+          return (
+            <Section key="projects" className="col-span-full">
+              <SectionHeading>{entry.section.title}</SectionHeading>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+                {entry.items.map((project) => (
+                  <div key={project.id} className="space-y-2">
+                    {project.video && (
+                      <div className="relative rounded-2xl bg-muted/40 p-1 ring-1 ring-border/50 ring-inset">
+                        <ProjectVideo src={project.video} />
+                      </div>
+                    )}
+                    <div className="px-1">
+                      <a
+                        className="group relative inline-block font-medium text-foreground"
+                        href={project.link}
+                        target="_blank"
+                      >
+                        {project.name}
+                        <span className="absolute bottom-0.5 left-0 block h-[1px] w-full max-w-0 bg-foreground transition-all duration-200 group-hover:max-w-full"></span>
+                      </a>
+                      <p className="text-muted-foreground">{project.description}</p>
+                    </div>
                   </div>
-                  <p className="shrink-0 text-sm text-muted-foreground">
-                    {job.start} - {job.end}
-                  </p>
-                </div>
+                ))}
               </div>
-            </a>
-          ))}
-        </div>
-      </Section>
+            </Section>
+          )
+        }
+
+        return (
+          <Section key="experience" className="col-span-full">
+            <SectionHeading>{entry.section.title}</SectionHeading>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {entry.items.map((job) => (
+                <a
+                  className="relative overflow-hidden rounded-2xl bg-border p-[1px]"
+                  href={job.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  key={job.id}
+                >
+                  <Spotlight
+                    className="from-foreground via-foreground/90 to-foreground/80 blur-2xl"
+                    size={64}
+                  />
+                  <div className="relative h-full w-full rounded-[15px] bg-background p-4">
+                    <div className="relative flex w-full flex-row justify-between gap-4">
+                      <div>
+                        <h3 className="font-medium">{job.title}</h3>
+                        <p className="text-muted-foreground">{job.company}</p>
+                      </div>
+                      <p className="shrink-0 text-sm text-muted-foreground">
+                        {job.start} - {job.end}
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </Section>
+        )
+      })}
     </motion.main>
   )
 }
