@@ -356,13 +356,15 @@ describe('初始发布素材导入', () => {
     expect(store.getDraft(input.id)).toMatchObject(input)
   })
 
-  it('整批导入中途失败时回滚前面的身份、修订和发布引用', () => {
+  it('整批导入中途失败时回滚前面的身份、修订和发布引用，并拒绝非 UUID 身份', () => {
+    expect(() => importPublishedPosts(database, [{ id: 'not-a-uuid', ...content }])).toThrow(z.ZodError)
+    const firstId = randomUUID()
     const inputs = [
-      { id: 'first', ...content },
-      { id: 'second', ...content, title: ' \t ' },
+      { id: firstId, ...content },
+      { id: randomUUID(), ...content, title: ' \t ' },
     ]
     expect(() => importPublishedPosts(database, inputs)).toThrow()
     expect(snapshot()).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [] })
-    expect(importPublishedPosts(database, [{ id: 'first', ...content }])).toEqual({ imported: 1, skipped: 0 })
+    expect(importPublishedPosts(database, [{ id: firstId, ...content }])).toEqual({ imported: 1, skipped: 0 })
   })
 })

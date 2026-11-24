@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
 import { parseMarkdownFile, serializeMarkdownFile } from './file-format'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from './file-exchange'
-import { createPostStore, importPublishedPosts, type PostStore } from './store'
+import { createPostStore, type PostStore } from './store'
+import { insertDraft, writePublication } from './storage'
 import { createWritingStore } from './writing-store'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
@@ -199,7 +200,10 @@ describe('Markdown 文件与真实文章存储', () => {
   })
 
   it('旧非 UUID 文章可以留在存储中，但导出返回 invalid 而非伪造身份', () => {
-    importPublishedPosts(database, [{ ...content, id: 'legacy-post' }])
+    database.transaction(transaction => {
+      const legacy = insertDraft(transaction, 'legacy-post', content, 'import')
+      writePublication(transaction, legacy)
+    })
     const before = snapshot()
     expect(exportPostMarkdown(store, 'legacy-post').status).toBe('invalid')
     expect(exportPostMarkdown(store, 'legacy-post', 'published').status).toBe('invalid')

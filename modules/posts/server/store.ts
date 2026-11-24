@@ -36,13 +36,14 @@ export function importPublishedPosts(database: AppDatabase, inputs: ImportPostIn
     let imported = 0
     let skipped = 0
     for (const input of inputs) {
-      const existing = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, input.id)).get()
+      const id = postIdSchema.parse(input.id)
+      const content = postContentSchema.parse(input)
+      const existing = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, id)).get()
       if (existing) {
         skipped += 1
         continue
       }
-      const content = postContentSchema.parse(input)
-      const draft = insertDraft(transaction, input.id, content, 'import')
+      const draft = insertDraft(transaction, id, content, 'import')
       writePublication(transaction, draft)
       imported += 1
     }

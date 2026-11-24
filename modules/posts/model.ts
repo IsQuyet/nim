@@ -35,7 +35,7 @@ export type PostRevision = PostContent & {
 }
 
 export const draftPostSchema = postContentSchema.extend({
-  id: z.string().min(1),
+  id: postIdSchema,
   revisionId: revisionIdSchema,
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -79,7 +79,7 @@ export type PostSummary = Pick<
   status: z.infer<typeof postStatusSchema>
 }
 
-export const identifiedPostContentSchema = postContentSchema.extend({ id: z.string().min(1) })
+export const identifiedPostContentSchema = postContentSchema.extend({ id: postIdSchema })
 export type ImportPostInput = z.infer<typeof identifiedPostContentSchema>
 
 export type ImportDraftInput = PostContent & {
