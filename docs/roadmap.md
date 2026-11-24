@@ -21,8 +21,8 @@
    - 未发布图片仅管理员可读；发布时由 `remark-rehype` 解析实际引用的站内图片并登记到 `post_publication_media`。
 
 4. **认证、存储与部署目标**
-   - 首版采用 GitHub 单管理员登录（Better Auth + SQLite 会话，按 `ADMIN_GITHUB_ID` 授权），不开放公众注册、密码或 Passkey；认证入库保留 Better Auth 原生 SQLite 的多步事务保证，表结构统一由 Drizzle schema 与迁移管理。
-   - 近期以单机 VPS 为部署目标：生产构建必须设置 `SITE_URL`，更新部署时保留数据库与自动生成会话密钥所在的持久化目录。
+   - 首版采用 GitHub 单管理员登录（Better Auth + PostgreSQL 会话，按 `ADMIN_GITHUB_ID` 授权），不开放公众注册、密码或 Passkey；表结构与迁移统一由 Drizzle PostgreSQL schema（`modules/*/server/schema.ts` + `./drizzle`）管理。
+   - **双形态开源可部署**：数据库统一为 PostgreSQL 语义（配置 `DATABASE_URL` 时连接托管或容器化 PostgreSQL；留空时使用嵌入式 `@electric-sql/pglite` 目录 `.data/pgdata`）。媒体存储支持本地磁盘与 S3 兼容对象存储（Cloudflare R2 / AWS S3 / MinIO）双后端，会话密钥支持 `AUTH_SECRET` 环境变量优先，同时适配单机 VPS（Docker Compose / 裸机）与无服务器部署（Vercel + Postgres + R2）。
 
 5. **当前阶段开发原则**
    - 开发期直接升级并同步更新所有调用方与测试，不为旧内部接口保留兼容双轨。

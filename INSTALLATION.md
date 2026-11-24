@@ -2,7 +2,7 @@
 
 ## 前置条件
 
-- **Node.js 24.x 或更高版本**（仓库自带原生依赖 `better-sqlite3` 与 `sharp`）
+- **Node.js 24.x 或更高版本**（图像处理使用 `sharp`）
 - **Git**
 - **GitHub OAuth App**（用于 `/admin` 单管理员登录授权；仅本地预览公开页面可先留空）
 
@@ -31,10 +31,20 @@
    | 变量名 | 必填范围 | 说明 |
    | --- | --- | --- |
    | `SITE_URL` | **生产构建必填**；本地留空默认 `http://localhost:3000` | 必须是完整的 HTTP 或 HTTPS 站点根地址（例如 `https://example.com`），不能带子路径、查询参数、片段或认证信息。 |
-   | `DATABASE_PATH` | 可选，默认 `.data/nim.sqlite` | SQLite 数据库文件路径。自动生成的会话密钥 `auth-secret` 与上传媒体目录 `media/` 会存放在同一父目录下。 |
+   | `DATABASE_URL` | 可选（生产/Serverless 推荐） | PostgreSQL 连接字符串（`postgres://...` 或 `postgresql://...`）。留空时本地/单机使用嵌入式 `@electric-sql/pglite` 目录。 |
+   | `DATABASE_PATH` | 可选，默认 `.data/pgdata` | 仅在未设置 `DATABASE_URL` 时生效，指定本地 PGlite 数据目录路径。 |
+   | `DATA_DIR` | 可选，默认取 `dirname(DATABASE_PATH)` | 持久化工作目录，用于保存本地媒体文件 `media/` 与自动生成的 `auth-secret`。 |
+   | `AUTH_SECRET` | 无服务器环境必填；单机留空自动生成 | Better Auth 会话签名密钥。配置后优先于本地 `auth-secret` 文件。 |
    | `GITHUB_CLIENT_ID` | 登录后台必填 | GitHub OAuth App 的 Client ID。 |
    | `GITHUB_CLIENT_SECRET` | 登录后台必填 | GitHub OAuth App 的 Client Secret。 |
    | `ADMIN_GITHUB_ID` | 登录后台必填 | 唯一管理员的 **GitHub 数字账号 ID**（不是用户名，也不是上面的 Client ID）。 |
+   | `S3_BUCKET` | 使用对象存储时必填 | 设置后自动启用 S3 / Cloudflare R2 / MinIO 媒体后端；留空则使用本地 `DATA_DIR/media/`。 |
+   | `S3_REGION` | 可选，默认 `auto` | S3 Region（Cloudflare R2 填写 `auto`）。 |
+   | `S3_ENDPOINT` | R2 / MinIO 等自定义兼容服务必填 | S3 兼容服务 Endpoint（例如 `https://<accountid>.r2.cloudflarestorage.com`）。 |
+   | `S3_ACCESS_KEY_ID` | 设置 `S3_BUCKET` 时必填 | 对象存储 Access Key ID。 |
+   | `S3_SECRET_ACCESS_KEY` | 设置 `S3_BUCKET` 时必填 | 对象存储 Secret Access Key。 |
+   | `S3_KEY_PREFIX` | 可选，默认 `media` | 对象存储键前缀，最终对象路径为 `<prefix>/<id>.<ext>`。 |
+   | `S3_FORCE_PATH_STYLE` | 可选，默认 `false` | 设为 `true` 可强制使用路径风格寻址（部分自建 MinIO 需要）。 |
 
 3. **配置 GitHub OAuth 回调地址**
 
@@ -53,7 +63,7 @@
    npm run dev
    ```
 
-   `predev` 钩子会自动执行 `npm run setup`，完成 SQLite 建库、执行 `./drizzle` 下所有待应用迁移并创建 `auth-secret`。访问 `http://localhost:3000` 即可浏览站点。
+   `predev` 钩子会自动执行 `npm run setup`，完成建库、执行 `./drizzle` 下所有 PostgreSQL 迁移并准备会话密钥。访问 `http://localhost:3000` 即可浏览站点。
 
 5. **调整站点静态资料**
 
@@ -63,19 +73,19 @@
 
 ## 数据持久化、迁移与导入
 
-### 1. SQLite 与目录结构
+### 1. 数据库与目录结构
 
-数据统一落地在 `dirname(DATABASE_PATH)` 下（本地默认为 `.data/`）：
+- **远程 / 容器化 PostgreSQL 模式**（设置 `DATABASE_URL`）：业务与认证数据全部存储在目标 PostgreSQL 实例；若同时配置 `S3_BUCKET` 与 `AUTH_SECRET`，容器/函数节点自身完全无状态。
+- **零依赖单机模式**（留空 `DATABASE_URL`）：数据统一落地在 `DATA_DIR`（默认为 `.data/`）：
 
 ```text
 <持久化目录>/
-├── nim.sqlite        # 业务与认证数据（开启 WAL 与外键约束）
+├── pgdata/           # 嵌入式 PostgreSQL（PGlite）数据目录
 ├── auth-secret       # 首次初始化自动生成的 Better Auth 会话签名密钥
 └── media/            # 经过校验与 WebP 转码后的站内媒体文件
 ```
 
-- **Drizzle 迁移**：数据库表结构定义于 `modules/*/server/schema.ts`。更新代码后运行 `npm run setup`（生产使用 `npm run setup -- --production`）会按 `./drizzle` 顺序应用增量迁移。`npm run dev` 与 `npm start` 都会通过 `predev` / `prestart` 自动触发该脚本。
-- **备份原则**：只要完整保留与备份该持久化目录，更新代码重新部署就不会丢失文章、修订历史、画廊、媒体文件或已有管理员会话密钥。
+- **Drizzle 迁移**：数据库表结构定义于 `modules/*/server/schema.ts`。更新代码后运行 `npm run setup`（生产使用 `npm run setup -- --production`）会按 `./drizzle` 顺序应用增量 PostgreSQL 迁移。`npm run dev` 与 `npm start` 都会通过 `predev` / `prestart` 自动触发该脚本。
 
 ### 2. 显式导入已有 Markdown 文章
 
@@ -90,31 +100,27 @@
   npm run db:post-file -- import ./path/to/article.md
   npm run db:post-file -- export <postId> ./out/article.md --published
   ```
-  针对生产数据库执行时，在末尾追加 `--production` 或提前设置 `NODE_ENV=production` 与 `DATABASE_PATH`。
+  针对生产数据库执行时，在末尾追加 `--production` 或提前设置 `NODE_ENV=production` 与 `DATABASE_URL` / `DATABASE_PATH`。
 - **后台界面导入**：登录管理员后访问 `/admin/import` 上传 `.md` / `.markdown` 文件。
 
 ---
 
-## 单机 VPS 生产部署
+## 方案 A：单机 VPS 部署（Docker Compose 或裸机）
 
-正式环境禁止使用 `npm run dev` 对外提供服务，应使用生产构建 + 本地持久化目录 + 反向代理：
+### Docker Compose（推荐 VPS 方案）
 
-1. **准备生产环境变量**
+仓库自带 [Dockerfile](./Dockerfile) 与 [compose.yaml](./compose.yaml)（PostgreSQL 17 + Nim）：
 
-   在部署环境或仓库根目录不入库的 `.env.production.local` 中配置完整变量，例如：
+```bash
+cp .env.example .env
+# 编辑 .env，填写 SITE_URL、GITHUB_CLIENT_ID、GITHUB_CLIENT_SECRET、ADMIN_GITHUB_ID、AUTH_SECRET 等
+docker compose up -d --build
+```
 
-   ```dotenv
-   SITE_URL=https://example.com
-   DATABASE_PATH=/var/lib/nim/nim.sqlite
-   GITHUB_CLIENT_ID=...
-   GITHUB_CLIENT_SECRET=...
-   ADMIN_GITHUB_ID=...
-   ```
+### 裸机 Node.js + 反向代理
 
-   请确保运行 Node 进程的系统用户对 `DATABASE_PATH` 所在目录（例如 `/var/lib/nim`）拥有读写权限，且该目录在更新发布代码时保持不变。
-
-2. **校验并构建产物**
-
+1. 在 `.env.production.local` 或系统环境中配置 `SITE_URL`（以及可选 `DATABASE_URL` / `DATABASE_PATH`、`GITHUB_*`、`ADMIN_GITHUB_ID`）。
+2. 校验与构建：
    ```bash
    npm ci
    npm test
@@ -122,13 +128,27 @@
    npm run check-types
    npm run build
    ```
-
-   > 注意：`SITE_URL` 会在构建时参与静态元数据、`sitemap.xml` 与 `robots.txt` 生成；若更换公开域名，需修改 `SITE_URL` 后重新执行 `npm run build` 并重启服务，同时同步更新 GitHub OAuth App 的回调地址。
-
-3. **启动服务与反向代理**
-
+3. 启动服务：
    ```bash
    npm start -- --hostname 127.0.0.1 --port 3000
    ```
+   建议使用 `systemd` 或 `pm2` 守护进程，由 Nginx / Caddy 在前端终止 HTTPS 后反代至 `127.0.0.1:3000`（需透传 `Host`、`X-Forwarded-Proto` 与 `X-Forwarded-Host` 请求头）。
 
-   `prestart` 会自动先执行 `npm run setup -- --production` 完成 SQLite 迁移。建议使用 `systemd`、`pm2` 等进程管理器守护该进程，并由 Nginx 或 Caddy 在前端终止 HTTPS 后反向代理至 `127.0.0.1:3000`（需透传 `Host`、`X-Forwarded-Proto` 与 `X-Forwarded-Host` 请求头，确保 Better Auth OAuth 回调校验与公开 URL 一致）。
+---
+
+## 方案 B：Vercel + 托管 PostgreSQL + Cloudflare R2 部署（无服务器）
+
+1. **准备托管数据库**：在 Neon、Supabase 或 Vercel Postgres 创建 PostgreSQL 数据库，取得 `DATABASE_URL`（建议使用带 SSL 参数的连接字符串）。
+2. **准备对象存储**：在 Cloudflare R2（或 AWS S3）创建私有存储桶（站点通过 `/media/[id]` 路由校验草稿/发布权限后再转发图像字节，无需开启桶的公开匿名访问），创建 API Token 获取 `S3_ACCESS_KEY_ID` 与 `S3_SECRET_ACCESS_KEY`。
+3. **配置 Vercel 环境变量**：
+   - `SITE_URL`（例如 `https://your-domain.com`）
+   - `DATABASE_URL`
+   - `AUTH_SECRET`（使用 `openssl rand -base64 32` 生成）
+   - `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`ADMIN_GITHUB_ID`
+   - `S3_BUCKET`、`S3_REGION`（R2 填 `auto`）、`S3_ENDPOINT`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`
+4. **Build Command 建议**：将 Vercel Build Command 设为：
+   ```bash
+   npx tsx scripts/setup.ts --production && npm run build
+   ```
+   这样每次部署构建时都会自动对托管 PostgreSQL 执行尚未应用的 Drizzle 迁移。
+5. **上传大小提示**：自托管节点（VPS / Docker）单张图片上限为 `10 MB`；部署在 Vercel Serverless Functions 时，受平台单次请求体上限约束，建议单张图片控制在 **4.5 MB** 以内。
