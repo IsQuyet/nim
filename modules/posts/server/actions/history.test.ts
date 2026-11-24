@@ -30,6 +30,15 @@ describe('修订恢复入口', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
+  it('拒绝非 UUID 文章身份，不访问存储', async () => {
+    expect(await restoreRevisionAction('not-a-uuid', input, { status: 'idle' })).toEqual({
+      status: 'error', message: 'Invalid post ID.',
+    })
+    expect(mocks.restoreRevision).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    expect(mocks.redirect).not.toHaveBeenCalled()
+  })
+
   it.each([
     null, {},
     { ...input, revisionId: '4' }, { ...input, revisionId: 0 },

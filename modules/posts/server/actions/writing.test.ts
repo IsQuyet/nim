@@ -93,9 +93,11 @@ describe('明确草稿 Server Actions', () => {
   it('读取明确草稿区分缺失、非法输入和普通故障，绝不刷新或写入', async () => {
     expect(await readDraftAction(draft.id)).toEqual({ status: 'success', value: draft })
     store.getDraft.mockReturnValue(null)
-    expect(await readDraftAction('missing')).toEqual({ status: 'success', value: null })
+    expect(await readDraftAction(randomUUID())).toEqual({ status: 'success', value: null })
     store.getDraft.mockClear()
-    expect(await readDraftAction(null)).toMatchObject({ status: 'error' })
+    for (const invalid of [null, '', 'not-a-uuid']) {
+      expect(await readDraftAction(invalid)).toEqual({ status: 'error', message: 'Invalid post ID.' })
+    }
     expect(store.getDraft).not.toHaveBeenCalled()
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     store.getDraft.mockImplementation(() => { throw new Error('unavailable') })
