@@ -62,6 +62,59 @@ class MarkerWidget extends WidgetType {
   }
 }
 
+class ImagePreviewWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+  ) {
+    super()
+  }
+
+  eq(other: ImagePreviewWidget) {
+    return other.src === this.src && other.alt === this.alt
+  }
+
+  ignoreEvent() {
+    return false
+  }
+
+  toDOM() {
+    const wrapper = document.createElement('span')
+    wrapper.className = 'cm-md-image-preview'
+    const image = document.createElement('img')
+    image.src = this.src
+    image.alt = this.alt
+    image.loading = 'lazy'
+    image.className = 'cm-md-image-img'
+    image.addEventListener('error', () => {
+      wrapper.replaceChildren(document.createTextNode(this.alt || this.src))
+      wrapper.classList.add('cm-md-image-fallback')
+    })
+    wrapper.appendChild(image)
+    if (this.alt) {
+      const caption = document.createElement('span')
+      caption.className = 'cm-md-image-caption'
+      caption.textContent = this.alt
+      wrapper.appendChild(caption)
+    }
+    return wrapper
+  }
+}
+
+function previewImageUrl(raw: string): string | null {
+  const trimmed = raw.trim()
+  const unwrapped = trimmed.startsWith('<') && trimmed.endsWith('>') ? trimmed.slice(1, -1).trim() : trimmed
+  if (!unwrapped) return null
+  if (/^\/media\/[^\s]+$/u.test(unwrapped)) return unwrapped
+  try {
+    const parsed = new URL(unwrapped)
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href
+  } catch {
+    return null
+  }
+  return null
+}
+
 function selectionTouches(view: EditorView, from: number, to: number) {
   return view.state.selection.ranges.some(range => range.empty
     ? range.head >= from && range.head <= to
@@ -194,7 +247,19 @@ function buildLivePreview(view: EditorView): DecorationSet {
       }
 
       if (name === 'Image') {
-        mark(node.from, node.to, 'cm-md-image-source')
+        const children = directChildren(node)
+        const urlNode = children.find(child => child.name === 'URL')
+        const safeSrc = urlNode ? previewImageUrl(view.state.doc.sliceString(urlNode.from, urlNode.to)) : null
+        const sameLine = view.state.doc.lineAt(node.from).number === view.state.doc.lineAt(node.to).number
+        if (!active && safeSrc !== null && sameLine) {
+          const marks = children.filter(child => child.name === 'LinkMark')
+          const alt = marks.length >= 2 ? view.state.doc.sliceString(marks[0].to, marks[1].from) : ''
+          decorations.push(Decoration.replace({
+            widget: new ImagePreviewWidget(safeSrc, alt),
+          }).range(node.from, node.to))
+        } else {
+          mark(node.from, node.to, 'cm-md-image-source')
+        }
       }
 
       if (name === 'Blockquote') {
@@ -307,6 +372,33 @@ const editorTheme = EditorView.theme({
   },
   '.cm-md-link': { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '0.2em' },
   '.cm-md-image-source': { color: 'color-mix(in srgb, currentColor 65%, transparent)' },
+  '.cm-md-image-preview': {
+    display: 'inline-flex',
+    flexDirection: 'column',
+    gap: '0.375rem',
+    maxWidth: '100%',
+    margin: '0.5rem 0',
+    verticalAlign: 'middle',
+  },
+  '.cm-md-image-img': {
+    display: 'block',
+    maxWidth: '100%',
+    maxHeight: '24rem',
+    borderRadius: '0.5rem',
+    border: '1px solid var(--border)',
+    backgroundColor: 'var(--muted)',
+    objectFit: 'contain',
+  },
+  '.cm-md-image-caption': {
+    fontSize: '0.75rem',
+    lineHeight: '1.25',
+    color: 'var(--muted-foreground)',
+  },
+  '.cm-md-image-fallback': {
+    fontSize: '0.875rem',
+    color: 'var(--muted-foreground)',
+    textDecoration: 'underline',
+  },
   '.cm-md-blockquote': {
     borderLeft: '2px solid color-mix(in srgb, currentColor 24%, transparent)',
     paddingLeft: '1rem',

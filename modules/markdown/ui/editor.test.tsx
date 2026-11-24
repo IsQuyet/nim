@@ -144,8 +144,10 @@ describe('Markdown 实时编辑器', () => {
     expect(pending?.insert('late image')).toBe(false)
   })
 
-  it('不把 Markdown 图片伪装成已经渲染的图片', () => {
-    const source = '![alt text](image.png)'
+  it('光标离开合法图片语法时就地呈现图片，光标进入后揭示源码，且拒绝不安全或相对路径图片', async () => {
+    const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
+    const mediaSyntax = `![Architecture diagram](/media/${id})`
+    const source = `Intro\n\n${mediaSyntax}\n\n![Relative](image.png)\n\n![Unsafe](javascript:alert(1))`
     render(
       <>
         <label id="body-label">Body</label>
@@ -153,6 +155,21 @@ describe('Markdown 实时编辑器', () => {
       </>,
     )
 
-    expect(editor().contentDOM.textContent).toContain(source)
+    const view = editor()
+    act(() => view.dispatch({ selection: { anchor: 0 } }))
+
+    await waitFor(() => expect(view.dom.querySelector(`img[src="/media/${id}"]`)).not.toBeNull())
+    const rendered = view.dom.querySelector<HTMLImageElement>(`img[src="/media/${id}"]`)!
+    expect(rendered.alt).toBe('Architecture diagram')
+    expect(view.contentDOM.textContent).not.toContain(`/media/${id}`)
+    expect(view.contentDOM.textContent).toContain('![Relative](image.png)')
+    expect(view.contentDOM.textContent).toContain('![Unsafe](javascript:alert(1))')
+    expect(view.dom.querySelectorAll('img.cm-md-image-img')).toHaveLength(1)
+
+    const imageOffset = source.indexOf(mediaSyntax) + 4
+    act(() => view.dispatch({ selection: { anchor: imageOffset } }))
+    expect(view.dom.querySelector(`img[src="/media/${id}"]`)).toBeNull()
+    expect(view.contentDOM.textContent).toContain(mediaSyntax)
+    expect(view.state.doc.toString()).toBe(source)
   })
 })

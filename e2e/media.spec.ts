@@ -77,6 +77,9 @@ test('上传图片在光标处插入原生 Markdown，仅发布时关联公开�
   const published = snapshot(runtime, draft.id)
   expect(published.revisions.at(-1)?.body).toBe(`Before after ![tiny](${mediaUrl})`)
 
+  await body.press('ControlOrMeta+Home')
+  await expect(body.locator(`img[src="${mediaUrl}"]`)).toBeVisible()
+
   const publicReader = await browser.newContext()
   let storedBytes: Buffer
   try {
@@ -198,4 +201,54 @@ test('上传成功但正文未保存时，图片保持私有且正文仍为本�
     const response = await anonymous.request.get(`${runtime.origin}${upload.media.url}`)
     expect(response.status()).toBe(404)
   } finally { await anonymous.close() }
+})
+
+test('后台媒体库展示引用关系，并仅允许删除未被引用的图片', async ({ page, context, login, runtime }) => {
+  await login()
+  await page.goto('/admin/posts/new')
+  await expect(page.getByText('Ready to write.', { exact: true })).toBeVisible()
+
+  // 上传第一张图片并发布文章（应显示 Published 引用且不可删除）
+  await page.getByLabel('Title', { exact: true }).fill('Media library post')
+  await page.getByLabel('Choose image', { exact: true }).setInputFiles({
+    name: 'used.png', mimeType: 'image/png', buffer: pngBytes,
+  })
+  const usedResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/media') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Upload and insert', exact: true }).click()
+  const used = mediaUploadResponseSchema.parse(await (await usedResponse).json())
+  if (used.status !== 'success') throw new Error('Expected first upload to succeed.')
+  await page.getByRole('button', { name: 'Publish', exact: true }).click()
+  await expect(page.getByText('Post published.', { exact: true })).toBeVisible()
+
+  // 上传第二张图片但不保存/发布正文（应显示 Not referenced 且可删除）
+  await page.goto('/admin/posts/new')
+  await expect(page.getByText('Ready to write.', { exact: true })).toBeVisible()
+  await page.getByLabel('Choose image', { exact: true }).setInputFiles({
+    name: 'orphan.png', mimeType: 'image/png', buffer: pngBytes,
+  })
+  const orphanResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/media') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Upload and insert', exact: true }).click()
+  const orphan = mediaUploadResponseSchema.parse(await (await orphanResponse).json())
+  if (orphan.status !== 'success') throw new Error('Expected second upload to succeed.')
+
+  const mediaPage = await context.newPage()
+  await mediaPage.goto('/admin/media')
+  await expect(mediaPage.getByRole('heading', { name: 'Media', exact: true })).toBeVisible()
+  const mediaList = mediaPage.getByRole('list', { name: 'Media assets' })
+  const usedCard = mediaList.locator(':scope > li', { hasText: 'used.png' })
+  const orphanCard = mediaList.locator(':scope > li', { hasText: 'orphan.png' })
+
+  await expect(usedCard.getByRole('link', { name: 'Media library post' })).toBeVisible()
+  await expect(usedCard.getByRole('link', { name: 'Published', exact: true })).toBeVisible()
+  await expect(usedCard.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+
+  await expect(orphanCard.getByText('Not referenced', { exact: true })).toBeVisible()
+  await orphanCard.getByRole('button', { name: 'Delete', exact: true }).click()
+  const dialog = mediaPage.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(orphanCard).toHaveCount(0)
+  await expect(usedCard).toBeVisible()
+
+  expect((await mediaPage.request.get(`${runtime.origin}${orphan.media.url}`)).status()).toBe(404)
+  await mediaPage.close()
 })
