@@ -10,7 +10,7 @@ let directory: string
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'nim-auth-secret-'))
-  vi.stubEnv('DATABASE_PATH', join(directory, 'data', 'nim.sqlite'))
+  vi.stubEnv('DATABASE_PATH', join(directory, 'data', 'pgdata'))
 })
 
 afterEach(() => {
@@ -50,5 +50,11 @@ describe('会话密钥的初始化与持久保存', () => {
     expect(() => getAuthSecret()).toThrow('会话密钥文件为空')
     expect(() => initializeAuthSecret()).toThrow('会话密钥文件为空')
     expect(readFileSync(getAuthSecretPath(), 'utf8')).toBe('')
+  })
+
+  it('优先使用 AUTH_SECRET 环境变量而不读取或创建本地密钥文件', () => {
+    vi.stubEnv('AUTH_SECRET', '  env-secret-value-for-serverless  ')
+    expect(getAuthSecret()).toBe('env-secret-value-for-serverless')
+    expect(existsSync(getAuthSecretPath())).toBe(false)
   })
 })

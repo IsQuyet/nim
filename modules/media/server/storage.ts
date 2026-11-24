@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, link, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { getMediaDirectory } from '@/lib/server/data-paths'
 import { mediaIdSchema, mediaImageFormats, mediaTypeSchema, type MediaAsset } from '../model'
+import { createS3MediaStorage } from './s3-storage'
+
+export { createS3MediaStorage }
 
 type StoredMedia = Pick<MediaAsset, 'id' | 'mediaType' | 'sha256'>
 
@@ -79,4 +83,26 @@ export function createFileMediaStorage(root: string): MediaStorage {
       await rm(filename(root, asset), { force: true })
     },
   }
+}
+
+/** 按环境选择媒体存储后端：配置了 S3/R2 桶时走对象存储，否则写入本地持久化目录。 */
+export function createConfiguredMediaStorage(): MediaStorage {
+  const bucket = process.env.S3_BUCKET?.trim()
+  if (!bucket) return createFileMediaStorage(getMediaDirectory())
+
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID?.trim()
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY?.trim()
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('已设置 S3_BUCKET，但缺少 S3_ACCESS_KEY_ID 或 S3_SECRET_ACCESS_KEY。')
+  }
+
+  return createS3MediaStorage({
+    bucket,
+    region: process.env.S3_REGION?.trim() || 'auto',
+    endpoint: process.env.S3_ENDPOINT?.trim() || undefined,
+    accessKeyId,
+    secretAccessKey,
+    keyPrefix: process.env.S3_KEY_PREFIX?.trim() || 'media',
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE?.trim() === 'true',
+  })
 }

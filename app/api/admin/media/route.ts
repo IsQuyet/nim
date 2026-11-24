@@ -1,11 +1,10 @@
 import { unstable_rethrow } from 'next/navigation'
 import { withAdmin } from '@/modules/auth/server/admin'
 import { getSiteUrl } from '@/lib/server/site-config'
-import { getMediaDirectory } from '@/lib/server/data-paths'
 import { mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES } from '@/modules/media/model'
 import { prepareMediaUpload } from '@/modules/media/server/upload'
 import { createMediaStore } from '@/modules/media/server/store'
-import { createFileMediaStorage } from '@/modules/media/server/storage'
+import { createConfiguredMediaStorage } from '@/modules/media/server/storage'
 import { withDatabase } from '@/lib/server/database'
 import { routes } from '@/lib/routes'
 
@@ -76,7 +75,7 @@ async function acceptUpload(request: Request) {
   if (prepared.status === 'invalid') return jsonError(prepared.message, 400)
 
   const result = await withDatabase(database =>
-    createMediaStore(database, createFileMediaStorage(getMediaDirectory())).upload(prepared.value))
+    createMediaStore(database, createConfiguredMediaStorage()).upload(prepared.value))
   if (result.status === 'conflict') {
     return jsonError('This upload ID already belongs to a different image.', 409)
   }

@@ -1,10 +1,9 @@
 import { connection } from 'next/server'
 import { mediaIdSchema } from '@/modules/media/model'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { getMediaDirectory } from '@/lib/server/data-paths'
 import { withDatabase } from '@/lib/server/database'
 import { createMediaStore } from '@/modules/media/server/store'
-import { createFileMediaStorage } from '@/modules/media/server/storage'
+import { createConfiguredMediaStorage } from '@/modules/media/server/storage'
 import { isSiteMediaPublished } from '@/modules/site/server/media-admin'
 
 type MediaRouteContext = {
@@ -23,11 +22,11 @@ export async function GET(request: Request, { params }: MediaRouteContext) {
   const parsed = mediaIdSchema.safeParse(candidate)
   if (!parsed.success) return notFound()
 
-  const storage = createFileMediaStorage(getMediaDirectory())
-  const found = await withDatabase(database => {
-    const asset = createMediaStore(database, storage).get(parsed.data)
+  const storage = createConfiguredMediaStorage()
+  const found = await withDatabase(async database => {
+    const asset = await createMediaStore(database, storage).get(parsed.data)
     if (!asset || asset.state !== 'ready') return null
-    return { asset, publicAsset: isSiteMediaPublished(database, asset.id) }
+    return { asset, publicAsset: await isSiteMediaPublished(database, asset.id) }
   })
   if (!found) return notFound()
   const { asset, publicAsset } = found

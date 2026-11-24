@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { initializeDatabase, openDatabase } from '@/lib/server/database'
+import { closeDatabaseConnections, initializeDatabase, openDatabase } from '@/lib/server/database'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 import { createTestAdminSession } from '@/test/admin-session'
 import { createTestImage } from '@/test/media-fixtures'
@@ -26,30 +26,31 @@ let filename: string
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-media-read-'))
-  filename = join(directory, 'nim.sqlite')
+  filename = join(directory, 'pgdata')
   vi.stubEnv('DATABASE_PATH', filename)
   vi.mocked(getAdminSession).mockReset().mockResolvedValue(createTestAdminSession())
   bytes = await createTestImage()
   await initializeDatabase(filename)
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeDatabaseConnections()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   rmSync(directory, { recursive: true, force: true })
 })
 
 async function upload(id: string) {
-  const database = openDatabase(filename)
+  const database = await openDatabase(filename)
   try {
     const input = await prepareMediaUpload({ id, originalName: 'tiny.png', declaredType: 'image/png', bytes })
     if (input.status !== 'success') throw new Error('Fixture must be a valid PNG.')
     await createMediaStore(database, createFileMediaStorage(join(directory, 'media'))).upload(input.value)
-    const draft = createTestDraft(createWritingStore(database), {
+    const draft = await createTestDraft(createWritingStore(database), {
       title: 'Media post', description: '', body: `![tiny](/media/${id})`,
     })
     return { draft, media: input.value }
-  } finally { database.$client.close() }
+  } finally { await database.close() }
 }
 
 function mediaRequest(id: string, etag?: string) {
@@ -73,8 +74,8 @@ describe('媒体公开读取 Route Handler', () => {
   it('发布后可匿名读取无源元数据的 WebP，ETag 对应实际存储字节', async () => {
     const id = randomUUID()
     const { draft, media } = await upload(id)
-    const database = openDatabase(filename)
-    try { publishTestDraft(createWritingStore(database), draft) } finally { database.$client.close() }
+    const database = await openDatabase(filename)
+    try { await publishTestDraft(createWritingStore(database), draft) } finally { await database.close() }
     vi.mocked(getAdminSession).mockResolvedValue(null)
     const response = await GET(mediaRequest(id), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(200)
@@ -95,25 +96,25 @@ describe('媒体公开读取 Route Handler', () => {
   it('新发布版移除图片不会撤回已经公开的历史媒体', async () => {
     const id = randomUUID()
     const { draft } = await upload(id)
-    const database = openDatabase(filename)
+    const database = await openDatabase(filename)
     try {
       const writer = createWritingStore(database)
-      publishTestDraft(writer, draft)
-      const next = saveTestDraft(writer, draft, { title: draft.title, description: '', body: 'No image' })
-      publishTestDraft(writer, next)
-    } finally { database.$client.close() }
+      await publishTestDraft(writer, draft)
+      const next = await saveTestDraft(writer, draft, { title: draft.title, description: '', body: 'No image' })
+      await publishTestDraft(writer, next)
+    } finally { await database.close() }
     vi.mocked(getAdminSession).mockResolvedValue(null)
     expect((await GET(mediaRequest(id), { params: Promise.resolve({ id }) })).status).toBe(200)
   })
 
   it('缺失、不完整或无效媒体保持一致的 404', async () => {
     const id = randomUUID()
-    const database = openDatabase(filename)
+    const database = await openDatabase(filename)
     const incomplete = await prepareMediaUpload({ id, originalName: 'tiny.png', declaredType: 'image/png', bytes })
     if (incomplete.status !== 'success') throw new Error('Fixture must be a valid PNG.')
     try {
       await createMediaStore(database, { async put() { return 'created' }, async read() { return null }, async remove() {} }).upload(incomplete.value)
-    } finally { database.$client.close() }
+    } finally { await database.close() }
     const missing = await GET(mediaRequest(randomUUID()), { params: Promise.resolve({ id: randomUUID() }) })
     const invalid = await GET(mediaRequest('not-a-uuid'), { params: Promise.resolve({ id: 'not-a-uuid' }) })
     const absentFile = await GET(mediaRequest(id), { params: Promise.resolve({ id }) })

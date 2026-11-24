@@ -4,6 +4,9 @@ import { dirname } from 'node:path'
 import { getAuthSecretPath } from '@/lib/server/data-paths'
 
 export function getAuthSecret() {
+  const configured = process.env.AUTH_SECRET?.trim()
+  if (configured) return configured
+
   try {
     const secret = readFileSync(getAuthSecretPath(), 'utf8').trim()
     if (!secret) throw new Error('会话密钥文件为空，请检查持久化目录。')
