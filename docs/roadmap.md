@@ -52,5 +52,5 @@
 - [x] **跨内容站内搜索**：已在内容模块之上落地 `modules/search/`，通过统一检索评分与摘录高亮同时支持公开文章与画廊作品（含中文短词与英文标点词），并提供页头 `Ctrl/Cmd+K` 面板、`/api/search` 及独立 `/search` 页面。
 
 ### P3：文档对齐与真机 / 真实环境验收
-- [ ] **对齐公开文档**：更新 `README.md` 与 `INSTALLATION.md`，补全 SQLite 持久化、Drizzle 迁移、显式导入旧文、`SITE_URL`、VPS 部署及 GitHub OAuth 回调配置说明。
+- [x] **对齐公开文档**：已更新 `README.md` 与 `INSTALLATION.md`，补全核心功能、SQLite/media/auth-secret 持久化目录、Drizzle 迁移、显式导入旧文、`SITE_URL`、GitHub OAuth 回调与单机 VPS 部署说明。
 - [ ] **真实环境验收**：在真实域名与 GitHub OAuth App 下复测 Better Auth 登录授权；在真机环境下验收 Markdown 编辑器的输入法（IME）交互。
