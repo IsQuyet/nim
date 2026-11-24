@@ -8,6 +8,15 @@ function route<T extends string>(path: Route<T>) {
 // 正文里引用站内图片的地址以它开头，发布时据此识别媒体引用。
 export const MEDIA_PATH_PREFIX = '/media/'
 
+// 修订历史页上，选中修订的详情所在的页内锚点。
+export const REVISION_DETAILS_ANCHOR = 'revision'
+
+type RevisionSelection = { page: number; revisionId: number }
+
+function revisionQuery({ page, revisionId }: RevisionSelection) {
+  return new URLSearchParams({ page: String(page), revisionId: String(revisionId) }).toString()
+}
+
 export const routes = {
   home: route('/'),
   blog: route('/blog'),
@@ -21,8 +30,12 @@ export const routes = {
     newDraft: (id: string) => route(`/admin/posts/new?draft=${id}`),
     post: (id: string) => route(`/admin/posts/${id}`),
     postHistory: (id: string) => route(`/admin/posts/${id}/history`),
-    postRevision: (id: string, selection: { page: number; revisionId: number }) =>
-      route(`/admin/posts/${id}/history?${new URLSearchParams({ page: String(selection.page), revisionId: String(selection.revisionId) }).toString()}`),
+    /** 修订列表的某一页，保持已选中的修订。 */
+    postHistoryPage: (id: string, selection: RevisionSelection) =>
+      route(`/admin/posts/${id}/history?${revisionQuery(selection)}`),
+    /** 选中一条修订，并定位到它的详情。 */
+    postRevision: (id: string, selection: RevisionSelection) =>
+      route(`/admin/posts/${id}/history?${revisionQuery(selection)}#${REVISION_DETAILS_ANCHOR}`),
     postExport: (id: string) => route(`/admin/posts/${id}/export`),
     mediaUpload: route('/api/admin/media'),
   },

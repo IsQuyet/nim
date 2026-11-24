@@ -1,5 +1,7 @@
 'use client'
 
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import { samePostContent, type PostContent, type PublishedPost } from '../model'
 import { MarkdownPreviewLoader } from '@/modules/markdown/ui/preview-loader'
 import { MarkdownProse } from '@/modules/markdown/ui/prose'
@@ -13,6 +15,8 @@ type ComparedVersion = PostContent & {
 type MarkdownComparisonProps = {
   published: PublishedPost | null
   compared: ComparedVersion
+  /** 针对整个对照的操作，排在标题右侧。 */
+  action?: ReactNode
 }
 
 function VersionPanel({
@@ -50,25 +54,29 @@ function VersionPanel({
   )
 }
 
-export function MarkdownComparison({ published, compared }: MarkdownComparisonProps) {
+export function MarkdownComparison({ published, compared, action }: MarkdownComparisonProps) {
   const identical = published !== null && samePostContent(published, compared)
 
   return (
-    <section aria-label="Rendered version comparison" className="space-y-4">
-      <header className="space-y-1">
-        <h2 className="text-lg font-medium">Published comparison</h2>
-        {published ? (
-          <p className="text-sm text-muted-foreground">
-            Published revision {published.revisionId} · Publication {published.publicationId}
-          </p>
-        ) : (
-          <p role="status" className="text-sm text-muted-foreground">
-            This post has not been published yet.
-          </p>
-        )}
-        {identical && <p role="status" className="text-sm">These versions have no content differences.</p>}
+    <section aria-label="Rendered version comparison" className="@container space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        <div className="space-y-1">
+          <h2 className="text-lg font-medium">Published comparison</h2>
+          {published ? (
+            <p className="text-sm text-muted-foreground">
+              Published revision {published.revisionId} · Publication {published.publicationId}
+            </p>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              This post has not been published yet.
+            </p>
+          )}
+          {identical && <p role="status" className="text-sm">These versions have no content differences.</p>}
+        </div>
+        {action}
       </header>
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* 两个版本在所在的栏够宽时并排。只有一个版本时保持阅读宽度。 */}
+      <div className={cn('grid gap-4', published ? '@3xl:grid-cols-2' : 'max-w-2xl')}>
         {published && (
           <VersionPanel
             label="Published version"

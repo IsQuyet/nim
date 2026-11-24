@@ -13,7 +13,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
 }
 
 function Label({ className, ...props }: React.ComponentProps<"label">) {
-  return <label data-slot="label" className={cn("text-sm font-medium", className)} {...props} />
+  return <label data-slot="label" className={cn("block w-fit text-sm font-medium", className)} {...props} />
 }
 
 export { Input, Label, Textarea }

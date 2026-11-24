@@ -7,8 +7,8 @@ import { ThemeMenu } from './theme-menu'
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-xl">
-      <div className="canvas flex h-14 items-center gap-2">
+    <header className="sticky top-0 z-40 h-(--header-height) border-b bg-background/80 backdrop-blur-xl">
+      <div className="canvas flex h-full items-center gap-2">
         <NavigationDrawer title={PROFILE.name} />
         <Link href={routes.home} className="mr-4 font-medium">
           {PROFILE.name}

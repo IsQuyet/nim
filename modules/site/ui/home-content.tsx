@@ -129,31 +129,96 @@ type HomeContentProps = {
   posts: PublishedPostSummary[]
 }
 
+// 首页只展示最近的几篇，完整列表在文章索引页。
+const RECENT_POSTS = 4
+
+function Section({ className, children }: { className: string; children: React.ReactNode }) {
+  return (
+    <motion.section className={className} variants={VARIANTS_SECTION} transition={TRANSITION_SECTION}>
+      {children}
+    </motion.section>
+  )
+}
+
+function SectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex items-baseline justify-between gap-4">
+      <h2 className="text-sm font-medium text-muted-foreground">{children}</h2>
+      {action}
+    </div>
+  )
+}
+
 export function HomeContent({ posts }: HomeContentProps) {
   return (
     <motion.main
-      className="space-y-24"
+      className="canvas-grid gap-y-14 md:gap-y-20"
       variants={VARIANTS_CONTAINER}
       initial="hidden"
       animate="visible"
     >
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <div className="flex-1">
-          <p className="text-muted-foreground">
-            {PROFILE.description}
-          </p>
+      <Section className="col-span-full space-y-6 md:col-span-7">
+        <div>
+          <h1 className="text-3xl font-medium md:text-4xl">{PROFILE.name}</h1>
+          <p className="mt-2 text-lg text-muted-foreground">{PROFILE.role}</p>
         </div>
-      </motion.section>
+        <p className="max-w-140 text-lg">{PROFILE.description}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {SOCIAL_LINKS.map((link) => (
+            <MagneticSocialLink key={link.label} link={link.link}>
+              {link.label}
+            </MagneticSocialLink>
+          ))}
+          <a className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground" href={`mailto:${EMAIL}`}>
+            {EMAIL}
+          </a>
+        </div>
+      </Section>
 
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-5 text-lg font-medium">Selected Projects</h3>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <Section className="col-span-full md:col-span-5">
+        <SectionHeading
+          action={
+            <Link href={routes.blog} className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+              All posts
+            </Link>
+          }
+        >
+          Recent writing
+        </SectionHeading>
+        {posts.length > 0 ? (
+          <div className="flex flex-col">
+            <AnimatedBackground
+              enableHover
+              className="h-full w-full rounded-lg bg-accent"
+              transition={{
+                type: 'spring',
+                bounce: 0,
+                duration: 0.2,
+              }}
+            >
+              {posts.slice(0, RECENT_POSTS).map((post) => (
+                <Link
+                  key={post.id}
+                  className="-mx-3 rounded-xl px-3 py-3"
+                  href={routes.post(post.id)}
+                  data-id={post.id}
+                >
+                  <div className="flex flex-col space-y-1">
+                    <h3 className="font-medium">{post.title}</h3>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">{post.description}</p>
+                  </div>
+                </Link>
+              ))}
+            </AnimatedBackground>
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No posts yet.</p>
+        )}
+      </Section>
+
+      <Section className="col-span-full">
+        <SectionHeading>Selected projects</SectionHeading>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
           {PROJECTS.map((project) => (
             <div key={project.name} className="space-y-2">
               {project.video && (
@@ -163,28 +228,23 @@ export function HomeContent({ posts }: HomeContentProps) {
               )}
               <div className="px-1">
                 <a
-                  className="group relative inline-block font-[450] text-foreground"
+                  className="group relative inline-block font-medium text-foreground"
                   href={project.link}
                   target="_blank"
                 >
                   {project.name}
                   <span className="absolute bottom-0.5 left-0 block h-[1px] w-full max-w-0 bg-foreground transition-all duration-200 group-hover:max-w-full"></span>
                 </a>
-                <p className="text-base text-muted-foreground">
-                  {project.description}
-                </p>
+                <p className="text-muted-foreground">{project.description}</p>
               </div>
             </div>
           ))}
         </div>
-      </motion.section>
+      </Section>
 
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-5 text-lg font-medium">Work Experience</h3>
-        <div className="flex flex-col space-y-2">
+      <Section className="col-span-full">
+        <SectionHeading>Work experience</SectionHeading>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {WORK_EXPERIENCE.map((job) => (
             <a
               className="relative overflow-hidden rounded-2xl bg-border p-[1px]"
@@ -198,16 +258,12 @@ export function HomeContent({ posts }: HomeContentProps) {
                 size={64}
               />
               <div className="relative h-full w-full rounded-[15px] bg-background p-4">
-                <div className="relative flex w-full flex-row justify-between">
+                <div className="relative flex w-full flex-row justify-between gap-4">
                   <div>
-                    <h4 className="font-normal">
-                      {job.title}
-                    </h4>
-                    <p className="text-muted-foreground">
-                      {job.company}
-                    </p>
+                    <h3 className="font-medium">{job.title}</h3>
+                    <p className="text-muted-foreground">{job.company}</p>
                   </div>
-                  <p className="text-muted-foreground">
+                  <p className="shrink-0 text-sm text-muted-foreground">
                     {job.start} - {job.end}
                   </p>
                 </div>
@@ -215,63 +271,7 @@ export function HomeContent({ posts }: HomeContentProps) {
             </a>
           ))}
         </div>
-      </motion.section>
-
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-3 text-lg font-medium">Blog</h3>
-        <div className="flex flex-col space-y-0">
-          <AnimatedBackground
-            enableHover
-            className="h-full w-full rounded-lg bg-accent"
-            transition={{
-              type: 'spring',
-              bounce: 0,
-              duration: 0.2,
-            }}
-          >
-            {posts.map((post) => (
-              <Link
-                key={post.id}
-                className="-mx-3 rounded-xl px-3 py-3"
-                href={routes.post(post.id)}
-                data-id={post.id}
-              >
-                <div className="flex flex-col space-y-1">
-                  <h4 className="font-normal">
-                    {post.title}
-                  </h4>
-                  <p className="text-muted-foreground">
-                    {post.description}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </AnimatedBackground>
-        </div>
-      </motion.section>
-
-      <motion.section
-        variants={VARIANTS_SECTION}
-        transition={TRANSITION_SECTION}
-      >
-        <h3 className="mb-5 text-lg font-medium">Connect</h3>
-        <p className="mb-5 text-muted-foreground">
-          Feel free to contact me at{' '}
-          <a className="text-foreground underline" href={`mailto:${EMAIL}`}>
-            {EMAIL}
-          </a>
-        </p>
-        <div className="flex items-center justify-start space-x-3">
-          {SOCIAL_LINKS.map((link) => (
-            <MagneticSocialLink key={link.label} link={link.link}>
-              {link.label}
-            </MagneticSocialLink>
-          ))}
-        </div>
-      </motion.section>
+      </Section>
     </motion.main>
   )
 }

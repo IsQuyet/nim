@@ -109,7 +109,7 @@ describe('管理员修订历史页', () => {
     expect(within(items[2]).getByRole('link', { name: 'Selected title' }).getAttribute('aria-current'))
       .toBe('true')
     expect(within(items[2]).getByRole('link', { name: 'Restored from revision 4' }).getAttribute('href'))
-      .toBe(`/admin/posts/${id}/history?page=2&revisionId=4`)
+      .toBe(`/admin/posts/${id}/history?page=2&revisionId=4#revision`)
   })
 
   it('并排渲染发布版与选中修订，排除当前草稿指针正文', async () => {
@@ -136,7 +136,7 @@ describe('管理员修订历史页', () => {
     expect(within(comparison).getByRole('article', { name: 'Selected revision' })).toBeDefined()
   })
 
-  it('分页保留当前选择，摘要链接保留当前页', async () => {
+  it('分页保留当前选择，摘要链接保留当前页并指向详情', async () => {
     await renderHistory({ page: '2', revisionId: '6' })
     const nav = screen.getByRole('navigation', { name: 'Revision pages' })
     expect(within(nav).getByText('Page 2 of 3')).toBeDefined()
@@ -146,7 +146,8 @@ describe('管理员修订历史页', () => {
       .toBe(`/admin/posts/${id}/history?page=3&revisionId=6`)
     expect(within(screen.getByRole('list', { name: 'Revisions' }))
       .getByRole('link', { name: 'Current draft title' }).getAttribute('href'))
-      .toBe(`/admin/posts/${id}/history?page=2&revisionId=7`)
+      .toBe(`/admin/posts/${id}/history?page=2&revisionId=7#revision`)
+    expect(screen.getByRole('region', { name: 'Revision details' }).id).toBe('revision')
   })
 
   it.each([1, 3])('第%d页不提供越界分页链接', async page => {

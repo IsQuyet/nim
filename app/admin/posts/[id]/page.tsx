@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Canvas } from '@/components/layout/canvas'
+import { PageHeader } from '@/components/layout/page-header'
 import { getAdminDraft } from '@/modules/posts/server/admin'
 import { PostEditor } from '@/modules/posts/ui/post-editor'
 import { routes } from '@/lib/routes'
-import { Focus } from '@/components/layout/focus'
 
 export const metadata: Metadata = { title: 'Edit draft' }
 
@@ -18,21 +18,15 @@ export default async function EditDraftPage({ params }: EditDraftPageProps) {
   if (!draft) notFound()
 
   return (
-    <Focus>
-      <main className="space-y-8">
-        <section className="space-y-3">
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <Link href={routes.admin.home} className="underline underline-offset-4">
-              Back to posts
-            </Link>
-          </div>
-          <h1 className="text-lg font-medium">Edit draft</h1>
-          <p className="text-xs break-all text-muted-foreground">
-            /blog/{draft.id}
-          </p>
-        </section>
+    <Canvas>
+      <main>
+        <PageHeader
+          title="Edit draft"
+          back={{ href: routes.admin.home, label: 'Back to posts' }}
+          description={<p className="text-xs break-all">/blog/{draft.id}</p>}
+        />
         <PostEditor key={draft.id} postId={draft.id} initial={draft} />
       </main>
-    </Focus>
+    </Canvas>
   )
 }

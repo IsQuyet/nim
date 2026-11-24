@@ -80,11 +80,19 @@
   画布是全站内容共用的对齐基准。canvas 给出页边距和最大宽度，页头、主体、页脚的
   内容都放在它里面，背景和分隔线画在它外面。canvas-grid 在画布内排出 4、8、12 列，
   模块用 col-span-* 占列。
+
+  页头固定在视口顶部，高度是 --header-height。主体画布上下各留 --canvas-block-padding。
+  --canvas-top 是页面在最顶端时主体内容的起始线，停靠的辅栏对齐到这条线，
+  所以辅栏从页面顶端起就在停靠位置上。--anchor-top 是跳转到页内锚点时留在目标上方的距离。
 */
 :root {
+  --header-height: 3.5rem;
   --canvas-margin: 1rem;
   --canvas-gutter: 1rem;
   --canvas-columns: 4;
+  --canvas-block-padding: 2.5rem;
+  --canvas-top: calc(var(--header-height) + var(--canvas-block-padding));
+  --anchor-top: calc(var(--header-height) + 1.5rem);
 }
 
 @media (width >= theme(--breakpoint-sm)) {
@@ -98,6 +106,7 @@
 @media (width >= theme(--breakpoint-md)) {
   :root {
     --canvas-columns: 12;
+    --canvas-block-padding: 3.5rem;
   }
 }
 
@@ -174,7 +183,7 @@
 }
 
 .prose :where(h1, h2, h3, h4, h5, h6) {
-  scroll-margin-top: 5rem;
+  scroll-margin-top: var(--anchor-top);
 }
 
 .markdown-heading-anchor {

@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Canvas } from '@/components/layout/canvas'
+import { PageHeader } from '@/components/layout/page-header'
+import { Panes } from '@/components/layout/panes'
 import { MarkdownComparison } from '@/modules/posts/ui/version-comparison'
 import { getAdminRevisionHistory } from '@/modules/posts/server/admin'
-import type { PostRevisionSummary } from '@/modules/posts/history'
+import type { PostRevisionHistory, PostRevisionSummary } from '@/modules/posts/history'
 import { samePostContent } from '@/modules/posts/model'
 import { restoreRevisionAction } from '@/modules/posts/server/actions/history'
 import { RestoreForm } from '@/modules/posts/ui/restore-form'
-import { routes } from '@/lib/routes'
-import { Focus } from '@/components/layout/focus'
+import { REVISION_DETAILS_ANCHOR, routes } from '@/lib/routes'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Revision history' }
 
@@ -32,24 +35,34 @@ const dateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: 'UTC',
 })
 
-function revisionHref(id: string, page: number, revisionId: number) {
-  return routes.admin.postRevision(id, { page, revisionId })
-}
+const pageLinkClassName = 'underline underline-offset-4 transition-colors hover:text-muted-foreground'
 
-function RevisionMarkers({
-  revisionId,
-  draftRevisionId,
-  publishedRevisionId,
-}: {
-  revisionId: number
-  draftRevisionId: number
-  publishedRevisionId: number | undefined
+/** 一条修订的编号、时间、来源，以及它与草稿、发布版的关系。 */
+function RevisionFacts({ revision, history, className }: {
+  revision: PostRevisionSummary
+  history: PostRevisionHistory
+  className: string
 }) {
+  const { draft, published, page } = history
+
   return (
-    <>
-      {revisionId === draftRevisionId && <span>Last saved revision</span>}
-      {revisionId === publishedRevisionId && <span>Currently published</span>}
-    </>
+    <div className={cn('flex flex-wrap text-xs text-muted-foreground', className)}>
+      <span>Revision {revision.id}</span>
+      <time dateTime={revision.createdAt}>
+        {dateFormatter.format(new Date(revision.createdAt))} UTC
+      </time>
+      <span>{sourceLabels[revision.source]}</span>
+      {revision.id === draft.revisionId && <span className="text-foreground">Last saved revision</span>}
+      {revision.id === published?.revisionId && <span className="text-foreground">Currently published</span>}
+      {revision.restoredFromRevisionId !== null && (
+        <Link
+          href={routes.admin.postRevision(draft.id, { page, revisionId: revision.restoredFromRevisionId })}
+          className="underline underline-offset-4 transition-colors hover:text-foreground"
+        >
+          Restored from revision {revision.restoredFromRevisionId}
+        </Link>
+      )}
+    </div>
   )
 }
 
@@ -60,112 +73,98 @@ export default async function RevisionHistoryPage({ params, searchParams }: Revi
   const { draft, published, selectedRevision, revisions, page, pageCount, revisionCount } = history
 
   return (
-    <Focus>
-      <main className="space-y-8">
-        <section className="space-y-3">
-          <Link
-            href={routes.admin.post(id)}
-            className="text-sm text-muted-foreground underline underline-offset-4"
-          >
-            Back to editor
-          </Link>
-          <h1 className="text-lg font-medium">Revision history</h1>
-          <p className="text-muted-foreground">
-            {revisionCount} {revisionCount === 1 ? 'revision' : 'revisions'}. Restoring changes only the draft.
-          </p>
-        </section>
-        <ol aria-label="Revisions" className="divide-y divide-border">
-          {revisions.map(revision => (
-            <li key={revision.id} className="space-y-2 py-4 first:pt-0 last:pb-0">
-              <Link
-                href={revisionHref(id, page, revision.id)}
-                aria-current={selectedRevision.id === revision.id ? 'true' : undefined}
-                className="font-medium underline underline-offset-4 transition-colors hover:text-muted-foreground"
-              >
-                {revision.title}
-              </Link>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>Revision {revision.id}</span>
-                <time dateTime={revision.createdAt}>
-                  {dateFormatter.format(new Date(revision.createdAt))} UTC
-                </time>
-                <span>{sourceLabels[revision.source]}</span>
-                <RevisionMarkers
-                  revisionId={revision.id}
-                  draftRevisionId={draft.revisionId}
-                  publishedRevisionId={published?.revisionId}
-                />
-                {revision.restoredFromRevisionId !== null && (
-                  <Link
-                    href={revisionHref(id, page, revision.restoredFromRevisionId)}
-                    className="underline underline-offset-4"
-                  >
-                    Restored from revision {revision.restoredFromRevisionId}
-                  </Link>
-                )}
+    <Canvas>
+      <main>
+        <Panes
+          split="list-detail"
+          side={
+            <>
+              <PageHeader
+                title="Revision history"
+                back={{ href: routes.admin.post(id), label: 'Back to editor' }}
+                description={
+                  <p>
+                    {revisionCount} {revisionCount === 1 ? 'revision' : 'revisions'}. Restoring changes only the draft.
+                  </p>
+                }
+              />
+              <div className="space-y-6 md:min-h-0 md:overflow-y-auto md:pr-1">
+                <ol aria-label="Revisions" className="border-l">
+                  {revisions.map(revision => {
+                    const selected = selectedRevision.id === revision.id
+
+                    return (
+                      <li
+                        key={revision.id}
+                        className={cn('-ml-px space-y-1 border-l-2 py-2.5 pl-4', selected ? 'border-foreground' : 'border-transparent')}
+                      >
+                        <Link
+                          href={routes.admin.postRevision(id, { page, revisionId: revision.id })}
+                          aria-current={selected ? 'true' : undefined}
+                          className={cn(
+                            'block w-fit font-medium transition-colors hover:text-foreground',
+                            selected ? 'text-foreground' : 'text-muted-foreground',
+                          )}
+                        >
+                          {revision.title}
+                        </Link>
+                        <RevisionFacts revision={revision} history={history} className="gap-x-3 gap-y-0.5" />
+                      </li>
+                    )
+                  })}
+                </ol>
+                <nav aria-label="Revision pages" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
+                  {page > 1 && (
+                    <Link href={routes.admin.postHistoryPage(id, { page: page - 1, revisionId: selectedRevision.id })} className={pageLinkClassName}>
+                      Previous page
+                    </Link>
+                  )}
+                  <span className="text-muted-foreground">Page {page} of {pageCount}</span>
+                  {page < pageCount && (
+                    <Link href={routes.admin.postHistoryPage(id, { page: page + 1, revisionId: selectedRevision.id })} className={pageLinkClassName}>
+                      Next page
+                    </Link>
+                  )}
+                </nav>
               </div>
-            </li>
-          ))}
-        </ol>
-        <nav aria-label="Revision pages" className="flex flex-wrap items-center justify-between gap-4 text-sm">
-          {page > 1 && (
-            <Link href={revisionHref(id, page - 1, selectedRevision.id)} className="underline underline-offset-4">
-              Previous page
-            </Link>
-          )}
-          <span className="text-muted-foreground">Page {page} of {pageCount}</span>
-          {page < pageCount && (
-            <Link href={revisionHref(id, page + 1, selectedRevision.id)} className="underline underline-offset-4">
-              Next page
-            </Link>
-          )}
-        </nav>
-        <section aria-label="Revision details" className="space-y-4 border-t border-border pt-6">
-          <h2 className="text-lg font-medium">{selectedRevision.title}</h2>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>Revision {selectedRevision.id}</span>
-            <time dateTime={selectedRevision.createdAt}>
-              {dateFormatter.format(new Date(selectedRevision.createdAt))} UTC
-            </time>
-            <span>{sourceLabels[selectedRevision.source]}</span>
-            <RevisionMarkers
-              revisionId={selectedRevision.id}
-              draftRevisionId={draft.revisionId}
-              publishedRevisionId={published?.revisionId}
+            </>
+          }
+        >
+          {/* 两栏并排时详情与列表同起于画布顶边，选中后页面回到顶端。上下排列时详情在列表之后，选中后滚到详情。 */}
+          <section
+            id={REVISION_DETAILS_ANCHOR}
+            aria-label="Revision details"
+            className="scroll-mt-(--anchor-top) space-y-8 border-t pt-10 md:scroll-mt-(--canvas-top) md:border-t-0 md:pt-0"
+          >
+            <header className="space-y-2">
+              <h2 className="text-xl font-medium">{selectedRevision.title}</h2>
+              <RevisionFacts revision={selectedRevision} history={history} className="gap-x-4 gap-y-1" />
+              {selectedRevision.description && (
+                <p className="text-muted-foreground">{selectedRevision.description}</p>
+              )}
+            </header>
+            <RestoreForm
+              key={`${selectedRevision.id}:${draft.revisionId}`}
+              action={restoreRevisionAction.bind(null, id, {
+                revisionId: selectedRevision.id,
+                expectedRevisionId: draft.revisionId,
+              })}
+              disabled={samePostContent(selectedRevision, draft)}
             />
-            {selectedRevision.restoredFromRevisionId !== null && (
-              <Link
-                href={revisionHref(id, page, selectedRevision.restoredFromRevisionId)}
-                className="underline underline-offset-4"
-              >
-                Restored from revision {selectedRevision.restoredFromRevisionId}
-              </Link>
-            )}
-          </div>
-          {selectedRevision.description && (
-            <p className="text-muted-foreground">{selectedRevision.description}</p>
-          )}
-          <RestoreForm
-            key={`${selectedRevision.id}:${draft.revisionId}`}
-            action={restoreRevisionAction.bind(null, id, {
-              revisionId: selectedRevision.id,
-              expectedRevisionId: draft.revisionId,
-            })}
-            disabled={samePostContent(selectedRevision, draft)}
-          />
-          <MarkdownComparison
-            published={published}
-            compared={{
-              label: 'Selected revision',
-              revisionId: selectedRevision.id,
-              detail: `${sourceLabels[selectedRevision.source]} · ${dateFormatter.format(new Date(selectedRevision.createdAt))} UTC`,
-              title: selectedRevision.title,
-              description: selectedRevision.description,
-              body: selectedRevision.body,
-            }}
-          />
-        </section>
+            <MarkdownComparison
+              published={published}
+              compared={{
+                label: 'Selected revision',
+                revisionId: selectedRevision.id,
+                detail: `${sourceLabels[selectedRevision.source]} · ${dateFormatter.format(new Date(selectedRevision.createdAt))} UTC`,
+                title: selectedRevision.title,
+                description: selectedRevision.description,
+                body: selectedRevision.body,
+              }}
+            />
+          </section>
+        </Panes>
       </main>
-    </Focus>
+    </Canvas>
   )
 }
