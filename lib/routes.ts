@@ -17,12 +17,23 @@ function revisionQuery({ page, revisionId }: RevisionSelection) {
   return new URLSearchParams({ page: String(page), revisionId: String(revisionId) }).toString()
 }
 
+function searchParamsQuery(query: string, scope: 'all' | 'posts' | 'gallery') {
+  const params = new URLSearchParams()
+  if (query.trim()) params.set('q', query.trim())
+  if (scope !== 'all') params.set('type', scope)
+  const serialized = params.toString()
+  return serialized ? route(`/search?${serialized}`) : route('/search')
+}
+
 export const routes = {
   home: route('/'),
   blog: route('/blog'),
   post: (id: string) => route(`/blog/${id}`),
   gallery: route('/gallery'),
   galleryItem: (id: string) => route(`/gallery/${id}`),
+  search: route('/search'),
+  searchWith: searchParamsQuery,
+  searchApi: route('/api/search'),
   media: (id: string) => route(`${MEDIA_PATH_PREFIX}${id}`),
   admin: {
     home: route('/admin'),

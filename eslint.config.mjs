@@ -5,7 +5,7 @@ import nextTs from 'eslint-config-next/typescript'
 import prettier from 'eslint-config-prettier/flat'
 
 // 模块按层排列，后面的层可以引用前面的层，同层之间互不引用。新增模块时在这里登记。
-const moduleTiers = [['auth', 'markdown'], ['media'], ['posts', 'gallery'], ['site']]
+const moduleTiers = [['auth', 'markdown'], ['media'], ['posts', 'gallery'], ['search'], ['site']]
 
 const moduleNames = moduleTiers.flat()
 const unlisted = readdirSync(new URL('./modules', import.meta.url), { withFileTypes: true })

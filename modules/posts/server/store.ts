@@ -182,3 +182,27 @@ export function createPostStore(database: AppDatabase): PostStore {
     listPublishedPosts,
   }
 }
+
+export type PublishedPostSearchDocument = {
+  id: string
+  title: string
+  description: string
+  body: string
+  publishedAt: string
+}
+
+/** 查询所有公开版本文章及其正文，供跨内容站内检索使用。 */
+export function listPublishedPostDocuments(database: Pick<AppDatabase, 'select'>): PublishedPostSearchDocument[] {
+  return database.select({
+    id: posts.id,
+    title: postRevisions.title,
+    description: postRevisions.description,
+    body: postRevisions.body,
+    publishedAt: postPublications.publishedAt,
+  }).from(posts)
+    .innerJoin(postPublished, eq(postPublished.postId, posts.id))
+    .innerJoin(postPublications, eq(postPublications.id, postPublished.publicationId))
+    .innerJoin(postRevisions, eq(postRevisions.id, postPublications.revisionId))
+    .orderBy(desc(postPublications.publishedAt), asc(posts.id))
+    .all()
+}

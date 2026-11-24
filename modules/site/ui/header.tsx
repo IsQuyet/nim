@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { AdminEntry } from '@/modules/auth/ui/admin-entry'
+import { SearchTrigger } from '@/modules/search/ui/search-command'
 import { routes } from '@/lib/routes'
 import { PROFILE } from '../data'
 import { NavigationDrawer, PinnedNavigation } from './site-navigation'
@@ -15,6 +16,7 @@ export function Header() {
         </Link>
         <PinnedNavigation />
         <div className="ml-auto flex items-center gap-1">
+          <SearchTrigger />
           <ThemeMenu />
           <AdminEntry />
         </div>
