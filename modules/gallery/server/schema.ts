@@ -1,7 +1,7 @@
-import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, pgTable, text } from 'drizzle-orm/pg-core'
 import { mediaAssets } from '@/modules/media/server/schema'
 
-export const galleryItems = sqliteTable('gallery_items', {
+export const galleryItems = pgTable('gallery_items', {
   id: text('id').primaryKey(),
   mediaId: text('media_id')
     .notNull()

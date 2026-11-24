@@ -1,15 +1,15 @@
 import { sql } from 'drizzle-orm'
-import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
+import { check, foreignKey, index, integer, pgTable, primaryKey, serial, text, unique } from 'drizzle-orm/pg-core'
 import { mediaAssets } from '@/modules/media/server/schema'
 import { revisionSources, revisionSourceSchema } from '../model'
 
-export const posts = sqliteTable('posts', {
+export const posts = pgTable('posts', {
   id: text('id').primaryKey(),
   createdAt: text('created_at').notNull(),
 })
 
-export const postRevisions = sqliteTable('post_revisions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const postRevisions = pgTable('post_revisions', {
+  id: serial('id').primaryKey(),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description').notNull(),
@@ -28,7 +28,7 @@ export const postRevisions = sqliteTable('post_revisions', {
   check('post_revisions_restore_check', sql`(${table.source} = ${sql.raw(`'${revisionSourceSchema.enum.restore}'`)}) = (${table.restoredFromRevisionId} is not null)`),
 ])
 
-export const postDrafts = sqliteTable('post_drafts', {
+export const postDrafts = pgTable('post_drafts', {
   postId: text('post_id').primaryKey().references(() => posts.id, { onDelete: 'cascade' }),
   revisionId: integer('revision_id').notNull(),
 }, table => [
@@ -38,7 +38,7 @@ export const postDrafts = sqliteTable('post_drafts', {
   }),
 ])
 
-export const postWriteReceipts = sqliteTable('post_write_receipts', {
+export const postWriteReceipts = pgTable('post_write_receipts', {
   operationId: text('operation_id').primaryKey(),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   requestHash: text('request_hash').notNull(),
@@ -56,8 +56,8 @@ export const postWriteReceipts = sqliteTable('post_write_receipts', {
   }),
 ])
 
-export const postPublications = sqliteTable('post_publications', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const postPublications = pgTable('post_publications', {
+  id: serial('id').primaryKey(),
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   revisionId: integer('revision_id').notNull(),
   publishedAt: text('published_at').notNull(),
@@ -70,7 +70,7 @@ export const postPublications = sqliteTable('post_publications', {
   }),
 ])
 
-export const postPublicationMedia = sqliteTable('post_publication_media', {
+export const postPublicationMedia = pgTable('post_publication_media', {
   postId: text('post_id').notNull(),
   publicationId: integer('publication_id').notNull(),
   mediaId: text('media_id').notNull().references(() => mediaAssets.id, { onDelete: 'restrict' }),
@@ -83,7 +83,7 @@ export const postPublicationMedia = sqliteTable('post_publication_media', {
   }).onDelete('cascade'),
 ])
 
-export const postPublished = sqliteTable('post_published', {
+export const postPublished = pgTable('post_published', {
   postId: text('post_id').primaryKey().references(() => posts.id, { onDelete: 'cascade' }),
   publicationId: integer('publication_id').notNull(),
 }, table => [

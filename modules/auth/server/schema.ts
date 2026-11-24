@@ -1,33 +1,27 @@
-import { customType, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 
-const date = customType<{ data: Date; driverData: string }>({
-  dataType: () => 'date',
-  toDriver: value => value.toISOString(),
-  fromDriver: value => new Date(value),
-})
-
-export const user = sqliteTable('user', {
+export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull(),
+  emailVerified: boolean('emailVerified').notNull(),
   image: text('image'),
-  createdAt: date('createdAt').notNull(),
-  updatedAt: date('updatedAt').notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true, mode: 'date' }).notNull(),
 })
 
-export const session = sqliteTable('session', {
+export const session = pgTable('session', {
   id: text('id').primaryKey(),
-  expiresAt: date('expiresAt').notNull(),
+  expiresAt: timestamp('expiresAt', { withTimezone: true, mode: 'date' }).notNull(),
   token: text('token').notNull().unique(),
-  createdAt: date('createdAt').notNull(),
-  updatedAt: date('updatedAt').notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true, mode: 'date' }).notNull(),
   ipAddress: text('ipAddress'),
   userAgent: text('userAgent'),
   userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, table => [index('session_userId_idx').on(table.userId)])
 
-export const account = sqliteTable('account', {
+export const account = pgTable('account', {
   id: text('id').primaryKey(),
   accountId: text('accountId').notNull(),
   providerId: text('providerId').notNull(),
@@ -35,19 +29,19 @@ export const account = sqliteTable('account', {
   accessToken: text('accessToken'),
   refreshToken: text('refreshToken'),
   idToken: text('idToken'),
-  accessTokenExpiresAt: date('accessTokenExpiresAt'),
-  refreshTokenExpiresAt: date('refreshTokenExpiresAt'),
+  accessTokenExpiresAt: timestamp('accessTokenExpiresAt', { withTimezone: true, mode: 'date' }),
+  refreshTokenExpiresAt: timestamp('refreshTokenExpiresAt', { withTimezone: true, mode: 'date' }),
   scope: text('scope'),
   password: text('password'),
-  createdAt: date('createdAt').notNull(),
-  updatedAt: date('updatedAt').notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true, mode: 'date' }).notNull(),
 }, table => [index('account_userId_idx').on(table.userId)])
 
-export const verification = sqliteTable('verification', {
+export const verification = pgTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expiresAt: date('expiresAt').notNull(),
-  createdAt: date('createdAt').notNull(),
-  updatedAt: date('updatedAt').notNull(),
+  expiresAt: timestamp('expiresAt', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true, mode: 'date' }).notNull(),
 }, table => [index('verification_identifier_idx').on(table.identifier)])
