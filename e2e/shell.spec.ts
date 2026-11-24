@@ -1,4 +1,5 @@
-import { test, expect } from './fixtures'
+import { createTestDraft, publishTestDraft } from '../test/post-commands'
+import { test, expect, withWritingStore } from './fixtures'
 
 const phone = { width: 390, height: 800 }
 const desktop = { width: 1280, height: 800 }
@@ -66,4 +67,35 @@ test('访客从页头进入登录页，管理员从页头菜单进入管理、�
   await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeVisible()
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/admin\/login$/)
+})
+
+test('文章页在宽屏显示停靠目录并随跳转高亮，在窄屏折叠在正文上方', async ({ page, runtime }) => {
+  const fillers = Array.from({ length: 18 }, (_, index) => `Paragraph ${index + 1} with enough content to create scroll distance.`).join('\n\n')
+  const post = await withWritingStore(runtime, writer => {
+    const draft = createTestDraft(writer, {
+      title: 'Reading layout with ToC',
+      description: 'Test headings',
+      body: `# Reading layout\n\n## First section\n\n${fillers}\n\n### Nested detail\n\n${fillers}\n\n## Closing notes\n\nEnd.`,
+    })
+    return publishTestDraft(writer, draft)
+  })
+
+  await page.setViewportSize(desktop)
+  await page.goto(`/blog/${post.id}`)
+  const desktopToc = page.getByRole('navigation', { name: 'On this page' })
+  await expect(desktopToc).toBeVisible()
+  const closingLink = desktopToc.getByRole('link', { name: 'Closing notes', exact: true })
+  await closingLink.click()
+  await expect(page).toHaveURL(new RegExp(`/blog/${post.id}#closing-notes$`))
+  await expect(closingLink).toHaveAttribute('aria-current', 'location')
+
+  await page.setViewportSize(phone)
+  await expect(desktopToc).toBeHidden()
+  const summary = page.locator('details > summary', { hasText: 'On this page' })
+  await expect(summary).toBeVisible()
+  await summary.click()
+  const mobileToc = page.getByRole('navigation', { name: 'On this page' })
+  await expect(mobileToc).toBeVisible()
+  await mobileToc.getByRole('link', { name: 'First section', exact: true }).click()
+  await expect(mobileToc).toBeHidden()
 })
