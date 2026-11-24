@@ -99,3 +99,21 @@ test('文章页在宽屏显示停靠目录并随跳转高亮，在窄屏折叠�
   await mobileToc.getByRole('link', { name: 'First section', exact: true }).click()
   await expect(mobileToc).toBeHidden()
 })
+
+test('一屏短页面等待页脚文字切换动画时，不溢出视口产生短暂纵向滚动条', async ({ page }) => {
+  await page.setViewportSize(desktop)
+  await page.goto('/blog')
+  const initialOverflow = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)
+  expect(initialOverflow).toBe(false)
+
+  // 采样跨过 TextLoop 默认 2 秒切换周期，确认动画过程中文档高度不短暂撑破 100vh。
+  const overflowed = await page.evaluate(async () => {
+    const end = performance.now() + 2500
+    while (performance.now() < end) {
+      if (document.documentElement.scrollHeight > window.innerHeight) return true
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    }
+    return false
+  })
+  expect(overflowed).toBe(false)
+})

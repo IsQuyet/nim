@@ -3,7 +3,7 @@ import { TextLoop } from '@/components/ui/text-loop'
 
 export function Footer() {
   return (
-    <footer className="border-t">
+    <footer className="overflow-hidden border-t">
       <div className="canvas flex h-14 items-center">
         <a href="https://github.com/ibelick/nim" target="_blank">
           <TextLoop className="text-xs text-muted-foreground">
