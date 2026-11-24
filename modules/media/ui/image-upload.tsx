@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import type { MarkdownImageInsertion } from '@/modules/markdown/ui/editor'
-import { formatMarkdownImage, mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '../model'
-import { routes } from '@/lib/routes'
+import { formatMarkdownImage, mediaImageFormats, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '../model'
+import { uploadMediaFile } from '../upload-client'
 
 type MarkdownImageUploadProps = {
   prepareInsertion: () => MarkdownImageInsertion | null
@@ -53,19 +53,9 @@ export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadPro
     setBusy(true)
     setError(null)
     try {
-      const form = new FormData()
-      form.set('id', uploadId)
-      form.set('file', file)
-      const response = await fetch(routes.admin.mediaUpload, { method: 'POST', body: form, signal: controller.signal })
-      const raw: unknown = await response.json()
+      const uploaded = await uploadMediaFile({ id: uploadId, file, signal: controller.signal })
       if (controller.signal.aborted) return
-      const result = mediaUploadResponseSchema.safeParse(raw)
-      if (!result.success) throw new Error('The upload response was invalid.')
-      if (!response.ok || result.data.status === 'error') {
-        throw new Error(result.data.status === 'error' ? result.data.message : 'Could not upload the image.')
-      }
-      if (result.data.media.id !== uploadId) throw new Error('The upload response belongs to a different image.')
-      const markdown = formatMarkdownImage(result.data.media.id, result.data.media.originalName)
+      const markdown = formatMarkdownImage(uploaded.id, uploaded.originalName)
       if (insertion.current?.insert(markdown)) {
         finishInsertion()
       } else {
