@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { initializeDatabase, openDatabase, type ManagedDatabase } from '@/lib/server/database'
 import { mediaAssets } from '@/modules/media/server/schema'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
 import { createMediaStore } from '@/modules/media/server/store'
@@ -15,17 +15,17 @@ import { saveGalleryItemSchema } from '../model'
 import { createGalleryStore } from './store'
 
 let directory: string
-let database: AppDatabase
+let database: ManagedDatabase
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-gallery-store-'))
-  const filename = join(directory, 'nim.sqlite')
-  await initializeDatabase(filename)
-  database = openDatabase(filename)
+  const target = join(directory, 'pgdata')
+  await initializeDatabase(target)
+  database = await openDatabase(target)
 })
 
-afterEach(() => {
-  database?.$client.close()
+afterEach(async () => {
+  await database?.close()
   if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -49,7 +49,7 @@ describe('画廊存储与发布状态控制', () => {
     const media = await uploadReadyMedia()
     const store = createGalleryStore(database)
 
-    const saved = store.save({
+    const saved = await store.save({
       mediaId: media.id,
       title: 'Harbor Mist',
       caption: 'Early morning ferry',
@@ -60,27 +60,27 @@ describe('画廊存储与发布状态控制', () => {
     expect(saved.status).toBe('success')
     if (saved.status !== 'success') return
 
-    expect(store.listPublished()).toEqual([])
-    expect(store.getPublished(saved.item.id)).toBeNull()
-    expect(store.listAll()).toHaveLength(1)
+    expect(await store.listPublished()).toEqual([])
+    expect(await store.getPublished(saved.item.id)).toBeNull()
+    expect(await store.listAll()).toHaveLength(1)
 
-    const published = store.setStatus(saved.item.id, 'published')
+    const published = await store.setStatus(saved.item.id, 'published')
     expect(published.status).toBe('success')
     if (published.status !== 'success') return
     expect(published.item.publishedAt).toBeTruthy()
-    expect(store.listPublished()).toHaveLength(1)
-    expect(store.getPublished(saved.item.id)?.title).toBe('Harbor Mist')
+    expect(await store.listPublished()).toHaveLength(1)
+    expect((await store.getPublished(saved.item.id))?.title).toBe('Harbor Mist')
 
-    const unpublished = store.setStatus(saved.item.id, 'draft')
+    const unpublished = await store.setStatus(saved.item.id, 'draft')
     expect(unpublished.status).toBe('success')
     if (unpublished.status !== 'success') return
     expect(unpublished.item.publishedAt).toBeNull()
-    expect(store.listPublished()).toEqual([])
+    expect(await store.listPublished()).toEqual([])
   })
 
   it('拒绝不存在或未就绪的媒体，并在被引用时由外键阻止直接删媒体', async () => {
     const store = createGalleryStore(database)
-    const missing = store.save({
+    const missing = await store.save({
       mediaId: randomUUID(),
       title: 'Missing',
       caption: '',
@@ -91,7 +91,7 @@ describe('画廊存储与发布状态控制', () => {
     expect(missing.status).toBe('invalid')
 
     const media = await uploadReadyMedia('protected.png')
-    const saved = store.save({
+    const saved = await store.save({
       mediaId: media.id,
       title: 'Protected',
       caption: '',
@@ -102,11 +102,11 @@ describe('画廊存储与发布状态控制', () => {
     expect(saved.status).toBe('success')
     if (saved.status !== 'success') return
 
-    expect(() => database.delete(mediaAssets).where(eq(mediaAssets.id, media.id)).run()).toThrow()
+    await expect(database.delete(mediaAssets).where(eq(mediaAssets.id, media.id))).rejects.toThrow()
 
-    expect(store.remove(saved.item.id)).toEqual({ status: 'success', id: saved.item.id })
-    expect(store.get(saved.item.id)).toBeNull()
-    expect(database.select().from(mediaAssets).where(eq(mediaAssets.id, media.id)).get()).toBeDefined()
+    expect(await store.remove(saved.item.id)).toEqual({ status: 'success', id: saved.item.id })
+    expect(await store.get(saved.item.id)).toBeNull()
+    expect((await database.select().from(mediaAssets).where(eq(mediaAssets.id, media.id)))[0]).toBeDefined()
   })
 
   it('校验非法拍摄日期与空标题', () => {

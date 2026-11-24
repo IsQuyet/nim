@@ -91,12 +91,12 @@ function operationId(route: Route) {
 test('发布当前可见内容，私有修改和历史恢复不改变公开版本', async ({ page, login, runtime }, testInfo) => {
   await login()
   const id = await createDraft(page, 'History origin', '# First snapshot\n\nORIGINAL_MARKER')
-  const original = snapshot(runtime, id).revisions[0]
+  const original = (await snapshot(runtime, id)).revisions[0]
   await page.getByLabel('Title', { exact: true }).fill('Published visible title')
   await page.getByLabel('Description', { exact: true }).fill('Public summary')
   await page.getByLabel('Body', { exact: true }).fill('# Public snapshot\n\nPUBLIC_MARKER')
   await publish(page)
-  const live = snapshot(runtime, id)
+  const live = await snapshot(runtime, id)
   expect(live.revisions).toHaveLength(2)
   expect(live.publications).toHaveLength(1)
   expect(live.revisions[1].source).toBe('publish')
@@ -107,7 +107,7 @@ test('发布当前可见内容，私有修改和历史恢复不改变公开版�
 
   await page.getByLabel('Body', { exact: true }).fill('# Private snapshot\n\nPRIVATE_MARKER')
   await save(page)
-  expect(snapshot(runtime, id).publications).toEqual(live.publications)
+  expect((await snapshot(runtime, id)).publications).toEqual(live.publications)
   await page.goto(`/admin/posts/${id}/history?revisionId=${original.id}`)
   const historyComparison = page.getByRole('region', { name: 'Rendered version comparison' })
   await expect(historyComparison.getByRole('article', { name: 'Published version' })).toContainText('PUBLIC_MARKER')
@@ -118,7 +118,7 @@ test('发布当前可见内容，私有修改和历史恢复不改变公开版�
   await page.getByRole('button', { name: 'Restore draft', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${id}`)
   await expect(page.getByLabel('Body', { exact: true })).toContainText('ORIGINAL_MARKER')
-  const restored = snapshot(runtime, id)
+  const restored = await snapshot(runtime, id)
   expect(restored.revisions).toHaveLength(4)
   expect(restored.revisions.at(-1)?.restoredFromRevisionId).toBe(original.id)
   expect(restored.publications).toEqual(live.publications)
@@ -139,34 +139,34 @@ test('旧编辑基线拒绝覆盖，过期会话重登后原标签页仍能保�
   }
   await page.getByLabel('Body', { exact: true }).fill('# Current saved revision')
   await save(page)
-  const before = snapshot(runtime, id)
+  const before = await snapshot(runtime, id)
   await stale.getByLabel('Body', { exact: true }).fill('# Keep this stale input')
   await expectLocalBody(stale, id, '# Keep this stale input')
   await stale.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(stale.getByRole('region', { name: 'Draft conflict' })).toBeVisible()
   await expectLocalBody(stale, id, '# Keep this stale input')
-  expect(snapshot(runtime, id)).toEqual(before)
+  expect(await snapshot(runtime, id)).toEqual(before)
 
   await expireSession(page, runtime)
   await page.getByLabel('Body', { exact: true }).fill('# Keep this after expiry')
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
   await expect(page.getByRole('form', { name: 'Draft' }).getByRole('alert')).toContainText('Sign in to save or publish this draft.')
-  expect(snapshot(runtime, id)).toEqual(before)
+  expect(await snapshot(runtime, id)).toEqual(before)
   const signingIn = await context.newPage()
   await signIn(signingIn, runtime.origin)
   await page.getByRole('button', { name: 'Retry previous save', exact: true }).click()
   await expect(page.getByText('Draft saved.', { exact: true })).toBeVisible()
   await confirmed(page)
-  expect(snapshot(runtime, id).revisions.at(-1)?.body).toBe('# Keep this after expiry')
+  expect((await snapshot(runtime, id)).revisions.at(-1)?.body).toBe('# Keep this after expiry')
 })
 
 test('历史分页有界读取，只展示选中正文并保护访问', async ({ page, browser, login, runtime }) => {
   await login()
-  const draft = await withWritingStore(runtime, writer => {
-    let current = createTestDraft(writer, { title: 'Page 0', description: '', body: '# BODY_0' })
+  const draft = await withWritingStore(runtime, async writer => {
+    let current = await createTestDraft(writer, { title: 'Page 0', description: '', body: '# BODY_0' })
     const first = current.revisionId
     for (let index = 1; index < 27; index += 1) {
-      current = saveTestDraft(writer, current, { title: `Page ${index}`, description: '', body: `# BODY_${index}` })
+      current = await saveTestDraft(writer, current, { title: `Page ${index}`, description: '', body: `# BODY_${index}` })
     }
     return { id: current.id, first }
   })
@@ -193,21 +193,21 @@ test('历史分页有界读取，只展示选中正文并保护访问', async ({
 
 test('文件 ID 决定草稿目标，下载保留 UTF-8 原文且不改变公开版本', async ({ page, login, runtime }, testInfo) => {
   await login()
-  const draft = await withWritingStore(runtime, writer => {
-    const created = createTestDraft(writer, { title: 'Original public', description: '', body: '# Original public body' })
-    publishTestDraft(writer, created)
+  const draft = await withWritingStore(runtime, async writer => {
+    const created = await createTestDraft(writer, { title: 'Original public', description: '', body: '# Original public body' })
+    await publishTestDraft(writer, created)
     return created
   })
-  const live = snapshot(runtime, draft.id).publications
+  const live = (await snapshot(runtime, draft.id)).publications
   const body = '    first-line code\r\n\r\n# 导入正文\r\n\r\n'
   const file = `---\nid: ${draft.id}\ntitle: Imported title\n---\n${body}`
   await page.goto('/admin/import')
   await page.getByLabel('Markdown file', { exact: true }).setInputFiles({ name: 'not-the-id.md', mimeType: 'text/markdown', buffer: Buffer.from(file) })
   await page.getByRole('button', { name: 'Import draft', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${draft.id}`)
-  expect(snapshot(runtime, draft.id).revisions.at(-1)?.body).toBe(body)
-  expect(snapshot(runtime, draft.id).revisions.at(-1)?.source).toBe('import')
-  expect(snapshot(runtime, draft.id).publications).toEqual(live)
+  expect((await snapshot(runtime, draft.id)).revisions.at(-1)?.body).toBe(body)
+  expect((await snapshot(runtime, draft.id)).revisions.at(-1)?.source).toBe('import')
+  expect((await snapshot(runtime, draft.id)).publications).toEqual(live)
   const download = await page.request.get(`/admin/posts/${draft.id}/export`)
   expect(download.headers()['cache-control']).toBe('private, no-store')
   expect(download.headers()['content-disposition']).toContain(`${draft.id}.md`)
@@ -217,12 +217,12 @@ test('文件 ID 决定草稿目标，下载保留 UTF-8 原文且不改变公开
   const published = parseMarkdownFile(await (await page.request.get(`/admin/posts/${draft.id}/export?stage=published`)).text())
   assert.ok(published.success)
   expect(published.data.body).toBe('# Original public body')
-  const before = snapshot(runtime, draft.id)
+  const before = await snapshot(runtime, draft.id)
   await page.goto('/admin/import')
   await page.getByLabel('Markdown file', { exact: true }).setInputFiles({ name: 'renamed.md', mimeType: 'text/markdown', buffer: Buffer.from(file) })
   await page.getByRole('button', { name: 'Import draft', exact: true }).click()
   await expect(page).toHaveURL(`${runtime.origin}/admin/posts/${draft.id}`)
-  expect(snapshot(runtime, draft.id)).toEqual(before)
+  expect(await snapshot(runtime, draft.id)).toEqual(before)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/admin/import')
   await page.screenshot({ path: testInfo.outputPath('import-mobile.png'), fullPage: true })
@@ -237,7 +237,7 @@ test('大于默认 HTTP 上限的合法文件能导入，超文件限额会保�
   await expect(page).toHaveURL(/\/admin\/posts\/[0-9a-f-]{36}$/)
   const id = new URL(page.url()).pathname.split('/').at(-1)
   assert.ok(id)
-  expect(snapshot(runtime, id).revisions[0].body).toBe(body)
+  expect((await snapshot(runtime, id)).revisions[0].body).toBe(body)
   const before = await withStore(runtime, store => store.listPosts())
   await page.goto('/admin/import')
   await page.getByLabel('Markdown file', { exact: true }).setInputFiles({ name: 'too-large.md', mimeType: 'text/markdown', buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 65) })
@@ -284,10 +284,10 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
     dropResponse.resolve()
   }
   await expect(page.getByLabel('Saving status')).toContainText('The previous operation is not confirmed. Your input is preserved.')
-  const created = await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Lost response creation'))
+  const created = await withStore(runtime, async store => (await store.listPosts()).filter(post => post.title === 'Lost response creation'))
   expect(created).toHaveLength(1)
   await expectLocalBody(page, created[0].id, continuedBody)
-  const before = snapshot(runtime, created[0].id)
+  const before = await snapshot(runtime, created[0].id)
   expect(before.posts).toHaveLength(1)
   expect(before.revisions).toHaveLength(1)
   expect(before.revisions[0].body).toBe('# Keep after response loss')
@@ -298,14 +298,14 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   await expect(page.getByLabel('Saving status')).toContainText('Unsaved changes. Not saved to the server.')
   await expectLocalBody(page, created[0].id, continuedBody)
   expect(creationOperations).toEqual([creationOperations[0]])
-  expect(snapshot(runtime, created[0].id)).toEqual(before)
+  expect(await snapshot(runtime, created[0].id)).toEqual(before)
   await page.unrouteAll({ behavior: 'wait' })
   await save(page)
-  expect(snapshot(runtime, created[0].id).revisions.at(-1)?.body).toBe(continuedBody)
+  expect((await snapshot(runtime, created[0].id)).revisions.at(-1)?.body).toBe(continuedBody)
 
   for (const intent of ['save', 'publish'] as const) {
     let fail = true
-    const rejected = Promise.withResolvers<ReturnType<typeof snapshot>>()
+    const rejected = Promise.withResolvers<Awaited<ReturnType<typeof snapshot>>>()
     const operations: string[] = []
     const body = `# Kept during ${intent} outage`
     await page.route(`${runtime.origin}/**`, async route => {
@@ -316,7 +316,7 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
       operations.push(operationId(route))
       if (fail) {
         fail = false
-        rejected.resolve(snapshot(runtime, created[0].id))
+        rejected.resolve(await snapshot(runtime, created[0].id))
         await route.abort('internetdisconnected')
       } else await route.continue()
     })
@@ -325,11 +325,11 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
     await expect(page.getByLabel('Saving status')).toContainText('The previous operation is not confirmed. Your input is preserved.')
     await expectLocalBody(page, created[0].id, body)
     const beforeAttempt = await rejected.promise
-    expect(snapshot(runtime, created[0].id)).toEqual(beforeAttempt)
+    expect(await snapshot(runtime, created[0].id)).toEqual(beforeAttempt)
     await page.getByRole('button', { name: intent === 'save' ? 'Retry previous save' : 'Retry previous publish', exact: true }).click()
     await expect(page.getByText(intent === 'save' ? 'Draft saved.' : 'Post published.', { exact: true })).toBeVisible()
     await confirmed(page)
-    const accepted = snapshot(runtime, created[0].id)
+    const accepted = await snapshot(runtime, created[0].id)
     expect(operations).toEqual([operations[0], operations[0]])
     expect(accepted.revisions).toHaveLength(beforeAttempt.revisions.length + 1)
     expect(accepted.revisions.at(-1)?.body).toBe(body)
@@ -358,16 +358,16 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   })
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
   await expect(page.getByLabel('Saving status')).toContainText('The previous operation is not confirmed. Your input is preserved.')
-  const changed = await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Changed response creation'))
+  const changed = await withStore(runtime, async store => (await store.listPosts()).filter(post => post.title === 'Changed response creation'))
   expect(changed).toHaveLength(1)
-  expect(snapshot(runtime, changed[0].id).revisions).toHaveLength(1)
+  expect((await snapshot(runtime, changed[0].id)).revisions).toHaveLength(1)
   const localBody = '# Keep these different local edits'
   const remoteBody = '# Remote import after response loss'
   await page.getByLabel('Body', { exact: true }).fill(localBody)
   await withStore(runtime, store => store.importDraft({
     id: changed[0].id, title: 'Changed response creation', description: 'Imported remotely', body: remoteBody,
   }))
-  const imported = snapshot(runtime, changed[0].id)
+  const imported = await snapshot(runtime, changed[0].id)
   expect(imported.revisions).toHaveLength(2)
   expect(imported.revisions.at(-1)?.source).toBe('import')
   await page.getByRole('button', { name: 'Check previous operation', exact: true }).click()
@@ -378,7 +378,7 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   await expect(conflict).toContainText(remoteBody)
   await expectLocalBody(page, changed[0].id, localBody)
   expect(changedOperations).toEqual([changedOperations[0]])
-  expect(snapshot(runtime, changed[0].id)).toEqual(imported)
+  expect(await snapshot(runtime, changed[0].id)).toEqual(imported)
   const [review] = await Promise.all([
     context.waitForEvent('page'),
     conflict.getByRole('link', { name: 'Review server draft in a new tab', exact: true }).click(),
@@ -392,8 +392,8 @@ test('提交丢响应以原回执重试，保存发布断网与远端变化均�
   await expect(reviewStatus).toContainText('No unsaved changes.')
   await expect(review.getByLabel('Body', { exact: true })).toContainText('Remote import after response loss')
   await expectLocalBody(page, changed[0].id, localBody)
-  expect(await withStore(runtime, store => store.listPosts().filter(post => post.title === 'Changed response creation'))).toHaveLength(1)
-  expect(snapshot(runtime, changed[0].id)).toEqual(imported)
+  expect(await withStore(runtime, async store => (await store.listPosts()).filter(post => post.title === 'Changed response creation'))).toHaveLength(1)
+  expect(await snapshot(runtime, changed[0].id)).toEqual(imported)
   await page.unrouteAll({ behavior: 'wait' })
 })
 

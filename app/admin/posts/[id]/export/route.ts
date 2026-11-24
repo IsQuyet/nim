@@ -21,7 +21,7 @@ export async function GET(
       if (stages.length > 1) return errorResponse('Choose exactly one export stage.', 400)
       const stage = postFileStageSchema.safeParse(stages[0] ?? 'draft')
       if (!stage.success) return errorResponse('The export stage must be draft or published.', 400)
-      const file = exportPostMarkdown(store, id, stage.data)
+      const file = await exportPostMarkdown(store, id, stage.data)
       if (file.status === 'missing') return errorResponse('This saved snapshot does not exist.', 404)
       if (file.status === 'invalid') return errorResponse(file.message, 422)
       return new Response(file.source, {

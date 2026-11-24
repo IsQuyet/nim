@@ -27,9 +27,9 @@ function command(intent: WritingCommand['intent'] = 'save'): WritingCommand {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  store.write.mockReturnValue({ status: 'success', value: acknowledgement })
-  store.getDraft.mockReturnValue(draft)
-  store.inspect.mockReturnValue({ status: 'success', value: acknowledgement })
+  store.write.mockResolvedValue({ status: 'success', value: acknowledgement })
+  store.getDraft.mockResolvedValue(draft)
+  store.inspect.mockResolvedValue({ status: 'success', value: acknowledgement })
   vi.mocked(withAdminWritingStore).mockImplementation(async operation => ({ authorized: true, value: await operation(store) }))
 })
 
@@ -74,7 +74,7 @@ describe('明确草稿 Server Actions', () => {
   })
 
   it('冲突保留服务器当前草稿，不刷新页面', async () => {
-    store.write.mockReturnValue({ status: 'conflict', current: draft })
+    store.write.mockResolvedValue({ status: 'conflict', current: draft })
     expect(await writeDraftAction(command())).toEqual({ status: 'conflict', current: draft })
     expect(revalidatePath).not.toHaveBeenCalled()
   })
@@ -92,7 +92,7 @@ describe('明确草稿 Server Actions', () => {
 
   it('读取明确草稿区分缺失、非法输入和普通故障，绝不刷新或写入', async () => {
     expect(await readDraftAction(draft.id)).toEqual({ status: 'success', value: draft })
-    store.getDraft.mockReturnValue(null)
+    store.getDraft.mockResolvedValue(null)
     expect(await readDraftAction(randomUUID())).toEqual({ status: 'success', value: null })
     store.getDraft.mockClear()
     for (const invalid of [null, '', 'not-a-uuid']) {
@@ -112,9 +112,9 @@ describe('明确草稿 Server Actions', () => {
     const input = { postId: draft.id, operationId: randomUUID() }
     expect(await inspectDraftOperationAction(input)).toEqual({ status: 'success', value: acknowledgement })
     expect(store.inspect).toHaveBeenCalledExactlyOnceWith(input)
-    store.inspect.mockReturnValue({ status: 'unconfirmed' })
+    store.inspect.mockResolvedValue({ status: 'unconfirmed' })
     expect(await inspectDraftOperationAction(input)).toEqual({ status: 'unconfirmed' })
-    store.inspect.mockReturnValue({ status: 'invalid', message: 'Wrong post.' })
+    store.inspect.mockResolvedValue({ status: 'invalid', message: 'Wrong post.' })
     expect(await inspectDraftOperationAction(input)).toEqual({ status: 'invalid', message: 'Wrong post.' })
     expect(revalidatePath).not.toHaveBeenCalled()
     expect(store.write).not.toHaveBeenCalled()

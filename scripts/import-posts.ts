@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadEnvConfig } from '@next/env'
 import { BLOG_POST_SOURCES } from '../modules/posts/import-sources'
-import { withDatabase } from '../lib/server/database'
+import { closeDatabaseConnections, withDatabase } from '../lib/server/database'
 import { importPublishedPosts } from '../modules/posts/server/store'
 
 loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production')
@@ -22,3 +22,4 @@ withDatabase(database => importPublishedPosts(database, posts))
     console.error('文章导入失败。', error)
     process.exitCode = 1
   })
+  .finally(() => closeDatabaseConnections())

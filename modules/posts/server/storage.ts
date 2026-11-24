@@ -12,8 +12,8 @@ export function contentOf(content: PostContent): PostContent {
   return { title: content.title, description: content.description, body: content.body }
 }
 
-export function getDraft(database: PostDatabase, id: string): DraftPost | null {
-  return database.select({
+export async function getDraft(database: PostDatabase, id: string): Promise<DraftPost | null> {
+  const [row] = await database.select({
     id: posts.id,
     revisionId: postRevisions.id,
     createdAt: posts.createdAt,
@@ -23,11 +23,12 @@ export function getDraft(database: PostDatabase, id: string): DraftPost | null {
     body: postRevisions.body,
   }).from(posts).innerJoin(postDrafts, eq(postDrafts.postId, posts.id))
     .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
-    .where(eq(posts.id, id)).get() ?? null
+    .where(eq(posts.id, id)).limit(1)
+  return row ?? null
 }
 
-export function getPublishedPost(database: PostDatabase, id: string): PublishedPost | null {
-  return database.select({
+export async function getPublishedPost(database: PostDatabase, id: string): Promise<PublishedPost | null> {
+  const [row] = await database.select({
     id: posts.id,
     revisionId: postRevisions.id,
     publicationId: postPublications.id,
@@ -39,51 +40,53 @@ export function getPublishedPost(database: PostDatabase, id: string): PublishedP
   }).from(posts).innerJoin(postPublished, eq(postPublished.postId, posts.id))
     .innerJoin(postPublications, eq(postPublications.id, postPublished.publicationId))
     .innerJoin(postRevisions, eq(postRevisions.id, postPublications.revisionId))
-    .where(eq(posts.id, id)).get() ?? null
+    .where(eq(posts.id, id)).limit(1)
+  return row ?? null
 }
 
-export function insertRevision(
+export async function insertRevision(
   database: PostDatabase,
   postId: string,
   content: PostContent,
   source: PostRevision['source'],
   restoredFromRevisionId: number | null = null,
-): PostRevision {
-  return database.insert(postRevisions).values({
+): Promise<PostRevision> {
+  const [revision] = await database.insert(postRevisions).values({
     postId, ...contentOf(content), createdAt: new Date().toISOString(), source, restoredFromRevisionId,
-  }).returning().get()
+  }).returning()
+  return revision
 }
 
-export function insertDraft(database: PostDatabase, id: string, content: PostContent, source: PostRevision['source']): DraftPost {
+export async function insertDraft(database: PostDatabase, id: string, content: PostContent, source: PostRevision['source']): Promise<DraftPost> {
   const createdAt = new Date().toISOString()
-  database.insert(posts).values({ id, createdAt }).run()
-  const revision = insertRevision(database, id, content, source)
-  database.insert(postDrafts).values({ postId: id, revisionId: revision.id }).run()
+  await database.insert(posts).values({ id, createdAt })
+  const revision = await insertRevision(database, id, content, source)
+  await database.insert(postDrafts).values({ postId: id, revisionId: revision.id })
   return { id, revisionId: revision.id, createdAt, updatedAt: revision.createdAt, ...contentOf(content) }
 }
 
-export function updateDraft(
+export async function updateDraft(
   database: PostDatabase,
   draft: DraftPost,
   content: PostContent,
   source: PostRevision['source'],
   restoredFromRevisionId: number | null = null,
-): DraftPost {
+): Promise<DraftPost> {
   if (samePostContent(draft, content)) return draft
-  const revision = insertRevision(database, draft.id, content, source, restoredFromRevisionId)
-  database.update(postDrafts).set({ revisionId: revision.id }).where(eq(postDrafts.postId, draft.id)).run()
+  const revision = await insertRevision(database, draft.id, content, source, restoredFromRevisionId)
+  await database.update(postDrafts).set({ revisionId: revision.id }).where(eq(postDrafts.postId, draft.id))
   return { ...draft, ...contentOf(content), revisionId: revision.id, updatedAt: revision.createdAt }
 }
 
 export class InvalidPublicationMediaError extends Error {}
 
-function publicationMediaIds(database: PostDatabase, body: string) {
+async function publicationMediaIds(database: PostDatabase, body: string) {
   const references = extractMediaReferences(body)
   if (references.status === 'invalid') throw new InvalidPublicationMediaError(references.message)
   for (let offset = 0; offset < references.ids.length; offset += 500) {
     const batch = references.ids.slice(offset, offset + 500)
-    const assets = database.select({ id: mediaAssets.id, state: mediaAssets.state })
-      .from(mediaAssets).where(inArray(mediaAssets.id, batch)).all()
+    const assets = await database.select({ id: mediaAssets.id, state: mediaAssets.state })
+      .from(mediaAssets).where(inArray(mediaAssets.id, batch))
     if (assets.length !== batch.length || assets.some(asset => asset.state !== 'ready')) {
       throw new InvalidPublicationMediaError('Upload or repair every referenced image before publishing.')
     }
@@ -91,31 +94,33 @@ function publicationMediaIds(database: PostDatabase, body: string) {
   return references.ids
 }
 
-export function isMediaPublished(database: PostDatabase, mediaId: string) {
-  return database.select({ mediaId: postPublicationMedia.mediaId })
-    .from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, mediaId)).limit(1).get() !== undefined
+export async function isMediaPublished(database: PostDatabase, mediaId: string) {
+  const [row] = await database.select({ mediaId: postPublicationMedia.mediaId })
+    .from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, mediaId)).limit(1)
+  return row !== undefined
 }
 
-export function writePublication(database: PostTransaction, draft: DraftPost): PublishedPost {
-  const mediaIds = publicationMediaIds(database, draft.body)
-  const current = getPublishedPost(database, draft.id)
+export async function writePublication(database: PostTransaction, draft: DraftPost): Promise<PublishedPost> {
+  const mediaIds = await publicationMediaIds(database, draft.body)
+  const current = await getPublishedPost(database, draft.id)
   let published: PublishedPost
   if (current?.revisionId === draft.revisionId) {
     published = current
   } else {
-    const publication = database.insert(postPublications).values({
+    const [publication] = await database.insert(postPublications).values({
       postId: draft.id, revisionId: draft.revisionId, publishedAt: new Date().toISOString(),
-    }).returning().get()
-    database.insert(postPublished).values({ postId: draft.id, publicationId: publication.id })
-      .onConflictDoUpdate({ target: postPublished.postId, set: { publicationId: publication.id } }).run()
+    }).returning()
+    await database.insert(postPublished).values({ postId: draft.id, publicationId: publication.id })
+      .onConflictDoUpdate({ target: postPublished.postId, set: { publicationId: publication.id } })
     published = {
       id: draft.id, revisionId: draft.revisionId, publicationId: publication.id,
       createdAt: draft.createdAt, publishedAt: publication.publishedAt, ...contentOf(draft),
     }
   }
-  for (const mediaId of mediaIds) {
-    database.insert(postPublicationMedia).values({ postId: draft.id, publicationId: published.publicationId, mediaId })
-      .onConflictDoNothing().run()
+  if (mediaIds.length > 0) {
+    await database.insert(postPublicationMedia)
+      .values(mediaIds.map(mediaId => ({ postId: draft.id, publicationId: published.publicationId, mediaId })))
+      .onConflictDoNothing()
   }
   return published
 }

@@ -58,8 +58,8 @@ export async function saveGalleryItemAction(input: SaveGalleryItemInput): Promis
       errorLog: '保存画廊作品失败。',
       errorMessage: 'Could not save this gallery item. Please try again.',
     },
-    store => {
-      const result = store.save(parsed.data)
+    async store => {
+      const result = await store.save(parsed.data)
       if (result.status === 'missing') {
         return { status: 'missing', message: 'This gallery item no longer exists.' }
       }
@@ -87,8 +87,8 @@ export async function setGalleryStatusAction(
       errorLog: '更新画廊发布状态失败。',
       errorMessage: 'Could not update the publish status. Please try again.',
     },
-    store => {
-      const result = store.setStatus(parsedId.data, parsedStatus.data as GalleryStatus)
+    async store => {
+      const result = await store.setStatus(parsedId.data, parsedStatus.data as GalleryStatus)
       if (result.status === 'missing') {
         return { status: 'missing', message: 'This gallery item no longer exists.' }
       }
@@ -112,8 +112,8 @@ export async function deleteGalleryItemAction(id: unknown): Promise<DeleteGaller
       errorLog: '删除画廊作品失败。',
       errorMessage: 'Could not delete this gallery item. Please try again.',
     },
-    store => {
-      const result = store.remove(parsedId.data)
+    async store => {
+      const result = await store.remove(parsedId.data)
       if (result.status === 'missing') {
         return { status: 'missing', message: 'This gallery item no longer exists.' }
       }

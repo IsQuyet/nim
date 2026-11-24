@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAdminSession } from '@/modules/auth/server/auth'
-import { initializeDatabase } from '@/lib/server/database'
+import { closeDatabaseConnections, initializeDatabase } from '@/lib/server/database'
 import { getAdminDraft, getAdminPosts, getAdminRevisionHistory, withAdminPostStore, withAdminWritingStore } from './admin'
 import { createTestDraft, publishTestDraft, saveTestDraft } from '@/test/post-commands'
 
@@ -16,7 +16,7 @@ let directory: string
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'nim-admin-posts-'))
-  vi.stubEnv('DATABASE_PATH', join(directory, 'nim.sqlite'))
+  vi.stubEnv('DATABASE_PATH', join(directory, 'pgdata'))
   vi.mocked(getAdminSession).mockReset()
   vi.mocked(getAdminSession).mockResolvedValue({
     session: {
@@ -38,10 +38,11 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeDatabaseConnections()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
-  if (directory) rmSync(directory, { recursive: true })
+  if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
 describe('管理端文章访问', () => {
@@ -52,7 +53,7 @@ describe('管理端文章访问', () => {
     expect(await withAdminPostStore(operation)).toEqual({ authorized: false })
     expect(await withAdminWritingStore(operation)).toEqual({ authorized: false })
     expect(operation).not.toHaveBeenCalled()
-    expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
+    expect(existsSync(join(directory, 'pgdata'))).toBe(false)
   })
 
   it('未登录读取页面数据仍交给框架导航，不提前判断文章是否存在', async () => {
@@ -65,7 +66,7 @@ describe('管理端文章访问', () => {
     ]) {
       await expect(read()).rejects.toMatchObject({ digest: expect.stringMatching(/^NEXT_REDIRECT;/) })
     }
-    expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
+    expect(existsSync(join(directory, 'pgdata'))).toBe(false)
   })
 
   it('认证存储故障向上传播，不当作未登录', async () => {
@@ -75,7 +76,7 @@ describe('管理端文章访问', () => {
 
     await expect(withAdminPostStore(operation)).rejects.toBe(error)
     expect(operation).not.toHaveBeenCalled()
-    expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
+    expect(existsSync(join(directory, 'pgdata'))).toBe(false)
   })
 
   it('数据库无法打开时传播错误，不执行内容操作', async () => {
@@ -139,10 +140,10 @@ describe('管理端文章访问', () => {
   it('历史查询返回同一快照的草稿、公开指针和选中修订，列表仅含摘要', async () => {
     await initializeDatabase()
     const first = { title: 'Initial title', description: 'Original summary', body: '# Original body' }
-    const result = await withAdminWritingStore(store => {
-      const draft = createTestDraft(store, first)
-      const edited = saveTestDraft(store, draft, { ...first, body: '# Changed body' })
-      const published = publishTestDraft(store, edited)
+    const result = await withAdminWritingStore(async store => {
+      const draft = await createTestDraft(store, first)
+      const edited = await saveTestDraft(store, draft, { ...first, body: '# Changed body' })
+      const published = await publishTestDraft(store, edited)
       return { draft, edited, published }
     })
     assert.ok(result.authorized)

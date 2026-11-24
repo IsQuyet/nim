@@ -43,7 +43,7 @@ export async function importMarkdownAction(
     }
     const decoded = decodeMarkdownBytes(await file.arrayBuffer())
     if (!decoded.success) return { status: 'error', message: decoded.message }
-    const imported = importPostMarkdown(store, decoded.source, identity.data)
+    const imported = await importPostMarkdown(store, decoded.source, identity.data)
     if (imported.status === 'invalid') return { status: 'error', message: imported.message }
     if (imported.status === 'conflict') {
       return {

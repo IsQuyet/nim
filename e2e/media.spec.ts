@@ -41,7 +41,7 @@ test('上传图片在光标处插入原生 Markdown，仅发布时关联公开�
   const draft = await withWritingStore(runtime, writer => createTestDraft(writer, { title: 'Image article', description: '', body: 'Before after' }))
   await page.goto(`/admin/posts/${draft.id}`)
   await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-  const baseline = snapshot(runtime, draft.id)
+  const baseline = await snapshot(runtime, draft.id)
   const body = page.getByRole('textbox', { name: 'Body', exact: true })
   await body.press('ControlOrMeta+End')
 
@@ -63,7 +63,7 @@ test('上传图片在光标处插入原生 Markdown，仅发布时关联公开�
 
   const copy = await localCopy(page, draft.id)
   expect(copy).toMatchObject({ content: { body: `Before after ![tiny](${mediaUrl})` } })
-  expect(snapshot(runtime, draft.id)).toEqual(baseline)
+  expect(await snapshot(runtime, draft.id)).toEqual(baseline)
 
   const anonymous = await browser.newContext()
   try {
@@ -74,7 +74,7 @@ test('上传图片在光标处插入原生 Markdown，仅发布时关联公开�
 
   await page.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(page.getByText('Post published.', { exact: true })).toBeVisible()
-  const published = snapshot(runtime, draft.id)
+  const published = await snapshot(runtime, draft.id)
   expect(published.revisions.at(-1)?.body).toBe(`Before after ![tiny](${mediaUrl})`)
 
   await body.press('ControlOrMeta+Home')
@@ -97,15 +97,14 @@ test('上传图片在光标处插入原生 Markdown，仅发布时关联公开�
     await expect(image).toHaveAttribute('alt', 'tiny')
   } finally { await publicReader.close() }
 
-  const database = openDatabase(runtime.filename)
+  const database = await openDatabase(runtime.databaseUrl)
   try {
-    expect(database.select().from(mediaAssets).where(eq(mediaAssets.id, mediaId)).get()).toMatchObject({
+    expect((await database.select().from(mediaAssets).where(eq(mediaAssets.id, mediaId)))[0]).toMatchObject({
       id: mediaId, byteSize: storedBytes.byteLength, state: 'ready', sha256: createHash('sha256').update(storedBytes).digest('hex'),
     })
-    expect(database.select().from(postPublicationMedia)
-      .where(eq(postPublicationMedia.mediaId, mediaId)).all()).toHaveLength(1)
-    expect(database.$client.pragma('foreign_key_check')).toEqual([])
-  } finally { database.$client.close() }
+    expect(await database.select().from(postPublicationMedia)
+      .where(eq(postPublicationMedia.mediaId, mediaId))).toHaveLength(1)
+  } finally { await database.close() }
 })
 
 test('上传期间继续输入并移动光标，响应仍插入跟随原文移动的位置', async ({ page, login, runtime }) => {
@@ -113,7 +112,7 @@ test('上传期间继续输入并移动光标，响应仍插入跟随原文移�
   const draft = await withWritingStore(runtime, writer => createTestDraft(writer, { title: 'Typing during upload', description: '', body: 'Before after' }))
   await page.goto(`/admin/posts/${draft.id}`)
   await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-  const baseline = snapshot(runtime, draft.id)
+  const baseline = await snapshot(runtime, draft.id)
   const body = page.getByRole('textbox', { name: 'Body', exact: true })
   await body.press('ControlOrMeta+End')
   const stored = Promise.withResolvers<void>()
@@ -138,7 +137,7 @@ test('上传期间继续输入并移动光标，响应仍插入跟随原文移�
   } finally { release.resolve() }
   await expect(body).toContainText(mediaUrl)
   await expect.poll(() => localCopy(page, draft.id)).toMatchObject({ content: { body: `Prefix Before after ![tiny](${mediaUrl})` } })
-  expect(snapshot(runtime, draft.id)).toEqual(baseline)
+  expect(await snapshot(runtime, draft.id)).toEqual(baseline)
 })
 
 test('服务器已接收但响应中断时，只有明确重试才核对同一媒体身份', async ({ page, login, runtime }) => {
@@ -146,7 +145,7 @@ test('服务器已接收但响应中断时，只有明确重试才核对同一�
   const draft = await withWritingStore(runtime, writer => createTestDraft(writer, { title: 'Retry image', description: '', body: 'Before after' }))
   await page.goto(`/admin/posts/${draft.id}`)
   await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-  const baseline = snapshot(runtime, draft.id)
+  const baseline = await snapshot(runtime, draft.id)
   const body = page.getByRole('textbox', { name: 'Body', exact: true })
   await body.press('ControlOrMeta+End')
   const uploadedIds: string[] = []
@@ -162,7 +161,7 @@ test('服务器已接收但响应中断时，只有明确重试才核对同一�
   await page.getByRole('button', { name: 'Upload and insert', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Retry upload', exact: true })).toBeVisible()
   expect(uploadedIds).toHaveLength(1)
-  expect(snapshot(runtime, draft.id)).toEqual(baseline)
+  expect(await snapshot(runtime, draft.id)).toEqual(baseline)
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await expect(body).not.toContainText('/media/')
   expect(uploadedIds).toHaveLength(1)
@@ -171,12 +170,12 @@ test('服务器已接收但响应中断时，只有明确重试才核对同一�
   await expect(body).toContainText(url)
   expect(uploadedIds).toEqual([uploadedIds[0], uploadedIds[0]])
   await expect.poll(() => localCopy(page, draft.id)).toMatchObject({ content: { body: `Before after ![tiny](${url})` } })
-  expect(snapshot(runtime, draft.id)).toEqual(baseline)
-  const database = openDatabase(runtime.filename)
+  expect(await snapshot(runtime, draft.id)).toEqual(baseline)
+  const database = await openDatabase(runtime.databaseUrl)
   try {
-    expect(database.select().from(mediaAssets).where(eq(mediaAssets.id, uploadedIds[0])).all()).toHaveLength(1)
-    expect(database.select().from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, uploadedIds[0])).all()).toEqual([])
-  } finally { database.$client.close() }
+    expect(await database.select().from(mediaAssets).where(eq(mediaAssets.id, uploadedIds[0]))).toHaveLength(1)
+    expect(await database.select().from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, uploadedIds[0]))).toEqual([])
+  } finally { await database.close() }
 })
 
 test('上传成功但正文未保存时，图片保持私有且正文仍为本机内容', async ({ page, browser, login, runtime }) => {
@@ -195,7 +194,7 @@ test('上传成功但正文未保存时，图片保持私有且正文仍为本�
   expect(upload.media.url).toBe(`/media/${upload.media.id}`)
   await expect(page.getByText('Recovery copy saved on this browser.', { exact: true })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Body', exact: true })).toContainText(upload.media.url)
-  expect(snapshot(runtime, postId)).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [], receipts: [] })
+  expect(await snapshot(runtime, postId)).toEqual({ posts: [], revisions: [], drafts: [], publications: [], published: [], receipts: [] })
   const anonymous = await browser.newContext()
   try {
     const response = await anonymous.request.get(`${runtime.origin}${upload.media.url}`)

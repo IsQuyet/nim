@@ -24,8 +24,8 @@ function requestHash(command: WritingCommand) {
   })).digest('hex')
 }
 
-function getReceipt(database: PostDatabase, operationId: string) {
-  return database.select({
+async function getReceipt(database: PostDatabase, operationId: string) {
+  const [row] = await database.select({
     postId: postWriteReceipts.postId,
     requestHash: postWriteReceipts.requestHash,
     draft: {
@@ -42,18 +42,19 @@ function getReceipt(database: PostDatabase, operationId: string) {
     .innerJoin(posts, eq(posts.id, postWriteReceipts.postId))
     .innerJoin(postRevisions, eq(postRevisions.id, postWriteReceipts.revisionId))
     .leftJoin(postPublications, eq(postPublications.id, postWriteReceipts.publicationId))
-    .where(eq(postWriteReceipts.operationId, operationId)).get() ?? null
+    .where(eq(postWriteReceipts.operationId, operationId)).limit(1)
+  return row ?? null
 }
 
 export function createWritingStore(database: AppDatabase): WritingStore {
-  function write(input: WritingCommand): WritingResult {
+  async function write(input: WritingCommand): Promise<WritingResult> {
     const parsed = writingCommandSchema.safeParse(input)
     if (!parsed.success) return { status: 'invalid', message: parsed.error.issues[0].message }
     const command = parsed.data
     const hash = requestHash(command)
     try {
-      return database.transaction((transaction): WritingResult => {
-        const receipt = getReceipt(transaction, command.operationId)
+      return await database.transaction(async (transaction): Promise<WritingResult> => {
+        const receipt = await getReceipt(transaction, command.operationId)
         if (receipt) {
           if (receipt.postId !== command.postId || receipt.requestHash !== hash) {
             return { status: 'invalid', message: 'This operation ID belongs to a different request.' }
@@ -61,39 +62,40 @@ export function createWritingStore(database: AppDatabase): WritingStore {
           return { status: 'success', value: { draft: receipt.draft, publication: receipt.publication } }
         }
 
-        const current = getDraft(transaction, command.postId)
+        await transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, command.postId)).for('update')
+        const current = await getDraft(transaction, command.postId)
         if ((current?.revisionId ?? null) !== command.expectedRevisionId) return { status: 'conflict', current }
         if (!current) {
-          const identity = transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, command.postId)).get()
+          const [identity] = await transaction.select({ id: posts.id }).from(posts).where(eq(posts.id, command.postId)).limit(1)
           if (identity) return { status: 'conflict', current: null }
         }
         const draft = current
-          ? updateDraft(transaction, current, command.content, command.intent)
-          : insertDraft(transaction, command.postId, command.content, 'create')
+          ? await updateDraft(transaction, current, command.content, command.intent)
+          : await insertDraft(transaction, command.postId, command.content, 'create')
         let publication: WritingAcknowledgement['publication'] = null
         if (command.intent === 'publish') {
-          const published = writePublication(transaction, draft)
+          const published = await writePublication(transaction, draft)
           publication = { id: published.publicationId, publishedAt: published.publishedAt }
         }
-        transaction.insert(postWriteReceipts).values({
+        await transaction.insert(postWriteReceipts).values({
           operationId: command.operationId,
           postId: command.postId,
           requestHash: hash,
           revisionId: draft.revisionId,
           publicationId: publication?.id ?? null,
-        }).run()
+        })
         return { status: 'success', value: { draft, publication } }
-      }, { behavior: 'immediate' })
+      })
     } catch (error) {
       if (error instanceof InvalidPublicationMediaError) return { status: 'invalid', message: error.message }
       throw error
     }
   }
 
-  function inspect(input: OperationIdentity): ReceiptResult {
+  async function inspect(input: OperationIdentity): Promise<ReceiptResult> {
     const parsed = operationIdentitySchema.safeParse(input)
     if (!parsed.success) return { status: 'invalid', message: parsed.error.issues[0].message }
-    const receipt = getReceipt(database, parsed.data.operationId)
+    const receipt = await getReceipt(database, parsed.data.operationId)
     if (!receipt) return { status: 'unconfirmed' }
     if (receipt.postId !== parsed.data.postId) {
       return { status: 'invalid', message: 'This operation ID belongs to a different post.' }

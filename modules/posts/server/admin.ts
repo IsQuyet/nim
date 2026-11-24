@@ -2,25 +2,24 @@ import 'server-only'
 import { redirect } from 'next/navigation'
 import { withAdmin } from '@/modules/auth/server/admin'
 import { revisionHistoryQuerySchema } from '../history'
-import { getMediaDirectory } from '@/lib/server/data-paths'
 import { withDatabase, type AppDatabase } from '@/lib/server/database'
-import { createFileMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
+import { createConfiguredMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
 import { createPostStore, type PostStore } from './store'
 import { createWritingStore } from './writing-store'
 import type { WritingStore } from '../writing'
 import { listAdminMedia } from './media-admin'
 import { routes } from '@/lib/routes'
 
-export function withAdminPostStore<T>(operation: (store: PostStore) => T) {
+export function withAdminPostStore<T>(operation: (store: PostStore) => Promise<T> | T) {
   return withAdmin(() => withDatabase(database => operation(createPostStore(database))))
 }
 
-export function withAdminWritingStore<T>(operation: (store: WritingStore) => T) {
+export function withAdminWritingStore<T>(operation: (store: WritingStore) => Promise<T> | T) {
   return withAdmin(() => withDatabase(database => operation(createWritingStore(database))))
 }
 
 export function withAdminMediaDatabase<T>(operation: (database: AppDatabase, storage: MediaStorage) => Promise<T> | T) {
-  return withAdmin(() => withDatabase(database => operation(database, createFileMediaStorage(getMediaDirectory()))))
+  return withAdmin(() => withDatabase(database => operation(database, createConfiguredMediaStorage())))
 }
 
 export async function getAdminPosts() {

@@ -3,25 +3,29 @@ import { randomUUID } from 'node:crypto'
 import type { DraftPost, PostContent, PublishedPost } from '../modules/posts/model'
 import type { WritingCommand, WritingStore } from '../modules/posts/writing'
 
-function write(writer: WritingStore, command: WritingCommand) {
-  const result = writer.write(command)
+async function write(writer: WritingStore, command: WritingCommand) {
+  const result = await writer.write(command)
   assert.equal(result.status, 'success')
   return result.value
 }
 
-export function createTestDraft(writer: WritingStore, content: PostContent, postId = randomUUID()): DraftPost {
-  return write(writer, { postId, operationId: randomUUID(), expectedRevisionId: null, intent: 'save', content }).draft
+export async function createTestDraft(writer: WritingStore, content: PostContent, postId = randomUUID()): Promise<DraftPost> {
+  return (await write(writer, { postId, operationId: randomUUID(), expectedRevisionId: null, intent: 'save', content })).draft
 }
 
-export function saveTestDraft(writer: WritingStore, draft: DraftPost, content: PostContent): DraftPost {
-  return write(writer, {
+export async function saveTestDraft(writer: WritingStore, draft: DraftPost, content: PostContent): Promise<DraftPost> {
+  return (await write(writer, {
     postId: draft.id, operationId: randomUUID(), expectedRevisionId: draft.revisionId, intent: 'save',
     content: { title: content.title, description: content.description, body: content.body },
-  }).draft
+  })).draft
 }
 
-export function publishTestDraft(writer: WritingStore, draft: DraftPost, content: PostContent = draft): PublishedPost {
-  const result = write(writer, {
+export async function publishTestDraft(
+  writer: WritingStore,
+  draft: DraftPost,
+  content: PostContent = draft,
+): Promise<PublishedPost> {
+  const result = await write(writer, {
     postId: draft.id, operationId: randomUUID(), expectedRevisionId: draft.revisionId, intent: 'publish',
     content: { title: content.title, description: content.description, body: content.body },
   })

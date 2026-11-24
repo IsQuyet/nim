@@ -1,5 +1,5 @@
 import { loadEnvConfig } from '@next/env'
-import { getDatabasePath } from '../lib/server/data-paths'
+import { getDatabaseTarget } from '../lib/server/data-paths'
 import { initializeDatabase } from '../lib/server/database'
 import { initializeAuthSecret } from '../modules/auth/server/secret'
 
@@ -7,10 +7,10 @@ const production = process.argv.includes('--production') || process.env.NODE_ENV
 loadEnvConfig(process.cwd(), !production)
 
 async function setup() {
-  const filename = getDatabasePath()
-  await initializeDatabase(filename)
+  const target = getDatabaseTarget()
+  await initializeDatabase(target)
   initializeAuthSecret()
-  console.log(`数据库已初始化：${filename}`)
+  console.log(`数据库已初始化：${target}`)
   console.log('会话密钥已准备。')
 }
 

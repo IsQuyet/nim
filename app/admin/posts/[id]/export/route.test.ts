@@ -28,8 +28,8 @@ beforeEach(() => {
   mocks.withAdminPostStore.mockImplementation(async operation => ({
     authorized: true, value: await operation({ getDraft: mocks.getDraft, getPublishedPost: mocks.getPublishedPost }),
   }))
-  mocks.getDraft.mockReturnValue(draft)
-  mocks.getPublishedPost.mockReturnValue(published)
+  mocks.getDraft.mockResolvedValue(draft)
+  mocks.getPublishedPost.mockResolvedValue(published)
 })
 
 describe('已保存 Markdown 下载入口', () => {
@@ -78,8 +78,8 @@ describe('已保存 Markdown 下载入口', () => {
   )
 
   it.each(['draft', 'published'])('%s快照缺失返回404，不伪装成功或回退其他快照', async stage => {
-    mocks.getDraft.mockReturnValue(null)
-    mocks.getPublishedPost.mockReturnValue(null)
+    mocks.getDraft.mockResolvedValue(null)
+    mocks.getPublishedPost.mockResolvedValue(null)
     const response = await GET(request(`?stage=${stage}`), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(404)
     expect(response.headers.get('Content-Disposition')).toBeNull()
@@ -91,7 +91,7 @@ describe('已保存 Markdown 下载入口', () => {
     { ...draft, id: 'not-a-uuid' },
     { ...draft, title: '  ' },
   ])('已保存快照不符合文件契约时返回422而不是不安全附件', async invalid => {
-    mocks.getDraft.mockReturnValue(invalid)
+    mocks.getDraft.mockResolvedValue(invalid)
     const response = await GET(request(), { params: Promise.resolve({ id }) })
     expect(response.status).toBe(422)
     expect(await response.text()).toBe('This post does not satisfy the Markdown file format. Review its ID and content.')

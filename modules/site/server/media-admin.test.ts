@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { initializeDatabase, openDatabase, type ManagedDatabase } from '@/lib/server/database'
 import { createGalleryStore } from '@/modules/gallery/server/store'
 import { createFileMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
 import { createMediaStore } from '@/modules/media/server/store'
@@ -15,19 +15,19 @@ import { createTestDraft, publishTestDraft } from '@/test/post-commands'
 import { deleteSiteAdminMedia, isSiteMediaPublished, listSiteAdminMedia } from './media-admin'
 
 let directory: string
-let database: AppDatabase
+let database: ManagedDatabase
 let storage: MediaStorage
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-site-media-admin-'))
-  const filename = join(directory, 'nim.sqlite')
-  await initializeDatabase(filename)
-  database = openDatabase(filename)
+  const target = join(directory, 'pgdata')
+  await initializeDatabase(target)
+  database = await openDatabase(target)
   storage = createFileMediaStorage(join(directory, 'media'))
 })
 
-afterEach(() => {
-  database?.$client.close()
+afterEach(async () => {
+  await database?.close()
   if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -53,7 +53,7 @@ describe('跨模块媒体引用、公开判断与删除守卫', () => {
     const postPubImg = await uploadAsset('post-pub.png')
 
     const gallery = createGalleryStore(database)
-    const draftItem = gallery.save({
+    const draftItem = await gallery.save({
       mediaId: galleryDraftImg.id,
       title: 'Draft shot',
       caption: '',
@@ -61,7 +61,7 @@ describe('跨模块媒体引用、公开判断与删除守卫', () => {
       takenAt: null,
       status: 'draft',
     })
-    const pubItem = gallery.save({
+    const pubItem = await gallery.save({
       mediaId: galleryPubImg.id,
       title: 'Published shot',
       caption: '',
@@ -73,19 +73,19 @@ describe('跨模块媒体引用、公开判断与删除守卫', () => {
     expect(pubItem.status).toBe('success')
 
     const writer = createWritingStore(database)
-    const post = createTestDraft(writer, {
+    const post = await createTestDraft(writer, {
       title: 'Post with image',
       description: '',
       body: `![post](/media/${postPubImg.id})`,
     })
-    publishTestDraft(writer, post)
+    await publishTestDraft(writer, post)
 
-    expect(isSiteMediaPublished(database, unused.id)).toBe(false)
-    expect(isSiteMediaPublished(database, galleryDraftImg.id)).toBe(false)
-    expect(isSiteMediaPublished(database, galleryPubImg.id)).toBe(true)
-    expect(isSiteMediaPublished(database, postPubImg.id)).toBe(true)
+    expect(await isSiteMediaPublished(database, unused.id)).toBe(false)
+    expect(await isSiteMediaPublished(database, galleryDraftImg.id)).toBe(false)
+    expect(await isSiteMediaPublished(database, galleryPubImg.id)).toBe(true)
+    expect(await isSiteMediaPublished(database, postPubImg.id)).toBe(true)
 
-    const items = listSiteAdminMedia(database, storage)
+    const items = await listSiteAdminMedia(database, storage)
     const byId = new Map(items.map(item => [item.asset.id, item]))
     expect(byId.get(galleryDraftImg.id)?.galleryReferences).toHaveLength(1)
     expect(byId.get(galleryPubImg.id)?.galleryReferences).toHaveLength(1)

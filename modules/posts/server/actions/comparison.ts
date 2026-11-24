@@ -10,10 +10,10 @@ export async function readPublishedPostAction(input: unknown) {
     unauthorizedMessage: 'Sign in to compare with the published version.',
     errorLog: '读取文章发布版本失败。',
     errorMessage: 'Could not load the published version.',
-  }, store => {
+  }, async store => {
     const parsed = postIdSchema.safeParse(input)
     return parsed.success
-      ? publishedPostReadSchema.parse({ status: 'success', value: store.getPublishedPost(parsed.data) })
+      ? publishedPostReadSchema.parse({ status: 'success', value: await store.getPublishedPost(parsed.data) })
       : { status: 'error' as const, message: 'Invalid post ID.' }
   })
 }

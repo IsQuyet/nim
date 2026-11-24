@@ -47,9 +47,9 @@ export const draftReadResultSchema = z.discriminatedUnion('status', [
 ])
 
 export type WritingStore = {
-  getDraft(id: string): z.infer<typeof draftPostSchema> | null
-  write(command: WritingCommand): WritingResult
-  inspect(operation: OperationIdentity): ReceiptResult
+  getDraft(id: string): Promise<z.infer<typeof draftPostSchema> | null>
+  write(command: WritingCommand): Promise<WritingResult>
+  inspect(operation: OperationIdentity): Promise<ReceiptResult>
 }
 
 export type WritingTransport = {

@@ -2,7 +2,7 @@ import { toNextJsHandler } from 'better-auth/next-js'
 import { getAuth } from '@/modules/auth/server/auth'
 
 export const { GET, POST } = toNextJsHandler(async (request: Request) => {
-  const auth = getAuth()
+  const auth = await getAuth()
   if (!auth) {
     return Response.json({ error: 'Authentication is not configured.' }, { status: 503 })
   }

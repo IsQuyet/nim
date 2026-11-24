@@ -30,8 +30,8 @@ export async function saveHomeConfigAction(
       errorLog: '保存首页策展配置失败。',
       errorMessage: 'Could not save homepage settings. Please try again.',
     },
-    store => {
-      store.saveConfig(parsed.data)
+    async store => {
+      await store.saveConfig(parsed.data)
       revalidatePath(routes.home)
       revalidatePath(routes.admin.homepage)
       return { status: 'success' }

@@ -14,7 +14,7 @@ export type SearchQueryInput = {
 }
 
 /** 对数据库中的公开文章与公开画廊作品执行站内检索。 */
-export function searchSiteDatabase(database: AppDatabase, input: SearchQueryInput): SearchResponse {
+export async function searchSiteDatabase(database: AppDatabase, input: SearchQueryInput): Promise<SearchResponse> {
   const parsed = searchQuerySchema.parse({
     q: input.q ?? '',
     scope: input.scope ?? 'all',
@@ -32,8 +32,10 @@ export function searchSiteDatabase(database: AppDatabase, input: SearchQueryInpu
     }
   }
 
-  const posts = listPublishedPostDocuments(database)
-  const gallery = createGalleryStore(database).listPublished()
+  const [posts, gallery] = await Promise.all([
+    listPublishedPostDocuments(database),
+    createGalleryStore(database).listPublished(),
+  ])
 
   return executeSiteSearch({
     query: parsed.q,

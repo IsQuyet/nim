@@ -15,27 +15,27 @@ export function decodeMarkdownBytes(bytes: ArrayBuffer | Uint8Array):
   }
 }
 
-export function importPostMarkdown(
+export async function importPostMarkdown(
   store: Pick<PostStore, 'importDraft' | 'createImportedDraftOnce'>,
   source: string,
   newPostId: string,
-): PostMutationResult<DraftPost> | InvalidFile {
+): Promise<PostMutationResult<DraftPost> | InvalidFile> {
   const parsed = parseMarkdownFile(source)
   if (!parsed.success) return { status: 'invalid', message: parsed.message }
   if (parsed.data.id !== undefined) {
-    return { status: 'success', value: store.importDraft({ ...parsed.data, id: parsed.data.id }) }
+    return { status: 'success', value: await store.importDraft({ ...parsed.data, id: parsed.data.id }) }
   }
   const identity = postIdSchema.safeParse(newPostId)
   if (!identity.success) return { status: 'invalid', message: identity.error.issues[0].message }
   return store.createImportedDraftOnce(identity.data, parsed.data)
 }
 
-export function exportPostMarkdown(
+export async function exportPostMarkdown(
   store: Pick<PostStore, 'getDraft' | 'getPublishedPost'>,
   id: string,
   stage: PostFileStage = 'draft',
-): { status: 'success'; source: string; filename: string } | { status: 'missing' } | InvalidFile {
-  const post = stage === 'draft' ? store.getDraft(id) : store.getPublishedPost(id)
+): Promise<{ status: 'success'; source: string; filename: string } | { status: 'missing' } | InvalidFile> {
+  const post = stage === 'draft' ? await store.getDraft(id) : await store.getPublishedPost(id)
   if (!post) return { status: 'missing' }
   const identity = postIdSchema.safeParse(post.id)
   const content = postContentSchema.safeParse(post)

@@ -1,18 +1,20 @@
 import 'server-only'
 import { cache } from 'react'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { and, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { connection } from 'next/server'
 import { getSiteUrl } from '@/lib/server/site-config'
-import { getAuthSecret } from './secret'
-import { openDatabase, withDatabase } from '@/lib/server/database'
-import { account } from './schema'
+import { getSharedDatabase, withDatabase } from '@/lib/server/database'
 import { routes } from '@/lib/routes'
+import * as authSchema from './schema'
+import { getAuthSecret } from './secret'
 
 const SESSION_MAX_AGE = 24 * 60 * 60
 let auth: ReturnType<typeof betterAuth> | undefined
+let pendingAuth: Promise<ReturnType<typeof betterAuth> | null> | undefined
 
 export function getAuthOptions(): BetterAuthOptions | null {
   const clientId = process.env.GITHUB_CLIENT_ID?.trim()
@@ -49,33 +51,45 @@ export function getAuthOptions(): BetterAuthOptions | null {
   }
 }
 
-export function getAuth() {
+export async function getAuth() {
   const options = getAuthOptions()
   if (!options) return null
+  if (auth) return auth
 
-  // 按需建立进程内共享连接，构建时不打开持久化文件。
-  auth ??= betterAuth<BetterAuthOptions>({ ...options, database: openDatabase().$client })
-  return auth
+  if (!pendingAuth) {
+    pendingAuth = getSharedDatabase()
+      .then(database => {
+        auth = betterAuth<BetterAuthOptions>({
+          ...options,
+          database: drizzleAdapter(database, { provider: 'pg', schema: authSchema, transaction: true }),
+        })
+        return auth
+      })
+      .finally(() => {
+        pendingAuth = undefined
+      })
+  }
+  return pendingAuth
 }
 
 export const getAdminSession = cache(async () => {
   await connection()
-  const auth = getAuth()
-  if (!auth) return null
+  const authInstance = await getAuth()
+  if (!authInstance) return null
 
   const requestHeaders = await headers()
-  const session = await auth.api.getSession({ headers: requestHeaders })
+  const session = await authInstance.api.getSession({ headers: requestHeaders })
   if (!session) return null
 
   const adminId = process.env.ADMIN_GITHUB_ID?.trim()
   if (!adminId) return null
 
-  return withDatabase(database => {
-    const adminAccount = database.select({ id: account.id }).from(account).where(and(
-      eq(account.userId, session.user.id),
-      eq(account.providerId, 'github'),
-      eq(account.accountId, adminId),
-    )).get()
+  return withDatabase(async database => {
+    const [adminAccount] = await database.select({ id: authSchema.account.id }).from(authSchema.account).where(and(
+      eq(authSchema.account.userId, session.user.id),
+      eq(authSchema.account.providerId, 'github'),
+      eq(authSchema.account.accountId, adminId),
+    )).limit(1)
     return adminAccount ? session : null
   })
 })

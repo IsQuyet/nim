@@ -93,7 +93,7 @@ for (const input of [
         const draft = await withWritingStore(runtime, writer => createTestDraft(writer, { title: 'Markdown navigation', description: '', body: scenario.source }))
         await page.goto(`/admin/posts/${draft.id}`)
         await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-        const baseline = snapshot(runtime, draft.id)
+        const baseline = await snapshot(runtime, draft.id)
         const body = page.getByRole('textbox', { name: 'Body', exact: true })
         await body.press('ControlOrMeta+End')
         await page.getByLabel('Title', { exact: true }).focus()
@@ -103,7 +103,7 @@ for (const input of [
         const position = scenario.source.indexOf(scenario.needle) + scenario.offset
         const expected = `${scenario.source.slice(0, position)}Ω${scenario.source.slice(position)}`
         await expect.poll(() => localBody(page)).toBe(expected)
-        expect(snapshot(runtime, draft.id)).toEqual(baseline)
+        expect(await snapshot(runtime, draft.id)).toEqual(baseline)
       })
     }
 
@@ -113,7 +113,7 @@ for (const input of [
         const draft = await withWritingStore(runtime, writer => createTestDraft(writer, { title: 'Marker navigation', description: '', body: scenario.source }))
         await page.goto(`/admin/posts/${draft.id}`)
         await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-        const baseline = snapshot(runtime, draft.id)
+        const baseline = await snapshot(runtime, draft.id)
         const body = page.getByRole('textbox', { name: 'Body', exact: true })
         await body.press('ControlOrMeta+End')
         await page.getByLabel('Title', { exact: true }).focus()
@@ -124,7 +124,7 @@ for (const input of [
         await expect(body).toContainText(scenario.line)
         await page.getByRole('button', { name: 'Save draft', exact: true }).click()
         await expect(page.getByText('Draft saved.', { exact: true })).toBeVisible()
-        const saved = snapshot(runtime, draft.id)
+        const saved = await snapshot(runtime, draft.id)
         expect(saved.revisions).toEqual(baseline.revisions)
         expect(saved.drafts).toEqual(baseline.drafts)
         expect(saved.revisions.at(-1)?.body).toBe(scenario.source)

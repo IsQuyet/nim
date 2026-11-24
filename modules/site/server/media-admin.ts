@@ -2,7 +2,6 @@ import 'server-only'
 import { eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import { routes } from '@/lib/routes'
-import { getMediaDirectory } from '@/lib/server/data-paths'
 import { withDatabase, type AppDatabase } from '@/lib/server/database'
 import { withAdmin } from '@/modules/auth/server/admin'
 import {
@@ -12,7 +11,7 @@ import {
 } from '@/modules/gallery/server/media'
 import { mediaIdSchema, type MediaAsset } from '@/modules/media/model'
 import { mediaAssets } from '@/modules/media/server/schema'
-import { createFileMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
+import { createConfiguredMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
 import { createMediaStore } from '@/modules/media/server/store'
 import {
   findPostMediaBlocker,
@@ -23,17 +22,19 @@ import { isMediaPublished as isPostMediaPublished } from '@/modules/posts/server
 import type { SiteMediaItem } from '../media'
 
 /** 判断媒体资产是否在公开文章或公开画廊中被引用，决定匿名访客是否可读取 `/media/[id]`。 */
-export function isSiteMediaPublished(database: AppDatabase, mediaId: string) {
-  return isPostMediaPublished(database, mediaId) || isGalleryMediaPublished(database, mediaId)
+export async function isSiteMediaPublished(database: AppDatabase, mediaId: string) {
+  return (await isPostMediaPublished(database, mediaId)) || (await isGalleryMediaPublished(database, mediaId))
 }
 
-export function listSiteAdminMedia(database: AppDatabase, storage: MediaStorage): SiteMediaItem[] {
-  return database.transaction(transaction => {
-    const assets = createMediaStore(transaction as unknown as AppDatabase, storage).list()
+export async function listSiteAdminMedia(database: AppDatabase, storage: MediaStorage): Promise<SiteMediaItem[]> {
+  return database.transaction(async transaction => {
+    const assets = await createMediaStore(transaction as unknown as AppDatabase, storage).list()
     if (assets.length === 0) return []
 
-    const postsByMedia = listPostMediaReferences(transaction)
-    const galleryByMedia = listGalleryMediaReferences(transaction)
+    const [postsByMedia, galleryByMedia] = await Promise.all([
+      listPostMediaReferences(transaction),
+      listGalleryMediaReferences(transaction),
+    ])
 
     return assets.map(asset => {
       const postReferences = Array.from(postsByMedia.get(asset.id)?.values() ?? []).sort((left, right) => {
@@ -44,7 +45,7 @@ export function listSiteAdminMedia(database: AppDatabase, storage: MediaStorage)
       const galleryReferences = galleryByMedia.get(asset.id) ?? []
       return { asset, postReferences, galleryReferences }
     })
-  }, { behavior: 'deferred' })
+  })
 }
 
 export async function deleteSiteAdminMedia(
@@ -56,21 +57,26 @@ export async function deleteSiteAdminMedia(
   if (!parsed.success) return { status: 'invalid', message: 'Invalid media ID.' }
   const id = parsed.data
 
-  const removed = database.transaction(
-    (transaction): { status: 'deleted'; asset: MediaAsset } | Exclude<DeleteMediaResult, { status: 'success' }> => {
-      const asset = createMediaStore(transaction as unknown as AppDatabase, storage).get(id)
+  const removed = await database.transaction(
+    async (transaction): Promise<{ status: 'deleted'; asset: MediaAsset } | Exclude<DeleteMediaResult, { status: 'success' }>> => {
+      await transaction
+        .select({ id: mediaAssets.id })
+        .from(mediaAssets)
+        .where(eq(mediaAssets.id, id))
+        .for('update')
+        .limit(1)
+      const asset = await createMediaStore(transaction as unknown as AppDatabase, storage).get(id)
       if (!asset) return { status: 'missing' }
 
-      const postBlocker = findPostMediaBlocker(transaction, id)
+      const postBlocker = await findPostMediaBlocker(transaction, id)
       if (postBlocker) return { status: 'referenced', message: postBlocker }
 
-      const galleryBlocker = findGalleryMediaBlocker(transaction, id)
+      const galleryBlocker = await findGalleryMediaBlocker(transaction, id)
       if (galleryBlocker) return { status: 'referenced', message: galleryBlocker }
 
-      transaction.delete(mediaAssets).where(eq(mediaAssets.id, id)).run()
+      await transaction.delete(mediaAssets).where(eq(mediaAssets.id, id))
       return { status: 'deleted', asset }
     },
-    { behavior: 'immediate' },
   )
 
   if (removed.status !== 'deleted') return removed
@@ -81,7 +87,7 @@ export async function deleteSiteAdminMedia(
 export function withAdminSiteMediaDatabase<T>(
   operation: (database: AppDatabase, storage: MediaStorage) => Promise<T> | T,
 ) {
-  return withAdmin(() => withDatabase(database => operation(database, createFileMediaStorage(getMediaDirectory()))))
+  return withAdmin(() => withDatabase(database => operation(database, createConfiguredMediaStorage())))
 }
 
 export async function getSiteAdminMedia() {

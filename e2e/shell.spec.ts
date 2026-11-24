@@ -71,8 +71,8 @@ test('访客从页头进入登录页，管理员从页头菜单进入管理、�
 
 test('文章页在宽屏显示停靠目录并随跳转高亮，在窄屏折叠在正文上方', async ({ page, runtime }) => {
   const fillers = Array.from({ length: 18 }, (_, index) => `Paragraph ${index + 1} with enough content to create scroll distance.`).join('\n\n')
-  const post = await withWritingStore(runtime, writer => {
-    const draft = createTestDraft(writer, {
+  const post = await withWritingStore(runtime, async writer => {
+    const draft = await createTestDraft(writer, {
       title: 'Reading layout with ToC',
       description: 'Test headings',
       body: `# Reading layout\n\n## First section\n\n${fillers}\n\n### Nested detail\n\n${fillers}\n\n## Closing notes\n\nEnd.`,
@@ -120,8 +120,8 @@ test('一屏短页面等待页脚文字切换动画时，不溢出视口产生�
 
 test('短页面与长页面切换时保持同一视口内容宽度，不因滚动条出现而横向挤动', async ({ page, runtime }) => {
   const fillers = Array.from({ length: 24 }, (_, index) => `Paragraph ${index + 1} adding enough vertical height to require scrolling.`).join('\n\n')
-  const post = await withWritingStore(runtime, writer => {
-    const draft = createTestDraft(writer, {
+  const post = await withWritingStore(runtime, async writer => {
+    const draft = await createTestDraft(writer, {
       title: 'Long scrolling article',
       description: 'Compare viewport gutter stability',
       body: fillers,

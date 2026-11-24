@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { initializeDatabase, openDatabase, type ManagedDatabase } from '@/lib/server/database'
 import { createFileMediaStorage, type MediaStorage } from '@/modules/media/server/storage'
 import { createMediaStore } from '@/modules/media/server/store'
 import { prepareMediaUpload } from '@/modules/media/server/upload'
@@ -14,21 +14,21 @@ import { createWritingStore } from './writing-store'
 import { deleteAdminMedia, listAdminMedia } from './media-admin'
 
 let directory: string
-let database: AppDatabase
+let database: ManagedDatabase
 let storage: MediaStorage
 let mediaRoot: string
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-media-admin-'))
-  const filename = join(directory, 'nim.sqlite')
+  const target = join(directory, 'pgdata')
   mediaRoot = join(directory, 'media')
-  await initializeDatabase(filename)
-  database = openDatabase(filename)
+  await initializeDatabase(target)
+  database = await openDatabase(target)
   storage = createFileMediaStorage(mediaRoot)
 })
 
-afterEach(() => {
-  database?.$client.close()
+afterEach(async () => {
+  await database?.close()
   if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -54,29 +54,29 @@ describe('后台媒体列表与引用查询', () => {
     const historicalOnly = await uploadAsset('historical.png')
 
     const writer = createWritingStore(database)
-    const draftPost = createTestDraft(writer, {
+    const draftPost = await createTestDraft(writer, {
       title: 'Draft post',
       description: '',
       body: `![draft](/media/${draftOnly.id})`,
     })
-    const livePost = createTestDraft(writer, {
+    const livePost = await createTestDraft(writer, {
       title: 'Live post',
       description: '',
       body: `![live](/media/${publishedBoth.id})\n\n![old](/media/${historicalOnly.id})`,
     })
-    const published = publishTestDraft(writer, livePost)
-    saveTestDraft(writer, { ...livePost, revisionId: published.revisionId }, {
+    const published = await publishTestDraft(writer, livePost)
+    await saveTestDraft(writer, { ...livePost, revisionId: published.revisionId }, {
       title: 'Live post',
       description: '',
       body: `![live](/media/${publishedBoth.id})`,
     })
-    publishTestDraft(writer, {
+    await publishTestDraft(writer, {
       ...livePost,
       revisionId: published.revisionId + 1,
       body: `![live](/media/${publishedBoth.id})`,
     })
 
-    const items = listAdminMedia(database, storage)
+    const items = await listAdminMedia(database, storage)
     const byId = new Map(items.map(item => [item.asset.id, item]))
 
     expect(byId.get(unused.id)?.references).toEqual([])
@@ -109,9 +109,9 @@ describe('后台媒体列表与引用查询', () => {
     const inPublished = await uploadAsset('in-published.png')
 
     const writer = createWritingStore(database)
-    createTestDraft(writer, { title: 'Draft', description: '', body: `![a](/media/${inDraft.id})` })
-    const pub = createTestDraft(writer, { title: 'Pub', description: '', body: `![b](/media/${inPublished.id})` })
-    publishTestDraft(writer, pub)
+    await createTestDraft(writer, { title: 'Draft', description: '', body: `![a](/media/${inDraft.id})` })
+    const pub = await createTestDraft(writer, { title: 'Pub', description: '', body: `![b](/media/${inPublished.id})` })
+    await publishTestDraft(writer, pub)
 
     expect(await deleteAdminMedia(database, storage, 'not-a-uuid')).toMatchObject({ status: 'invalid' })
     expect(await deleteAdminMedia(database, storage, randomUUID())).toEqual({ status: 'missing' })
@@ -122,6 +122,6 @@ describe('后台媒体列表与引用查询', () => {
     expect(existsSync(unusedFile)).toBe(true)
     expect(await deleteAdminMedia(database, storage, unused.id)).toEqual({ status: 'success', id: unused.id })
     expect(existsSync(unusedFile)).toBe(false)
-    expect(createMediaStore(database, storage).get(unused.id)).toBeNull()
+    expect(await createMediaStore(database, storage).get(unused.id)).toBeNull()
   })
 })

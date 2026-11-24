@@ -31,7 +31,7 @@ const store = {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  store.getPublishedPost.mockReturnValue(published)
+  store.getPublishedPost.mockResolvedValue(published)
   vi.mocked(withAdminPostStore).mockImplementation(async operation => ({
     authorized: true,
     value: await operation(store),
@@ -54,7 +54,7 @@ describe('发布版本只读比较入口', () => {
   it('校验文章身份后只读读取当前公开版本或未发布状态', async () => {
     expect(await readPublishedPostAction(published.id)).toEqual({ status: 'success', value: published })
     expect(store.getPublishedPost).toHaveBeenCalledExactlyOnceWith(published.id)
-    store.getPublishedPost.mockReturnValue(null)
+    store.getPublishedPost.mockResolvedValue(null)
     expect(await readPublishedPostAction(published.id)).toEqual({ status: 'success', value: null })
     expect(store.getPublishedPost).toHaveBeenCalledTimes(2)
   })

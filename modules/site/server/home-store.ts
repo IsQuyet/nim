@@ -53,8 +53,8 @@ function defaultSection(sectionKey: HomeSectionKey): HomeSectionConfig {
   return { sectionKey, ...DEFAULT_SECTIONS[sectionKey] }
 }
 
-function readSections(database: AppDatabase): Map<HomeSectionKey, HomeSectionConfig> {
-  const rows = database.select().from(siteHomeSections).all()
+async function readSections(database: AppDatabase): Promise<Map<HomeSectionKey, HomeSectionConfig>> {
+  const rows = await database.select().from(siteHomeSections)
   const byKey = new Map<HomeSectionKey, HomeSectionConfig>()
 
   for (const key of HOME_SECTION_KEYS) {
@@ -75,12 +75,11 @@ function readSections(database: AppDatabase): Map<HomeSectionKey, HomeSectionCon
   return byKey
 }
 
-function readItems(database: AppDatabase): Map<HomeSectionKey, HomeCuratedItem[]> {
-  const rows = database
+async function readItems(database: AppDatabase): Promise<Map<HomeSectionKey, HomeCuratedItem[]>> {
+  const rows = await database
     .select()
     .from(siteHomeItems)
     .orderBy(asc(siteHomeItems.sortOrder), asc(siteHomeItems.id))
-    .all()
 
   const grouped = new Map<HomeSectionKey, HomeCuratedItem[]>()
   for (const key of HOME_SECTION_KEYS) grouped.set(key, [])
@@ -128,17 +127,19 @@ function resolveStaticEntries<T extends { id: string }>(
 }
 
 export type HomeStore = {
-  getPublicHomepage(): HomepageData
-  getAdminHomepage(): AdminHomeData
-  saveConfig(input: ParsedHomeConfigInput): void
+  getPublicHomepage(): Promise<HomepageData>
+  getAdminHomepage(): Promise<AdminHomeData>
+  saveConfig(input: ParsedHomeConfigInput): Promise<void>
 }
 
 export function createHomeStore(database: AppDatabase): HomeStore {
-  function getPublicHomepage(): HomepageData {
-    const sections = readSections(database)
-    const curatedBySection = readItems(database)
-    const publishedPosts = createPostStore(database).listPublishedPosts()
-    const publishedGallery = createGalleryStore(database).listPublished()
+  async function getPublicHomepage(): Promise<HomepageData> {
+    const [sections, curatedBySection, publishedPosts, publishedGallery] = await Promise.all([
+      readSections(database),
+      readItems(database),
+      createPostStore(database).listPublishedPosts(),
+      createGalleryStore(database).listPublished(),
+    ])
 
     const postsById = new Map(publishedPosts.map(post => [post.id, post]))
     const galleryById = new Map(publishedGallery.map(item => [item.id, item]))
@@ -211,12 +212,15 @@ export function createHomeStore(database: AppDatabase): HomeStore {
     }
   }
 
-  function getAdminHomepage(): AdminHomeData {
-    const sections = readSections(database)
-    const curatedBySection = readItems(database)
-    const publishedPosts = createPostStore(database).listPublishedPosts()
-    const publishedGallery = createGalleryStore(database).listPublished()
-    const allGallery = createGalleryStore(database).listAll()
+  async function getAdminHomepage(): Promise<AdminHomeData> {
+    const galleryStore = createGalleryStore(database)
+    const [sections, curatedBySection, publishedPosts, publishedGallery, allGallery] = await Promise.all([
+      readSections(database),
+      readItems(database),
+      createPostStore(database).listPublishedPosts(),
+      galleryStore.listPublished(),
+      galleryStore.listAll(),
+    ])
 
     const postsById = new Map(publishedPosts.map(post => [post.id, post]))
     const publishedGalleryById = new Map(publishedGallery.map(item => [item.id, item]))
@@ -301,11 +305,11 @@ export function createHomeStore(database: AppDatabase): HomeStore {
     }
   }
 
-  function saveConfig(input: ParsedHomeConfigInput) {
-    database.transaction(transaction => {
+  async function saveConfig(input: ParsedHomeConfigInput): Promise<void> {
+    await database.transaction(async transaction => {
       const now = new Date().toISOString()
       for (const section of input.sections) {
-        transaction
+        await transaction
           .insert(siteHomeSections)
           .values({
             sectionKey: section.sectionKey,
@@ -327,23 +331,21 @@ export function createHomeStore(database: AppDatabase): HomeStore {
               updatedAt: now,
             },
           })
-          .run()
 
-        transaction.delete(siteHomeItems).where(eq(siteHomeItems.sectionKey, section.sectionKey)).run()
-        section.items.forEach((item, index) => {
-          transaction
-            .insert(siteHomeItems)
-            .values({
+        await transaction.delete(siteHomeItems).where(eq(siteHomeItems.sectionKey, section.sectionKey))
+        if (section.items.length > 0) {
+          await transaction.insert(siteHomeItems).values(
+            section.items.map((item, index) => ({
               sectionKey: section.sectionKey,
               itemKind: item.itemKind,
               itemId: item.itemId,
               visible: item.visible,
               sortOrder: index,
-            })
-            .run()
-        })
+            })),
+          )
+        }
       }
-    }, { behavior: 'immediate' })
+    })
   }
 
   return { getPublicHomepage, getAdminHomepage, saveConfig }

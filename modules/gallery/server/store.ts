@@ -25,13 +25,13 @@ export type DeleteGalleryResult =
   | { status: 'missing' }
 
 export type GalleryStore = {
-  listPublished(): PublishedGalleryItem[]
-  getPublished(id: string): PublishedGalleryItem | null
-  listAll(): GalleryItem[]
-  get(id: string): GalleryItem | null
-  save(input: ParsedGalleryItemInput): SaveGalleryResult
-  setStatus(id: string, status: GalleryStatus): SetGalleryStatusResult
-  remove(id: string): DeleteGalleryResult
+  listPublished(): Promise<PublishedGalleryItem[]>
+  getPublished(id: string): Promise<PublishedGalleryItem | null>
+  listAll(): Promise<GalleryItem[]>
+  get(id: string): Promise<GalleryItem | null>
+  save(input: ParsedGalleryItemInput): Promise<SaveGalleryResult>
+  setStatus(id: string, status: GalleryStatus): Promise<SetGalleryStatusResult>
+  remove(id: string): Promise<DeleteGalleryResult>
 }
 
 function gallerySelection() {
@@ -57,72 +57,72 @@ function gallerySelection() {
 }
 
 export function createGalleryStore(database: AppDatabase): GalleryStore {
-  function get(id: string): GalleryItem | null {
-    return (
-      database
-        .select(gallerySelection())
-        .from(galleryItems)
-        .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
-        .where(eq(galleryItems.id, id))
-        .get() ?? null
-    )
+  async function get(id: string): Promise<GalleryItem | null> {
+    const [row] = await database
+      .select(gallerySelection())
+      .from(galleryItems)
+      .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
+      .where(eq(galleryItems.id, id))
+      .limit(1)
+    return row ?? null
   }
 
-  function listAll(): GalleryItem[] {
+  async function listAll(): Promise<GalleryItem[]> {
     return database
       .select(gallerySelection())
       .from(galleryItems)
       .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
       .orderBy(desc(galleryItems.updatedAt), asc(galleryItems.id))
-      .all()
   }
 
-  function listPublished(): PublishedGalleryItem[] {
-    return database
+  async function listPublished(): Promise<PublishedGalleryItem[]> {
+    const rows = await database
       .select(gallerySelection())
       .from(galleryItems)
       .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
       .where(eq(galleryItems.status, 'published'))
       .orderBy(desc(galleryItems.publishedAt), asc(galleryItems.id))
-      .all()
-      .filter((item): item is PublishedGalleryItem => item.status === 'published' && item.publishedAt !== null)
+    return rows.filter(
+      (item): item is PublishedGalleryItem => item.status === 'published' && item.publishedAt !== null,
+    )
   }
 
-  function getPublished(id: string): PublishedGalleryItem | null {
-    const row = database
+  async function getPublished(id: string): Promise<PublishedGalleryItem | null> {
+    const [row] = await database
       .select(gallerySelection())
       .from(galleryItems)
       .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
       .where(and(eq(galleryItems.id, id), eq(galleryItems.status, 'published')))
-      .get()
+      .limit(1)
     if (!row || row.status !== 'published' || !row.publishedAt) return null
     return row as PublishedGalleryItem
   }
 
-  function save(input: ParsedGalleryItemInput): SaveGalleryResult {
-    return database.transaction((transaction): SaveGalleryResult => {
-      const asset = transaction
+  async function save(input: ParsedGalleryItemInput): Promise<SaveGalleryResult> {
+    return database.transaction(async (transaction): Promise<SaveGalleryResult> => {
+      const [asset] = await transaction
         .select({ id: mediaAssets.id, state: mediaAssets.state })
         .from(mediaAssets)
         .where(eq(mediaAssets.id, input.mediaId))
-        .get()
+        .limit(1)
       if (!asset || asset.state !== 'ready') {
         return { status: 'invalid', message: 'Choose a ready uploaded image before saving.' }
       }
 
       const now = new Date().toISOString()
       if (input.id) {
-        const existing = transaction
+        const [existing] = await transaction
           .select({ id: galleryItems.id, status: galleryItems.status, publishedAt: galleryItems.publishedAt })
           .from(galleryItems)
           .where(eq(galleryItems.id, input.id))
-          .get()
+          .for('update')
+          .limit(1)
         if (!existing) return { status: 'missing' }
 
         const publishedAt =
           input.status === 'published' ? (existing.publishedAt ?? now) : null
 
-        transaction
+        await transaction
           .update(galleryItems)
           .set({
             mediaId: input.mediaId,
@@ -135,20 +135,19 @@ export function createGalleryStore(database: AppDatabase): GalleryStore {
             publishedAt,
           })
           .where(eq(galleryItems.id, input.id))
-          .run()
 
-        const updated = transaction
+        const [updated] = await transaction
           .select(gallerySelection())
           .from(galleryItems)
           .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
           .where(eq(galleryItems.id, input.id))
-          .get()
+          .limit(1)
         return updated ? { status: 'success', item: updated } : { status: 'missing' }
       }
 
       const id = randomUUID()
       const publishedAt = input.status === 'published' ? now : null
-      transaction
+      await transaction
         .insert(galleryItems)
         .values({
           id,
@@ -162,21 +161,20 @@ export function createGalleryStore(database: AppDatabase): GalleryStore {
           updatedAt: now,
           publishedAt,
         })
-        .run()
 
-      const created = transaction
+      const [created] = await transaction
         .select(gallerySelection())
         .from(galleryItems)
         .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
         .where(eq(galleryItems.id, id))
-        .get()
+        .limit(1)
       return created ? { status: 'success', item: created } : { status: 'missing' }
-    }, { behavior: 'immediate' })
+    })
   }
 
-  function setStatus(id: string, status: GalleryStatus): SetGalleryStatusResult {
-    return database.transaction((transaction): SetGalleryStatusResult => {
-      const existing = transaction
+  async function setStatus(id: string, status: GalleryStatus): Promise<SetGalleryStatusResult> {
+    return database.transaction(async (transaction): Promise<SetGalleryStatusResult> => {
+      const [existing] = await transaction
         .select({
           id: galleryItems.id,
           mediaId: galleryItems.mediaId,
@@ -184,15 +182,16 @@ export function createGalleryStore(database: AppDatabase): GalleryStore {
         })
         .from(galleryItems)
         .where(eq(galleryItems.id, id))
-        .get()
+        .for('update')
+        .limit(1)
       if (!existing) return { status: 'missing' }
 
       if (status === 'published') {
-        const asset = transaction
+        const [asset] = await transaction
           .select({ state: mediaAssets.state })
           .from(mediaAssets)
           .where(eq(mediaAssets.id, existing.mediaId))
-          .get()
+          .limit(1)
         if (!asset || asset.state !== 'ready') {
           return { status: 'invalid', message: 'The image is not ready to publish.' }
         }
@@ -200,27 +199,29 @@ export function createGalleryStore(database: AppDatabase): GalleryStore {
 
       const now = new Date().toISOString()
       const publishedAt = status === 'published' ? (existing.publishedAt ?? now) : null
-      transaction
+      await transaction
         .update(galleryItems)
         .set({ status, updatedAt: now, publishedAt })
         .where(eq(galleryItems.id, id))
-        .run()
 
-      const updated = transaction
+      const [updated] = await transaction
         .select(gallerySelection())
         .from(galleryItems)
         .innerJoin(mediaAssets, eq(mediaAssets.id, galleryItems.mediaId))
         .where(eq(galleryItems.id, id))
-        .get()
+        .limit(1)
       return updated ? { status: 'success', item: updated } : { status: 'missing' }
-    }, { behavior: 'immediate' })
+    })
   }
 
-  function remove(id: string): DeleteGalleryResult {
-    return database.transaction((transaction): DeleteGalleryResult => {
-      const result = transaction.delete(galleryItems).where(eq(galleryItems.id, id)).run()
-      return result.changes > 0 ? { status: 'success', id } : { status: 'missing' }
-    }, { behavior: 'immediate' })
+  async function remove(id: string): Promise<DeleteGalleryResult> {
+    return database.transaction(async (transaction): Promise<DeleteGalleryResult> => {
+      const deleted = await transaction
+        .delete(galleryItems)
+        .where(eq(galleryItems.id, id))
+        .returning({ id: galleryItems.id })
+      return deleted.length > 0 ? { status: 'success', id } : { status: 'missing' }
+    })
   }
 
   return { listPublished, getPublished, listAll, get, save, setStatus, remove }

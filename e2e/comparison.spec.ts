@@ -6,8 +6,8 @@ const emptyServer = { posts: [], revisions: [], drafts: [], publications: [], pu
 
 test('编辑器将未保存内容与当前发布快照并列预览，不写入服务器', async ({ page, login, runtime }) => {
   await login()
-  const published = await withWritingStore(runtime, writer => {
-    const draft = createTestDraft(writer, {
+  const published = await withWritingStore(runtime, async writer => {
+    const draft = await createTestDraft(writer, {
       title: 'Published title',
       description: 'Published summary',
       body: '# Published body\n\n| Name | Value |\n| --- | --- |\n| Old | 1 |',
@@ -16,7 +16,7 @@ test('编辑器将未保存内容与当前发布快照并列预览，不写入�
   })
   await page.goto(`/admin/posts/${published.id}`)
   await expect(page.getByText('No unsaved changes.', { exact: true })).toBeVisible()
-  const baseline = snapshot(runtime, published.id)
+  const baseline = await snapshot(runtime, published.id)
 
   await page.getByLabel('Title', { exact: true }).fill('Current title')
   await page.getByLabel('Description', { exact: true }).fill('Current summary')
@@ -35,7 +35,7 @@ test('编辑器将未保存内容与当前发布快照并列预览，不写入�
   await expect(after).toContainText('Current summary')
   await expect(after).toContainText('New')
   await expect(after.getByRole('table')).toBeVisible()
-  expect(snapshot(runtime, published.id)).toEqual(baseline)
+  expect(await snapshot(runtime, published.id)).toEqual(baseline)
   await expect(page.getByText('Unsaved changes. Not saved to the server.', { exact: true })).toBeVisible()
 })
 
@@ -52,5 +52,5 @@ test('未发布新稿对照时明确显示没有发布基线', async ({ page, lo
   await expect(comparison.getByText('This post has not been published yet.', { exact: true })).toBeVisible()
   await expect(comparison.getByRole('article', { name: 'Published version' })).toHaveCount(0)
   await expect(comparison.getByRole('article', { name: 'Current editor text' })).toContainText('Local only body')
-  expect(snapshot(runtime, id)).toEqual(emptyServer)
+  expect(await snapshot(runtime, id)).toEqual(emptyServer)
 })

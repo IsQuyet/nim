@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
-import { initializeDatabase, openDatabase } from '@/lib/server/database'
+import { closeDatabaseConnections, initializeDatabase, openDatabase } from '@/lib/server/database'
 import { mediaAssets } from '@/modules/media/server/schema'
 import { getAdminSession } from '@/modules/auth/server/auth'
 import { mediaUploadResponseSchema } from '@/modules/media/model'
@@ -27,7 +27,7 @@ const id = '264efa5a-5f48-4f4d-bbc3-56021a5f6342'
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-media-route-'))
-  filename = join(directory, 'nim.sqlite')
+  filename = join(directory, 'pgdata')
   vi.stubEnv('DATABASE_PATH', filename)
   vi.stubEnv('SITE_URL', origin)
   vi.mocked(getAdminSession).mockReset().mockResolvedValue(createTestAdminSession())
@@ -35,7 +35,8 @@ beforeEach(async () => {
   await initializeDatabase(filename)
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeDatabaseConnections()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   rmSync(directory, { recursive: true, force: true })
@@ -74,12 +75,12 @@ describe('管理员图片上传 Route Handler', () => {
     expect(value).toMatchObject({ status: 'success', media: { id, mediaType: 'image/webp', width: 2, height: 3, url: `/media/${id}` } })
     const retry = await POST(await request(form(id)))
     expect(await retry.json()).toEqual(value)
-    const database = openDatabase(filename)
+    const database = await openDatabase(filename)
     try {
-      const stored = database.select().from(mediaAssets).get()
+      const [stored] = await database.select().from(mediaAssets).limit(1)
       expect(stored).toMatchObject({ id, state: 'ready', mediaType: 'image/webp' })
       expect((await sharp(readFileSync(join(directory, 'media', `${id}.webp`))).metadata()).format).toBe('webp')
-    } finally { database.$client.close() }
+    } finally { await database.close() }
   })
 
   it('拒绝伪造 MIME、截断图片及重复字段，不创建媒体元数据', async () => {
@@ -88,8 +89,8 @@ describe('管理员图片上传 Route Handler', () => {
     const duplicate = form(randomUUID())
     duplicate.append('id', randomUUID())
     expect((await POST(await request(duplicate))).status).toBe(400)
-    const database = openDatabase(filename)
-    try { expect(database.select().from(mediaAssets).all()).toEqual([]) } finally { database.$client.close() }
+    const database = await openDatabase(filename)
+    try { expect(await database.select().from(mediaAssets)).toEqual([]) } finally { await database.close() }
   })
 
   it('拒绝同上传身份绑定不同的有效图片', async () => {

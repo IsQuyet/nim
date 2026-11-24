@@ -12,7 +12,7 @@ export const getHomepageData = cache(async () => {
   return withDatabase(database => createHomeStore(database).getPublicHomepage())
 })
 
-export function withAdminHomeStore<T>(operation: (store: HomeStore) => T) {
+export function withAdminHomeStore<T>(operation: (store: HomeStore) => Promise<T> | T) {
   return withAdmin(() => withDatabase(database => operation(createHomeStore(database))))
 }
 

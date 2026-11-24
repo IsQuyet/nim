@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { loadEnvConfig } from '@next/env'
 import { postIdSchema } from '../modules/posts/model'
-import { withDatabase } from '../lib/server/database'
+import { closeDatabaseConnections, withDatabase } from '../lib/server/database'
 import type { PostFileStage } from '../modules/posts/files'
 import { decodeMarkdownBytes, exportPostMarkdown, importPostMarkdown } from '../modules/posts/server/file-exchange'
 import { createPostStore } from '../modules/posts/server/store'
@@ -111,8 +111,12 @@ async function main() {
     return
   }
   loadEnvConfig(process.cwd(), !command.production)
-  if (command.kind === 'import') await importFile(command.input)
-  else await exportFile(command)
+  try {
+    if (command.kind === 'import') await importFile(command.input)
+    else await exportFile(command)
+  } finally {
+    await closeDatabaseConnections()
+  }
 }
 
 main().catch(error => {

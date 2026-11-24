@@ -21,7 +21,7 @@ export function samePostContent(left: PostContent, right: PostContent) {
 }
 
 export const postIdSchema = z.uuid({ error: 'The post ID must be a UUID.' })
-export const revisionIdSchema = z.number().int().positive().safe()
+export const revisionIdSchema = z.number().int().positive().max(2_147_483_647)
 
 export const revisionSources = ['create', 'save', 'publish', 'import', 'restore', 'migration'] as const
 export const revisionSourceSchema = z.enum(revisionSources)

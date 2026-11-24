@@ -1,17 +1,35 @@
 // @vitest-environment node
+import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
+import { once } from 'node:events'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Database } from 'better-sqlite3'
-import { eq } from 'drizzle-orm'
+import { PGlite } from '@electric-sql/pglite'
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
+import { eq, sql, type SQL } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAuthSecret, initializeAuthSecret } from './secret'
 import { getAuthSecretPath } from '@/lib/server/data-paths'
-import { initializeDatabase, openDatabase } from '@/lib/server/database'
+import { closeDatabaseConnections, initializeDatabase, openDatabase, type AppDatabase, type ManagedDatabase } from '@/lib/server/database'
 import { session as sessions } from './schema'
 import { createWritingStore } from '@/modules/posts/server/writing-store'
 import { createTestDraft } from '@/test/post-commands'
+
+async function freePort() {
+  const listener = createServer()
+  listener.listen(0, '127.0.0.1')
+  await once(listener, 'listening')
+  const address = listener.address()
+  assert.ok(address && typeof address !== 'string')
+  await new Promise<void>((resolve, reject) => listener.close(error => (error ? reject(error) : resolve())))
+  return address.port
+}
+
+async function queryRows<T = Record<string, unknown>>(db: AppDatabase, statement: SQL): Promise<T[]> {
+  return ((await db.execute(statement)) as { rows: T[] }).rows
+}
 
 const next = vi.hoisted(() => ({ requestHeaders: new Headers() }))
 vi.mock('server-only', () => ({}))
@@ -27,9 +45,12 @@ const environment = {
 }
 
 let directory: string
+let pglite: PGlite
+let pgServer: PGLiteSocketServer
+let databaseUrl: string
 let app: typeof import('./auth')
 let route: typeof import('@/app/api/auth/[...all]/route')
-let database: Database
+let database: ManagedDatabase
 let githubId: string
 let githubRequests: Request[]
 let cookies: Map<string, string>
@@ -98,9 +119,15 @@ beforeEach(async () => {
   scenario += 1
   vi.resetModules()
   directory = mkdtempSync(join(tmpdir(), 'nim-auth-'))
-  vi.stubEnv('DATABASE_PATH', join(directory, 'nim.sqlite'))
+  const port = await freePort()
+  pglite = new PGlite()
+  pgServer = new PGLiteSocketServer({ db: pglite, port, host: '127.0.0.1', maxConnections: 10 })
+  await pgServer.start()
+  databaseUrl = `postgres://postgres:postgres@127.0.0.1:${port}/postgres`
+  vi.stubEnv('DATABASE_URL', databaseUrl)
+  vi.stubEnv('DATA_DIR', directory)
   for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
-  await initializeDatabase()
+  await initializeDatabase(databaseUrl)
   initializeAuthSecret()
   cookies = new Map()
   next.requestHeaders = new Headers()
@@ -137,16 +164,20 @@ beforeEach(async () => {
   }))
   app = await import('./auth')
   route = await import('@/app/api/auth/[...all]/route')
-  const auth = app.getAuth()!
+  const auth = (await app.getAuth())!
   await auth.$context
-  database = auth.options.database as Database
+  database = await openDatabase()
 })
 
-afterEach(() => {
-  if (database?.open) database.close()
+afterEach(async () => {
+  await database?.close()
+  await closeDatabaseConnections()
+  await (await import('@/lib/server/database')).closeDatabaseConnections()
+  await pgServer?.stop()
+  await pglite?.close()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  if (directory) rmSync(directory, { recursive: true })
+  if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
 describe('管理员认证与数据库会话', () => {
@@ -164,14 +195,17 @@ describe('管理员认证与数据库会话', () => {
   )
 
   it('配置读取不创建密钥或数据库，缺少密钥时关闭认证', async () => {
-    database.close()
+    await database?.close()
+    await closeDatabaseConnections()
+    vi.stubEnv('DATABASE_URL', '')
+    vi.stubEnv('DATA_DIR', '')
+    vi.stubEnv('DATABASE_PATH', join(directory, 'uninitialized-pgdata'))
     rmSync(getAuthSecretPath())
-    rmSync(join(directory, 'nim.sqlite'))
 
     expect(app.getAuthOptions()).toBeNull()
     expect(await app.getAdminSession()).toBeNull()
     expect(existsSync(getAuthSecretPath())).toBe(false)
-    expect(existsSync(join(directory, 'nim.sqlite'))).toBe(false)
+    expect(existsSync(join(directory, 'uninitialized-pgdata'))).toBe(false)
   })
 
   it('GitHub 登录绑定站点地址和 PKCE，指定账号建立一天会话，不向客户端泄漏提供方令牌', async () => {
@@ -209,9 +243,11 @@ describe('管理员认证与数据库会话', () => {
     expect(sessionResponse.status).toBe(200)
     expect(JSON.stringify(session)).not.toContain('provider-access-token')
     expect(JSON.stringify(session)).not.toContain(getAuthSecret())
-    const account = database.prepare('SELECT providerId, accountId, accessToken FROM account').get() as {
-      providerId: string; accountId: string; accessToken: string
-    }
+    const accountRows = await queryRows<{ providerId: string; accountId: string; accessToken: string }>(
+      database,
+      sql`SELECT "providerId", "accountId", "accessToken" FROM account`,
+    )
+    const account = accountRows[0]
     expect(account).toMatchObject({ providerId: 'github', accountId: '1234' })
     expect(account.accessToken).toBeTruthy()
     expect(account.accessToken).not.toBe('provider-access-token')
@@ -227,11 +263,11 @@ describe('管理员认证与数据库会话', () => {
 
   it('账号关联存储故障保持为错误，不伪装成未登录', async () => {
     await finishSignIn(await beginSignIn())
-    database.exec('ALTER TABLE account RENAME TO unavailable_account')
+    await database.execute(sql`ALTER TABLE account RENAME TO unavailable_account`)
     try {
       await expect(app.getAdminSession()).rejects.toThrow()
     } finally {
-      database.exec('ALTER TABLE unavailable_account RENAME TO account')
+      await database.execute(sql`ALTER TABLE unavailable_account RENAME TO account`)
     }
     expect(await app.getAdminSession()).not.toBeNull()
   })
@@ -239,32 +275,33 @@ describe('管理员认证与数据库会话', () => {
   it('认证与 Drizzle 对同一会话日期使用一致的查询和存储编码', async () => {
     await finishSignIn(await beginSignIn())
     const session = (await app.getAdminSession())!
-    const orm = openDatabase()
-    try {
-      expect(orm.select({ id: sessions.id }).from(sessions)
-        .where(eq(sessions.expiresAt, session.session.expiresAt)).get())
-        .toEqual({ id: session.session.id })
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
-      orm.update(sessions).set({ expiresAt }).where(eq(sessions.id, session.session.id)).run()
-      expect((await app.getAdminSession())?.session.expiresAt).toEqual(expiresAt)
-    } finally {
-      orm.$client.close()
-    }
+    expect((await database.select({ id: sessions.id }).from(sessions)
+      .where(eq(sessions.expiresAt, session.session.expiresAt)))[0])
+      .toEqual({ id: session.session.id })
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+    await database.update(sessions).set({ expiresAt }).where(eq(sessions.id, session.session.id))
+    expect((await app.getAdminSession())?.session.expiresAt).toEqual(expiresAt)
   })
 
   it('账号关联写入失败时回滚用户登记，恢复存储后可以重新登录', async () => {
-    database.exec(`
+    await database.execute(sql`
+      CREATE OR REPLACE FUNCTION reject_account_fn() RETURNS TRIGGER AS $$
+      BEGIN RAISE EXCEPTION 'account unavailable'; END;
+      $$ LANGUAGE plpgsql;
+    `)
+    await database.execute(sql`
       CREATE TRIGGER reject_account BEFORE INSERT ON account
-      BEGIN SELECT RAISE(ABORT, 'account unavailable'); END;
+      FOR EACH ROW EXECUTE FUNCTION reject_account_fn();
     `)
     const response = await finishSignIn(await beginSignIn())
     expect(response.status).toBe(302)
     expect(new URL(response.headers.get('location')!, environment.SITE_URL).pathname).toBe('/admin/login')
-    expect(database.prepare('SELECT * FROM user').all()).toEqual([])
-    expect(database.prepare('SELECT * FROM account').all()).toEqual([])
-    expect(database.prepare('SELECT * FROM session').all()).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM "user"`)).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM account`)).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM session`)).toEqual([])
 
-    database.exec('DROP TRIGGER reject_account')
+    await database.execute(sql`DROP TRIGGER reject_account ON account`)
+    await database.execute(sql`DROP FUNCTION reject_account_fn()`)
     expect((await finishSignIn(await beginSignIn())).status).toBe(302)
     expect(await app.getAdminSession()).not.toBeNull()
   })
@@ -278,9 +315,9 @@ describe('管理员认证与数据库会话', () => {
     const target = new URL(response.headers.get('location')!, environment.SITE_URL)
     expect(target.pathname).toBe('/admin/login')
     expect(target.searchParams.get('error')).toBe('account_not_allowed')
-    expect(database.prepare('SELECT * FROM user').all()).toEqual([])
-    expect(database.prepare('SELECT * FROM account').all()).toEqual([])
-    expect(database.prepare('SELECT * FROM session').all()).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM "user"`)).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM account`)).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM session`)).toEqual([])
     expect(await app.getAdminSession()).toBeNull()
   })
 
@@ -293,7 +330,7 @@ describe('管理员认证与数据库会话', () => {
     expect(target.pathname).toBe('/admin/login')
     expect(target.searchParams.get('error')).toBe('access_denied')
     expect(githubRequests).toHaveLength(0)
-    expect(database.prepare('SELECT * FROM user').all()).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM "user"`)).toEqual([])
   })
 
   it('无效 OAuth state 不能交换授权码或建立会话', async () => {
@@ -340,20 +377,20 @@ describe('管理员认证与数据库会话', () => {
     })
 
     expect(await app.getAdminSession()).toBeNull()
-    expect(database.prepare('SELECT accountId FROM account').get()).toEqual({ accountId: '1234' })
+    expect(await queryRows(database, sql`SELECT "accountId" FROM account`)).toEqual([{ accountId: '1234' }])
     const response = await finishSignIn(await beginSignIn())
     expect(new URL(response.headers.get('location')!, environment.SITE_URL).searchParams.get('error'))
       .toBe('account_not_allowed')
-    expect(database.prepare('SELECT * FROM session').all()).toHaveLength(1)
+    expect(await queryRows(database, sql`SELECT * FROM session`)).toHaveLength(1)
   })
 
   it('撤销失败时明确报错并保留 Cookie，原会话可以重试撤销', async () => {
     await finishSignIn(await beginSignIn())
     const session = await (await request('/get-session')).json()
     const originalCookies = cookieHeader()
-    const context = await app.getAuth()!.$context
+    const context = await (await app.getAuth())!.$context
     const deletion = vi.spyOn(context.internalAdapter, 'deleteSession')
-      .mockRejectedValueOnce(new Error('SQLITE_BUSY'))
+      .mockRejectedValueOnce(new Error('DB_BUSY'))
 
     const failed = await request('/revoke-session', { method: 'POST', body: { token: session.session.token } })
     expect(failed.status).toBe(500)
@@ -374,7 +411,7 @@ describe('管理员认证与数据库会话', () => {
     expect((await request('/revoke-session', {
       method: 'POST', body: { token: session.session.token },
     })).status).toBe(200)
-    expect(database.prepare('SELECT * FROM session').all()).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM session`)).toEqual([])
     cookies = new Map(originalCookies.split('; ').map(pair => {
       const separator = pair.indexOf('=')
       return [pair.slice(0, separator), pair.slice(separator + 1)]
@@ -390,21 +427,22 @@ describe('管理员认证与数据库会话', () => {
     expect(await app.getAdminSession()).toBeNull()
 
     next.requestHeaders = originalHeaders
-    database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
+    await database.execute(sql`UPDATE session SET "expiresAt" = ${new Date(Date.now() - 1)}`)
     expect(await app.getAdminSession()).toBeNull()
   })
 
   it('重复初始化和重新建立认证实例保留数据库会话与密钥', async () => {
     await finishSignIn(await beginSignIn())
     const secret = getAuthSecret()
-    database.close()
-    await initializeDatabase()
+    await database.close()
+    await closeDatabaseConnections()
+    await initializeDatabase(databaseUrl)
     initializeAuthSecret()
     vi.resetModules()
     app = await import('./auth')
-    const auth = app.getAuth()!
+    const auth = (await app.getAuth())!
     await auth.$context
-    database = auth.options.database as Database
+    database = await openDatabase(databaseUrl)
 
     expect(getAuthSecret()).toBe(secret)
     expect(await app.getAdminSession()).not.toBeNull()
@@ -414,31 +452,31 @@ describe('管理员认证与数据库会话', () => {
     await finishSignIn(await beginSignIn())
     const { withAdminPostStore } = await import('@/modules/posts/server/admin')
     const operation = vi.fn()
-    database.exec('ALTER TABLE session RENAME TO unavailable_session')
+    await database.execute(sql`ALTER TABLE session RENAME TO unavailable_session`)
     try {
       await expect(withAdminPostStore(operation)).rejects.toThrow()
       expect(operation).not.toHaveBeenCalled()
     } finally {
-      database.exec('ALTER TABLE unavailable_session RENAME TO session')
+      await database.execute(sql`ALTER TABLE unavailable_session RENAME TO session`)
     }
   })
 
   it('会话过期后保存返回重登提示，已保存正文保持不变', async () => {
     await finishSignIn(await beginSignIn())
-    const orm = openDatabase()
+    const orm = await openDatabase(databaseUrl)
     const original = { title: 'Saved title', description: '', body: '# Saved body\r\n' }
     let id: string
     let expectedRevisionId: number
     let receipts: unknown[]
     try {
-      const draft = createTestDraft(createWritingStore(orm), original)
+      const draft = await createTestDraft(createWritingStore(orm), original)
       id = draft.id
       expectedRevisionId = draft.revisionId
-      receipts = orm.$client.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)
+      receipts = await queryRows(orm, sql`SELECT * FROM post_write_receipts WHERE post_id = ${id}`)
     } finally {
-      orm.$client.close()
+      await orm.close()
     }
-    database.prepare('UPDATE session SET expiresAt = ?').run(new Date(Date.now() - 1).toISOString())
+    await database.execute(sql`UPDATE session SET "expiresAt" = ${new Date(Date.now() - 1)}`)
     const { writeDraftAction } = await import('@/modules/posts/server/actions/writing')
 
     expect(await writeDraftAction({
@@ -449,12 +487,13 @@ describe('管理员认证与数据库会话', () => {
       message: 'Sign in to save or publish this draft.',
       signInRequired: true,
     })
-    expect(database.prepare(`SELECT r.title, r.description, r.body FROM post_revisions r
-      INNER JOIN post_drafts d ON d.revision_id = r.id WHERE d.post_id = ?`).get(id))
-      .toEqual(original)
-    expect(database.prepare('SELECT revision_id FROM post_drafts WHERE post_id = ?').get(id))
+    expect((await queryRows(database, sql`
+      SELECT r.title, r.description, r.body FROM post_revisions r
+      INNER JOIN post_drafts d ON d.revision_id = r.id WHERE d.post_id = ${id}
+    `))[0]).toEqual(original)
+    expect((await queryRows(database, sql`SELECT revision_id FROM post_drafts WHERE post_id = ${id}`))[0])
       .toEqual({ revision_id: expectedRevisionId })
-    expect(database.prepare('SELECT * FROM post_write_receipts WHERE post_id = ?').all(id)).toEqual(receipts)
+    expect(await queryRows(database, sql`SELECT * FROM post_write_receipts WHERE post_id = ${id}`)).toEqual(receipts)
   })
 
   it('不开放邮箱密码注册', async () => {
@@ -463,6 +502,6 @@ describe('管理员认证与数据库会话', () => {
       body: { name: 'Visitor', email: 'visitor@example.test', password: 'not-a-site-password' },
     })
     expect(response.ok).toBe(false)
-    expect(database.prepare('SELECT * FROM user').all()).toEqual([])
+    expect(await queryRows(database, sql`SELECT * FROM "user"`)).toEqual([])
   })
 })

@@ -10,13 +10,13 @@ test.beforeAll(async () => {
 })
 
 test('跨内容站内搜索支持页头 Ctrl+K 弹窗与独立 /search 页面，且隔离草稿内容', async ({ page, browser, login, runtime }) => {
-  await withWritingStore(runtime, writer => {
-    createTestDraft(writer, {
+  await withWritingStore(runtime, async writer => {
+    await createTestDraft(writer, {
       title: 'Private Secret Draft',
       description: 'Hidden',
       body: 'SecretDraftKeyword only visible to drafts.',
     })
-    const live = createTestDraft(writer, {
+    const live = await createTestDraft(writer, {
       title: '记账数据与 Next.js',
       description: '公开文章关于 Next.js 与个人记账。',
       body: '这里详细讨论 记账 数据迁移与 Next.js 渲染边界。',

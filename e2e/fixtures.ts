@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -7,10 +7,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
+import { PGlite } from '@electric-sql/pglite'
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
 import { test as base, expect, type Page } from '@playwright/test'
 import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { openDatabase, withDatabase } from '../lib/server/database'
+import { initializeDatabase, withDatabase } from '../lib/server/database'
+import { initializeAuthSecret } from '../modules/auth/server/secret'
 import { createPostStore, type PostStore } from '../modules/posts/server/store'
 import { postDrafts, postPublications, postPublished, postRevisions, posts, postWriteReceipts } from '../modules/posts/server/schema'
 import { session } from '../modules/auth/server/schema'
@@ -19,33 +22,29 @@ import type { WritingStore } from '../modules/posts/writing'
 
 type Runtime = {
   origin: string
-  filename: string
+  databaseUrl: string
+  dataDirectory: string
   logs: () => string
   nextAddress: () => string
 }
 
-export function withStore<T>(runtime: Runtime, operation: (store: PostStore) => T) {
-  return withDatabase(database => operation(createPostStore(database)), runtime.filename)
+export function withStore<T>(runtime: Runtime, operation: (store: PostStore) => Promise<T> | T) {
+  return withDatabase(database => operation(createPostStore(database)), runtime.databaseUrl)
 }
 
-export function withWritingStore<T>(runtime: Runtime, operation: (store: WritingStore) => T) {
-  return withDatabase(database => operation(createWritingStore(database)), runtime.filename)
+export function withWritingStore<T>(runtime: Runtime, operation: (store: WritingStore) => Promise<T> | T) {
+  return withDatabase(database => operation(createWritingStore(database)), runtime.databaseUrl)
 }
 
-export function snapshot(runtime: Runtime, id: string) {
-  const database = openDatabase(runtime.filename)
-  try {
-    return {
-      posts: database.select().from(posts).where(eq(posts.id, id)).all(),
-      revisions: database.select().from(postRevisions).where(eq(postRevisions.postId, id)).orderBy(asc(postRevisions.id)).all(),
-      drafts: database.select().from(postDrafts).where(eq(postDrafts.postId, id)).all(),
-      publications: database.select().from(postPublications).where(eq(postPublications.postId, id)).orderBy(asc(postPublications.id)).all(),
-      published: database.select().from(postPublished).where(eq(postPublished.postId, id)).all(),
-      receipts: database.select().from(postWriteReceipts).where(eq(postWriteReceipts.postId, id)).orderBy(asc(postWriteReceipts.operationId)).all(),
-    }
-  } finally {
-    database.$client.close()
-  }
+export async function snapshot(runtime: Runtime, id: string) {
+  return withDatabase(async database => ({
+    posts: await database.select().from(posts).where(eq(posts.id, id)),
+    revisions: await database.select().from(postRevisions).where(eq(postRevisions.postId, id)).orderBy(asc(postRevisions.id)),
+    drafts: await database.select().from(postDrafts).where(eq(postDrafts.postId, id)),
+    publications: await database.select().from(postPublications).where(eq(postPublications.postId, id)).orderBy(asc(postPublications.id)),
+    published: await database.select().from(postPublished).where(eq(postPublished.postId, id)),
+    receipts: await database.select().from(postWriteReceipts).where(eq(postWriteReceipts.postId, id)).orderBy(asc(postWriteReceipts.operationId)),
+  }), runtime.databaseUrl)
 }
 
 export async function signIn(page: Page, origin: string) {
@@ -64,9 +63,9 @@ export async function signIn(page: Page, origin: string) {
 export async function expireSession(page: Page, runtime: Runtime) {
   const response = await page.request.get(`${runtime.origin}/api/auth/get-session`)
   const current = z.object({ session: z.object({ id: z.string() }) }).parse(await response.json())
-  await withDatabase(database => {
-    database.update(session).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(session.id, current.session.id)).run()
-  }, runtime.filename)
+  await withDatabase(async database => {
+    await database.update(session).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(session.id, current.session.id))
+  }, runtime.databaseUrl)
 }
 
 // Windows 上创建目录符号链接需要额外权限，junction 不需要。
@@ -103,13 +102,23 @@ export const test = base.extend<{ login: () => Promise<void>; checkBrowser: void
     if (!existsSync(join(build, 'BUILD_ID'))) throw new Error('先运行 npm run build，再执行浏览器测试。')
     const directory = mkdtempSync(join(tmpdir(), `nim-e2e-${browserName}-`))
     const release = join(directory, 'release')
-    const filename = join(directory, 'persistent', 'nim.sqlite')
+    const dataDirectory = join(directory, 'persistent')
+    const pgdata = join(dataDirectory, 'pgdata')
+    let pglite: PGlite | undefined
+    let pgServer: PGLiteSocketServer | undefined
     let server: ChildProcess | undefined
     let logs = ''
     let address = 0
     const failures: unknown[] = []
     try {
       const origin = `http://127.0.0.1:${await freePort()}`
+      const pgPort = await freePort()
+      const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${pgPort}/postgres`
+      mkdirSync(pgdata, { recursive: true })
+      pglite = new PGlite(pgdata)
+      pgServer = new PGLiteSocketServer({ db: pglite, port: pgPort, host: '127.0.0.1', maxConnections: 20 })
+      await pgServer.start()
+
       mkdirSync(release)
       // 构建产物里指向外部包的目录链接单独重建，其余内容照常复制。
       const links: string[] = []
@@ -133,20 +142,24 @@ export const test = base.extend<{ login: () => Promise<void>; checkBrowser: void
         if (value !== undefined) environment[key] = value
       }
       Object.assign(environment, {
-        NEXT_TELEMETRY_DISABLED: '1', SITE_URL: origin, DATABASE_PATH: filename,
-        GITHUB_CLIENT_ID: 'local-e2e-client', GITHUB_CLIENT_SECRET: 'local-e2e-client-secret', ADMIN_GITHUB_ID: '1234',
+        NEXT_TELEMETRY_DISABLED: '1',
+        SITE_URL: origin,
+        DATABASE_URL: databaseUrl,
+        DATA_DIR: dataDirectory,
+        GITHUB_CLIENT_ID: 'local-e2e-client',
+        GITHUB_CLIENT_SECRET: 'local-e2e-client-secret',
+        ADMIN_GITHUB_ID: '1234',
       })
-      const initialize = join(release, 'initialize.ts')
-      writeFileSync(initialize, `
-import { initializeDatabase } from ${JSON.stringify(join(root, 'lib/server/database.ts'))}
-import { initializeAuthSecret } from ${JSON.stringify(join(root, 'modules/auth/server/secret.ts'))}
-async function initialize() { await initializeDatabase(); initializeAuthSecret() }
-initialize().catch(error => { console.error(error); process.exitCode = 1 })
-`)
-      execFileSync(process.execPath, [join(root, 'node_modules/tsx/dist/cli.mjs'), initialize], {
-        // 初始化脚本在发布目录运行，路径别名的来源需要显式给出。
-        cwd: release, env: { ...environment, TSX_TSCONFIG_PATH: join(root, 'tsconfig.json') }, timeout: 30_000, stdio: 'pipe',
-      })
+      const previousDataDir = process.env.DATA_DIR
+      process.env.DATA_DIR = dataDirectory
+      try {
+        await initializeDatabase(databaseUrl)
+        initializeAuthSecret()
+      } finally {
+        if (previousDataDir === undefined) delete process.env.DATA_DIR
+        else process.env.DATA_DIR = previousDataDir
+      }
+
       const fixture = pathToFileURL(join(root, 'e2e/github.mjs')).href
       server = spawn(process.execPath, ['--import', fixture, join(root, 'node_modules/next/dist/bin/next'), 'start', '-H', '127.0.0.1', '-p', new URL(origin).port], {
         cwd: release, env: environment, stdio: ['ignore', 'pipe', 'pipe'],
@@ -166,12 +179,22 @@ initialize().catch(error => { console.error(error); process.exitCode = 1 })
         await sleep(100)
       }
       if (!ready) throw new Error(`测试服务未就绪。\n${logs}`)
-      await provide({ origin, filename, logs: () => logs, nextAddress: () => `192.0.2.${1 + address++ % 254}` })
+      await provide({ origin, databaseUrl, dataDirectory, logs: () => logs, nextAddress: () => `192.0.2.${1 + address++ % 254}` })
     } catch (error) {
       failures.push(error)
     } finally {
       try {
         if (server) await stopServer(server)
+      } catch (error) {
+        failures.push(error)
+      }
+      try {
+        if (pgServer) await pgServer.stop()
+      } catch (error) {
+        failures.push(error)
+      }
+      try {
+        if (pglite) await pglite.close()
       } catch (error) {
         failures.push(error)
       }
@@ -185,8 +208,8 @@ initialize().catch(error => { console.error(error); process.exitCode = 1 })
           nextPid: server?.pid ?? null,
           nextClosed,
           runtimeRemoved: !existsSync(directory),
-          databaseRemoved: !existsSync(filename),
-          secretRemoved: !existsSync(join(dirname(filename), 'auth-secret')),
+          databaseRemoved: !existsSync(pgdata),
+          secretRemoved: !existsSync(join(dataDirectory, 'auth-secret')),
           retainedRuntime: nextClosed ? null : directory,
           failures: failures.length,
         }, null, 2))

@@ -41,31 +41,35 @@ const draftMediaFilter = or(
   like(postRevisions.body, '%&#%'),
 )
 
-export function listPostMediaReferences(database: Pick<AppDatabase, 'select'>) {
-  const draftTitles = database.select({
-    postId: postDrafts.postId,
-    title: postRevisions.title,
-  }).from(postDrafts)
-    .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
-    .all()
+export async function listPostMediaReferences(database: Pick<AppDatabase, 'select'>) {
+  const [draftTitles, currentPubRows, draftsWithMedia, publicationRefs] = await Promise.all([
+    database.select({
+      postId: postDrafts.postId,
+      title: postRevisions.title,
+    }).from(postDrafts)
+      .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId)),
+    database.select({ postId: postPublished.postId, publicationId: postPublished.publicationId })
+      .from(postPublished),
+    database.select({
+      postId: postDrafts.postId,
+      title: postRevisions.title,
+      body: postRevisions.body,
+    }).from(postDrafts)
+      .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
+      .where(draftMediaFilter),
+    database.select({
+      mediaId: postPublicationMedia.mediaId,
+      postId: postPublicationMedia.postId,
+      publicationId: postPublicationMedia.publicationId,
+      title: postRevisions.title,
+    }).from(postPublicationMedia)
+      .innerJoin(postPublications, eq(postPublications.id, postPublicationMedia.publicationId))
+      .innerJoin(postRevisions, eq(postRevisions.id, postPublications.revisionId)),
+  ])
 
   const titleByPost = new Map(draftTitles.map(draft => [draft.postId, draft.title]))
-  const currentPublications = new Map(
-    database.select({ postId: postPublished.postId, publicationId: postPublished.publicationId })
-      .from(postPublished).all()
-      .map(row => [row.postId, row.publicationId]),
-  )
-
+  const currentPublications = new Map(currentPubRows.map(row => [row.postId, row.publicationId]))
   const byMedia = new Map<string, Map<string, AdminMediaReference>>()
-
-  const draftsWithMedia = database.select({
-    postId: postDrafts.postId,
-    title: postRevisions.title,
-    body: postRevisions.body,
-  }).from(postDrafts)
-    .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
-    .where(draftMediaFilter)
-    .all()
 
   for (const draft of draftsWithMedia) {
     const refs = extractMediaReferences(draft.body)
@@ -74,16 +78,6 @@ export function listPostMediaReferences(database: Pick<AppDatabase, 'select'>) {
       addPostReference(byMedia, mediaId, draft.postId, draft.title).inDraft = true
     }
   }
-
-  const publicationRefs = database.select({
-    mediaId: postPublicationMedia.mediaId,
-    postId: postPublicationMedia.postId,
-    publicationId: postPublicationMedia.publicationId,
-    title: postRevisions.title,
-  }).from(postPublicationMedia)
-    .innerJoin(postPublications, eq(postPublications.id, postPublicationMedia.publicationId))
-    .innerJoin(postRevisions, eq(postRevisions.id, postPublications.revisionId))
-    .all()
 
   for (const row of publicationRefs) {
     const title = titleByPost.get(row.postId) ?? row.title
@@ -97,18 +91,17 @@ export function listPostMediaReferences(database: Pick<AppDatabase, 'select'>) {
   return byMedia
 }
 
-export function findPostMediaBlocker(database: Pick<AppDatabase, 'select'>, id: string): string | null {
-  const published = database.select({ mediaId: postPublicationMedia.mediaId })
-    .from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, id)).limit(1).get()
+export async function findPostMediaBlocker(database: Pick<AppDatabase, 'select'>, id: string): Promise<string | null> {
+  const [published] = await database.select({ mediaId: postPublicationMedia.mediaId })
+    .from(postPublicationMedia).where(eq(postPublicationMedia.mediaId, id)).limit(1)
   if (published) {
     return 'This image is referenced by published posts and cannot be deleted.'
   }
 
-  const drafts = database.select({ body: postRevisions.body })
+  const drafts = await database.select({ body: postRevisions.body })
     .from(postDrafts)
     .innerJoin(postRevisions, eq(postRevisions.id, postDrafts.revisionId))
     .where(draftMediaFilter)
-    .all()
   const inDraft = drafts.some(draft => {
     const refs = extractMediaReferences(draft.body)
     return refs.status === 'success' && refs.ids.includes(id)
@@ -120,12 +113,13 @@ export function findPostMediaBlocker(database: Pick<AppDatabase, 'select'>, id: 
   return null
 }
 
-export function listAdminMedia(database: AppDatabase, storage: MediaStorage): AdminMediaItem[] {
-  return database.transaction(transaction => {
-    const assets = createMediaStore(transaction as unknown as AppDatabase, storage).list()
+export async function listAdminMedia(database: AppDatabase, storage: MediaStorage): Promise<AdminMediaItem[]> {
+  return database.transaction(async transaction => {
+    const txDb = transaction as unknown as AppDatabase
+    const assets = await createMediaStore(txDb, storage).list()
     if (assets.length === 0) return []
 
-    const byMedia = listPostMediaReferences(transaction)
+    const byMedia = await listPostMediaReferences(transaction)
 
     return assets.map(asset => {
       const refs = Array.from(byMedia.get(asset.id)?.values() ?? []).sort((left, right) => {
@@ -135,7 +129,7 @@ export function listAdminMedia(database: AppDatabase, storage: MediaStorage): Ad
       })
       return { asset, references: refs }
     })
-  }, { behavior: 'deferred' })
+  })
 }
 
 export async function deleteAdminMedia(
@@ -147,16 +141,18 @@ export async function deleteAdminMedia(
   if (!parsed.success) return { status: 'invalid', message: 'Invalid media ID.' }
   const id = parsed.data
 
-  const removed = database.transaction((transaction): { status: 'deleted'; asset: MediaAsset } | Exclude<DeleteMediaResult, { status: 'success' }> => {
-    const asset = createMediaStore(transaction as unknown as AppDatabase, storage).get(id)
+  const removed = await database.transaction(async (transaction): Promise<{ status: 'deleted'; asset: MediaAsset } | Exclude<DeleteMediaResult, { status: 'success' }>> => {
+    const [locked] = await transaction.select().from(mediaAssets).where(eq(mediaAssets.id, id)).for('update')
+    if (!locked) return { status: 'missing' }
+    const asset = await createMediaStore(transaction as unknown as AppDatabase, storage).get(id)
     if (!asset) return { status: 'missing' }
 
-    const blocker = findPostMediaBlocker(transaction, id)
+    const blocker = await findPostMediaBlocker(transaction, id)
     if (blocker) return { status: 'referenced', message: blocker }
 
-    transaction.delete(mediaAssets).where(eq(mediaAssets.id, id)).run()
+    await transaction.delete(mediaAssets).where(eq(mediaAssets.id, id))
     return { status: 'deleted', asset }
-  }, { behavior: 'immediate' })
+  })
 
   if (removed.status !== 'deleted') return removed
   await storage.remove(removed.asset)

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { initializeDatabase, openDatabase, type AppDatabase } from '@/lib/server/database'
+import { initializeDatabase, openDatabase, type ManagedDatabase } from '@/lib/server/database'
 import { createGalleryStore } from '@/modules/gallery/server/store'
 import { createFileMediaStorage } from '@/modules/media/server/storage'
 import { createMediaStore } from '@/modules/media/server/store'
@@ -16,17 +16,17 @@ import { PROJECTS, WORK_EXPERIENCE } from '../data'
 import { createHomeStore } from './home-store'
 
 let directory: string
-let database: AppDatabase
+let database: ManagedDatabase
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'nim-home-store-'))
-  const filename = join(directory, 'nim.sqlite')
-  await initializeDatabase(filename)
-  database = openDatabase(filename)
+  const target = join(directory, 'pgdata')
+  await initializeDatabase(target)
+  database = await openDatabase(target)
 })
 
-afterEach(() => {
-  database?.$client.close()
+afterEach(async () => {
+  await database?.close()
   if (directory) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -42,7 +42,7 @@ async function createPublishedPhoto(title: string) {
   const storage = createFileMediaStorage(join(directory, 'media'))
   const uploaded = await createMediaStore(database, storage).upload(prepared.value)
   if (uploaded.status !== 'success') throw new Error('Expected upload to succeed.')
-  const saved = createGalleryStore(database).save({
+  const saved = await createGalleryStore(database).save({
     mediaId: uploaded.value.id,
     title,
     caption: '',
@@ -55,9 +55,9 @@ async function createPublishedPhoto(title: string) {
 }
 
 describe('首页独立策展存储', () => {
-  it('未配置时使用默认顺序，无公开画廊时不显示空画廊区块', () => {
+  it('未配置时使用默认顺序，无公开画廊时不显示空画廊区块', async () => {
     const store = createHomeStore(database)
-    const data = store.getPublicHomepage()
+    const data = await store.getPublicHomepage()
     expect(data.writing.section.visible).toBe(true)
     expect(data.writing.section.sourceMode).toBe('latest')
     expect(data.sections.map(entry => entry.section.sectionKey)).toEqual(['projects', 'experience'])
@@ -65,14 +65,14 @@ describe('首页独立策展存储', () => {
 
   it('支持区块开关、全宽区块重排、手动精选与静态条目显隐', async () => {
     const writer = createWritingStore(database)
-    const postA = publishTestDraft(writer, createTestDraft(writer, { title: 'Post A', description: '', body: 'A' }))
-    const postB = publishTestDraft(writer, createTestDraft(writer, { title: 'Post B', description: '', body: 'B' }))
+    const postA = await publishTestDraft(writer, await createTestDraft(writer, { title: 'Post A', description: '', body: 'A' }))
+    const postB = await publishTestDraft(writer, await createTestDraft(writer, { title: 'Post B', description: '', body: 'B' }))
 
     const photo1 = await createPublishedPhoto('Photo 1')
     const photo2 = await createPublishedPhoto('Photo 2')
 
     const home = createHomeStore(database)
-    home.saveConfig({
+    await home.saveConfig({
       sections: [
         {
           sectionKey: 'writing',
@@ -119,7 +119,7 @@ describe('首页独立策展存储', () => {
       ],
     })
 
-    const initialPublic = home.getPublicHomepage()
+    const initialPublic = await home.getPublicHomepage()
     expect(initialPublic.writing.section.title).toBe('Featured writing')
     expect(initialPublic.writing.posts.map(post => post.id)).toEqual([postA.id])
     expect(initialPublic.sections.map(entry => entry.section.sectionKey)).toEqual(['projects', 'gallery'])
@@ -127,12 +127,12 @@ describe('首页独立策展存储', () => {
     expect(gallerySection?.items.map(item => item.id)).toEqual([photo1.id, photo2.id])
 
     // 当某个已上首页的画廊条目被转回草稿，首页自动过滤而不泄漏草稿，但后台保留提示状态。
-    createGalleryStore(database).setStatus(photo1.id, 'draft')
-    const afterUnpublish = home.getPublicHomepage()
+    await createGalleryStore(database).setStatus(photo1.id, 'draft')
+    const afterUnpublish = await home.getPublicHomepage()
     const filteredGallery = afterUnpublish.sections.find(entry => entry.section.sectionKey === 'gallery')
     expect(filteredGallery?.items.map(item => item.id)).toEqual([photo2.id])
 
-    const adminState = home.getAdminHomepage()
+    const adminState = await home.getAdminHomepage()
     const adminGallerySection = adminState.sections.find(section => section.sectionKey === 'gallery')
     expect(adminGallerySection?.items.find(item => item.itemId === photo1.id)?.available).toBe(false)
   })
