@@ -36,6 +36,9 @@ function mediaIdFromUrl(url: string) {
 }
 
 export function extractMediaReferences(source: string): MediaReferenceResult {
+  if (!source.includes(MEDIA_PATH_PREFIX) && !source.includes('&#')) {
+    return { status: 'success', ids: [] }
+  }
   // 发布授权来自实际生成的图片，引用定义、脚注和 alt 的可见性由正文转换器统一决定。
   const tree = parser.runSync(parser.parse(source))
   const urls: string[] = []

@@ -71,6 +71,7 @@ describe('媒体上传', () => {
     const failed = createMediaStore(database, {
       async put() { throw new Error('Disk unavailable') },
       async read() { return null },
+      async remove() {},
     })
     await expect(failed.upload(input)).rejects.toThrow('Disk unavailable')
     expect(failed.get(input.id)?.state).toBe('pending')

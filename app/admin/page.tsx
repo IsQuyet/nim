@@ -34,6 +34,9 @@ export default async function AdminPage() {
               <Button asChild>
                 <Link href={routes.admin.import}>Import Markdown</Link>
               </Button>
+              <Button asChild variant="outline">
+                <Link href={routes.admin.media}>Media library</Link>
+              </Button>
             </>
           }
         />

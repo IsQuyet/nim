@@ -24,6 +24,7 @@ export const routes = {
   media: (id: string) => route(`${MEDIA_PATH_PREFIX}${id}`),
   admin: {
     home: route('/admin'),
+    media: route('/admin/media'),
     login: route('/admin/login'),
     import: route('/admin/import'),
     newPost: route('/admin/posts/new'),

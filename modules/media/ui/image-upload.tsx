@@ -3,16 +3,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import type { MarkdownImageInsertion } from '@/modules/markdown/ui/editor'
-import { mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '../model'
+import { formatMarkdownImage, mediaImageFormats, mediaUploadResponseSchema, MAX_MEDIA_UPLOAD_BYTES, MAX_MEDIA_IMAGE_PIXELS } from '../model'
 import { routes } from '@/lib/routes'
 
 type MarkdownImageUploadProps = {
   prepareInsertion: () => MarkdownImageInsertion | null
-}
-
-function markdownAlt(filename: string) {
-  const base = filename.split(/[\\/]/).at(-1)?.replace(/\.[^.]*$/, '').trim() ?? ''
-  return base.replace(/[\\[\]]/g, character => `\\${character}`)
 }
 
 export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadProps) {
@@ -70,8 +65,7 @@ export function MarkdownImageUpload({ prepareInsertion }: MarkdownImageUploadPro
         throw new Error(result.data.status === 'error' ? result.data.message : 'Could not upload the image.')
       }
       if (result.data.media.id !== uploadId) throw new Error('The upload response belongs to a different image.')
-      const alt = markdownAlt(result.data.media.originalName)
-      const markdown = `![${alt}](${result.data.media.url})`
+      const markdown = formatMarkdownImage(result.data.media.id, result.data.media.originalName)
       if (insertion.current?.insert(markdown)) {
         finishInsertion()
       } else {

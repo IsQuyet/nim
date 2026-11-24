@@ -112,7 +112,7 @@ describe('媒体公开读取 Route Handler', () => {
     const incomplete = await prepareMediaUpload({ id, originalName: 'tiny.png', declaredType: 'image/png', bytes })
     if (incomplete.status !== 'success') throw new Error('Fixture must be a valid PNG.')
     try {
-      await createMediaStore(database, { async put() { return 'created' }, async read() { return null } }).upload(incomplete.value)
+      await createMediaStore(database, { async put() { return 'created' }, async read() { return null }, async remove() {} }).upload(incomplete.value)
     } finally { database.$client.close() }
     const missing = await GET(mediaRequest(randomUUID()), { params: Promise.resolve({ id: randomUUID() }) })
     const invalid = await GET(mediaRequest('not-a-uuid'), { params: Promise.resolve({ id: 'not-a-uuid' }) })

@@ -40,4 +40,13 @@ describe('文件媒体存储适配器', () => {
     await expect(storage.put({ ...asset, sha256: '0'.repeat(64) }, bytes)).rejects.toThrow('hash')
     expect(readdirSync(root)).toEqual([])
   })
+
+  it('删除媒体文件后目录为空，重复删除幂等', async () => {
+    const storage = createFileMediaStorage(root)
+    await storage.put(asset, bytes)
+    await storage.remove(asset)
+    expect(readdirSync(root)).toEqual([])
+    await storage.remove(asset)
+    expect(await storage.read(asset)).toBeNull()
+  })
 })

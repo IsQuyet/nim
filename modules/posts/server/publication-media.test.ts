@@ -110,6 +110,7 @@ describe('发布与图片引用', () => {
     const interrupted = createMediaStore(database, {
       async put() { throw new Error('Disk unavailable') },
       async read() { return null },
+      async remove() {},
     })
     await expect(interrupted.upload(input)).rejects.toThrow('Disk unavailable')
     const writer = createWritingStore(database)

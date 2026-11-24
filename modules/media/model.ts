@@ -41,6 +41,12 @@ export function mediaMarkdownUrl(id: string) {
   return routes.media(mediaIdSchema.parse(id))
 }
 
+export function formatMarkdownImage(id: string, originalName: string) {
+  const base = originalName.split(/[\\/]/).at(-1)?.replace(/\.[^.]*$/, '').trim() ?? ''
+  const alt = base.replace(/[\\[\]]/g, character => `\\${character}`)
+  return `![${alt}](${mediaMarkdownUrl(id)})`
+}
+
 export const mediaUploadResponseSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('success'),

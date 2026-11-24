@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import type { AppDatabase } from '@/lib/server/database'
 import { mediaAssets } from './schema'
 import { mediaAssetSchema, type MediaAsset } from '../model'
@@ -11,6 +11,7 @@ export type MediaUploadResult =
 
 export type MediaStore = {
   get(id: string): MediaAsset | null
+  list(): MediaAsset[]
   upload(input: PreparedMedia): Promise<MediaUploadResult>
 }
 
@@ -30,6 +31,12 @@ export function createMediaStore(database: AppDatabase, storage: MediaStorage): 
   function get(id: string) {
     const asset = database.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get()
     return asset ? mediaAssetSchema.parse(asset) : null
+  }
+
+  function list() {
+    return database.select().from(mediaAssets)
+      .orderBy(desc(mediaAssets.createdAt), asc(mediaAssets.id)).all()
+      .map(asset => mediaAssetSchema.parse(asset))
   }
 
   async function upload(input: PreparedMedia): Promise<MediaUploadResult> {
@@ -69,5 +76,5 @@ export function createMediaStore(database: AppDatabase, storage: MediaStorage): 
     }, { behavior: 'immediate' })
   }
 
-  return { get, upload }
+  return { get, list, upload }
 }

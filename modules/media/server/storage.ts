@@ -8,6 +8,7 @@ type StoredMedia = Pick<MediaAsset, 'id' | 'mediaType' | 'sha256'>
 export type MediaStorage = {
   put(asset: StoredMedia, bytes: Uint8Array): Promise<'created' | 'existing' | 'conflict'>
   read(asset: StoredMedia): Promise<Uint8Array | null>
+  remove(asset: Pick<StoredMedia, 'id' | 'mediaType'>): Promise<void>
 }
 
 function filename(root: string, asset: Pick<StoredMedia, 'id' | 'mediaType'>) {
@@ -72,6 +73,10 @@ export function createFileMediaStorage(root: string): MediaStorage {
         if (hasFilesystemCode(error, 'ENOENT')) return null
         throw error
       }
+    },
+
+    async remove(asset) {
+      await rm(filename(root, asset), { force: true })
     },
   }
 }
