@@ -136,19 +136,26 @@ docker compose up -d --build
 
 ---
 
-## 方案 B：Vercel + 托管 PostgreSQL + Cloudflare R2 部署（无服务器）
+## 方案 B：Vercel + 托管 PostgreSQL + 对象存储部署（无服务器）
 
-1. **准备托管数据库**：在 Neon、Supabase 或 Vercel Postgres 创建 PostgreSQL 数据库，取得 `DATABASE_URL`（建议使用带 SSL 参数的连接字符串）。
-2. **准备对象存储**：在 Cloudflare R2（或 AWS S3）创建私有存储桶（站点通过 `/media/[id]` 路由校验草稿/发布权限后再转发图像字节，无需开启桶的公开匿名访问），创建 API Token 获取 `S3_ACCESS_KEY_ID` 与 `S3_SECRET_ACCESS_KEY`。
-3. **配置 Vercel 环境变量**：
-   - `SITE_URL`（例如 `https://your-domain.com`）
-   - `DATABASE_URL`
-   - `AUTH_SECRET`（使用 `openssl rand -base64 32` 生成）
+仓库已自带 [vercel.json](./vercel.json)，会在 Vercel 每次构建时自动执行 `npx tsx scripts/setup.ts --production && npm run build` 完成 Drizzle PostgreSQL 迁移，并自动识别 `VERCEL_PROJECT_PRODUCTION_URL` 与 `VERCEL_URL` 作为站点根地址（无需提前猜填 `SITE_URL`）。
+
+### 第一步：先一键部署上线（仅需 PostgreSQL）
+
+1. 点击 [README](./README.md) 中的 **Deploy with Vercel** 按钮（或直接在 Vercel 控制台 Import 仓库并在 **Storage / Marketplace** 添加一个免费 **Neon PostgreSQL** 集成，会自动注入 `DATABASE_URL`）。
+2. 直接点击部署即可成功访问公开站点（如果后续在 Vercel 绑定自定义域名，`SITE_URL` 也会随正式域名自动生效；只有希望强制锁定固定域名时才需手动设 `SITE_URL`）。此时留空 GitHub OAuth、`AUTH_SECRET` 与 `S3_*` **完全不会阻塞部署或公开页面访问**，`/admin/login` 会安全提示尚未配置管理员登录。
+
+### 第二步：按需开启 `/admin` 后台登录
+
+1. 拿到第一步的线上地址（例如 `https://your-site.vercel.app`）后，在 GitHub Developer Settings 创建一个 OAuth App，将回调地址设为：
+   `https://your-site.vercel.app/api/auth/callback/github`
+2. 在 Vercel 项目 **Settings -> Environment Variables** 中补充：
    - `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`ADMIN_GITHUB_ID`
-   - `S3_BUCKET`、`S3_REGION`（R2 填 `auto`）、`S3_ENDPOINT`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`
-4. **Build Command 建议**：将 Vercel Build Command 设为：
-   ```bash
-   npx tsx scripts/setup.ts --production && npm run build
-   ```
-   这样每次部署构建时都会自动对托管 PostgreSQL 执行尚未应用的 Drizzle 迁移。
-5. **上传大小提示**：自托管节点（VPS / Docker）单张图片上限为 `10 MB`；部署在 Vercel Serverless Functions 时，受平台单次请求体上限约束，建议单张图片控制在 **4.5 MB** 以内。
+   - `AUTH_SECRET`（全平台通用生成命令：`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`）
+3. 触发一次 Redeploy，即可通过 `/admin` 登录后台在线写作与发布。
+
+### 第三步：按需开启图片上传与画廊（任意 S3 兼容对象存储）
+
+仅需在需要在线上传图片时配置；不配置不影响浏览公开页面和纯文本文章撰写。支持 Cloudflare R2、AWS S3、MinIO 等标准 S3 协议私有桶（站点通过 `/media/[id]` 校验草稿/发布权限后再转发图像字节，无需开启桶的公开访问）：
+- `S3_BUCKET`、`S3_REGION`（R2 填 `auto`）、`S3_ENDPOINT`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`
+- 在 Vercel Serverless Functions 环境下，受平台单次请求体上限约束，单张图片建议控制在 **4.5 MB** 以内（自托管 VPS/Docker 上限为 `10 MB`）。

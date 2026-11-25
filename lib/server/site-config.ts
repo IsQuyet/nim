@@ -1,11 +1,21 @@
 type SiteEnvironment = Readonly<Record<string, string | undefined>>
 
+function resolveVercelHost(environment: SiteEnvironment): string | undefined {
+  if (environment.VERCEL !== '1') return undefined
+  if (environment.VERCEL_ENV === 'production') {
+    return environment.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+  }
+  if (environment.VERCEL_ENV === 'preview') {
+    return environment.VERCEL_URL?.trim()
+  }
+  return undefined
+}
+
 export function getSiteUrl(environment: SiteEnvironment = process.env): URL {
   const configuredUrl = environment.SITE_URL?.trim()
-  const previewHost =
-    !configuredUrl && environment.VERCEL_ENV === 'preview' ? environment.VERCEL_URL?.trim() : ''
+  const vercelHost = !configuredUrl ? resolveVercelHost(environment) : undefined
   const resolvedUrl =
-    configuredUrl || (previewHost ? `https://${previewHost.replace(/^https?:\/\//, '')}` : '')
+    configuredUrl || (vercelHost ? `https://${vercelHost.replace(/^https?:\/\//, '')}` : '')
 
   if (!resolvedUrl) {
     if (environment.NODE_ENV === 'production') {

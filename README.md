@@ -42,6 +42,6 @@ npm run dev
 ## 部署方式
 
 1. **Docker Compose / 单机 VPS**：内置 `compose.yaml`（PostgreSQL 17 + 应用容器）与零配置本地 `.data/pgdata` 模式，配合 Nginx / Caddy 反向代理即可运行。
-2. **Vercel + 托管 Postgres + R2/S3（Serverless）**：设置 `DATABASE_URL`（Neon / Supabase / Vercel Postgres）、`AUTH_SECRET`、`SITE_URL` 及 `S3_*` 对象存储变量即可部署；具体配置见 [安装指南](./INSTALLATION.md)。
+2. **Vercel + 托管 Postgres + R2/S3（Serverless）**：点击下方按钮即可自动挂载 Neon PostgreSQL 并完成首次上线（无需先填 `SITE_URL` 或 Build Command），上线后再按需补齐后台登录与 S3/R2 图床；具体说明见 [安装指南](./INSTALLATION.md)。
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FIsQuyet%2Fnim&env=SITE_URL,DATABASE_URL,AUTH_SECRET,GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,ADMIN_GITHUB_ID&project-name=nim&repository-name=nim)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FIsQuyet%2Fnim&project-name=nim&repository-name=nim&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%7D%5D)

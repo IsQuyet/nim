@@ -22,18 +22,31 @@ describe('站点部署地址', () => {
     expect(
       getSiteUrl({
         NODE_ENV: 'production',
+        VERCEL: '1',
         VERCEL_ENV: 'preview',
         VERCEL_URL: 'nim-git-feat-demo.vercel.app',
       }).href,
     ).toBe('https://nim-git-feat-demo.vercel.app/')
   })
 
-  it('Vercel 生产环境仍强制要求显式配置 SITE_URL', () => {
+  it('Vercel 生产环境未配置 SITE_URL 时自动使用 VERCEL_PROJECT_PRODUCTION_URL', () => {
+    expect(
+      getSiteUrl({
+        NODE_ENV: 'production',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VERCEL_PROJECT_PRODUCTION_URL: 'nim-vert.vercel.app',
+        VERCEL_URL: 'nim-abc123.vercel.app',
+      }).href,
+    ).toBe('https://nim-vert.vercel.app/')
+  })
+
+  it('非 Vercel 生产环境或缺少 VERCEL=1 标识时仍强制要求显式配置 SITE_URL', () => {
     expect(() =>
       getSiteUrl({
         NODE_ENV: 'production',
         VERCEL_ENV: 'production',
-        VERCEL_URL: 'nim-abc123.vercel.app',
+        VERCEL_PROJECT_PRODUCTION_URL: 'nim-vert.vercel.app',
       }),
     ).toThrow('生产构建必须设置 SITE_URL')
   })
