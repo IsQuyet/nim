@@ -43,3 +43,5 @@ npm run dev
 
 1. **Docker Compose / 单机 VPS**：内置 `compose.yaml`（PostgreSQL 17 + 应用容器）与零配置本地 `.data/pgdata` 模式，配合 Nginx / Caddy 反向代理即可运行。
 2. **Vercel + 托管 Postgres + R2/S3（Serverless）**：设置 `DATABASE_URL`（Neon / Supabase / Vercel Postgres）、`AUTH_SECRET`、`SITE_URL` 及 `S3_*` 对象存储变量即可部署；具体配置见 [安装指南](./INSTALLATION.md)。
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FIsQuyet%2Fnim&env=SITE_URL,DATABASE_URL,AUTH_SECRET,GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,ADMIN_GITHUB_ID&project-name=nim&repository-name=nim)

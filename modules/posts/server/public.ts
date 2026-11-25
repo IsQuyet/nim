@@ -5,7 +5,7 @@ import { withDatabase } from '@/lib/server/database'
 import { createPostStore } from './store'
 
 export const getBlogPost = cache(async (id: string) => {
-  // 同步 SQLite 查询本身不会退出预渲染，须先等待请求再读库。
+  // 先等待进入真实请求生命周期，避免构建预渲染期间访问数据库。
   await connection()
   return withDatabase(database => createPostStore(database).getPublishedPost(id))
 })
