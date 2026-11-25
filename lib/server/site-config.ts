@@ -2,8 +2,12 @@ type SiteEnvironment = Readonly<Record<string, string | undefined>>
 
 export function getSiteUrl(environment: SiteEnvironment = process.env): URL {
   const configuredUrl = environment.SITE_URL?.trim()
+  const previewHost =
+    !configuredUrl && environment.VERCEL_ENV === 'preview' ? environment.VERCEL_URL?.trim() : ''
+  const resolvedUrl =
+    configuredUrl || (previewHost ? `https://${previewHost.replace(/^https?:\/\//, '')}` : '')
 
-  if (!configuredUrl) {
+  if (!resolvedUrl) {
     if (environment.NODE_ENV === 'production') {
       throw new Error('生产构建必须设置 SITE_URL。')
     }
@@ -13,7 +17,7 @@ export function getSiteUrl(environment: SiteEnvironment = process.env): URL {
 
   let url: URL
   try {
-    url = new URL(configuredUrl)
+    url = new URL(resolvedUrl)
   } catch {
     throw new Error('SITE_URL 必须是完整的 HTTP 或 HTTPS 站点地址。')
   }
